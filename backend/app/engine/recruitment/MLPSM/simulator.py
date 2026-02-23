@@ -10,7 +10,7 @@ Fonction pure — toutes les données sont injectées par le service.
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from engine.recruitment.master import compute_y_success, RecruitmentScore
+from engine.MLPSM.master import compute_y_success, RecruitmentScore
 from engine.team.harmony import compute_delta as compute_harmony_delta
 
 

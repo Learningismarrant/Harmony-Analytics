@@ -79,7 +79,7 @@ class CrewAssignment(Base):
     crew_profile_id = Column(Integer, ForeignKey("crew_profiles.id"), nullable=False, index=True)
     yacht_id        = Column(Integer, ForeignKey("yachts.id"), nullable=True, index=True)
 
-    role      = Column(SAEnum(YachtPosition), nullable=False)
+    role      = Column(SAEnum(YachtPosition, values_callable=lambda enum: [e.value for e in enum]), nullable=False)
     is_active = Column(Boolean, default=True)
 
     start_date = Column(DateTime(timezone=True), nullable=True)

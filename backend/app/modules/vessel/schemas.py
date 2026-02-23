@@ -38,7 +38,7 @@ class YachtTokenOut(BaseModel):
 
 # ── Paramètres environnement JD-R (F_env + F_lmx) ─────────
 
-class EnvironmentUpdateIn(BaseModel):
+class YachtEnvironmentUpdateIn(BaseModel):
     """
     Paramètres JD-R normalisés (0.0 → 1.0).
     Alimentent F_env et F_lmx dans l'équation maîtresse.

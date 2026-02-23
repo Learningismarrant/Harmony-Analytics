@@ -14,6 +14,7 @@ class Survey(Base):
     __tablename__ = "surveys"
 
     id                  = Column(Integer, primary_key=True, index=True)
+    title               = Column(String, nullable=True)
     yacht_id            = Column(Integer, ForeignKey("yachts.id"), nullable=False, index=True)
     triggered_by_id     = Column(Integer, ForeignKey("employer_profiles.id"), nullable=False)
 

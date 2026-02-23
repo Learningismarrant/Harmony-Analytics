@@ -10,7 +10,7 @@ from enum import Enum
 
 class UserRole(str, Enum):
     CANDIDATE = "candidate"
-    CLIENT    = "client"    # Cap / Owner / Manager
+    CLIENT    = "client"    
     ADMIN     = "admin"
 
 

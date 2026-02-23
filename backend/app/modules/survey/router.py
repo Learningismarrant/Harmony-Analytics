@@ -1,158 +1,103 @@
 # modules/survey/router.py
 """
-Endpoints du système de Feedback Surveys.
+Endpoints des Feedback Surveys.
 
-Deux acteurs :
-- Cap/Owner : déclenche les surveys, consulte les résultats agrégés
-- Crew (candidat) : reçoit les surveys, soumet ses réponses
+Changements v2 :
+- cap/owner → EmployerDep
+- crew (candidat) → CrewDep
 """
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from typing import List, Optional
+from fastapi import APIRouter, HTTPException, status
+from typing import List
 
-from app.core.database import get_db
-from app.shared.deps import get_current_user, role_required
+from app.shared.deps import DbDep, CrewDep, EmployerDep
 from app.modules.survey.service import SurveyService
 from app.modules.survey.schemas import (
     SurveyTriggerIn,
-    SurveyTriggerOut,
+    SurveyOut,
     SurveyResponseIn,
     SurveyResponseOut,
-    SurveyResultsOut,
-    PendingSurveyOut,
+    SurveyAggregatedOut,
 )
 
 router = APIRouter(prefix="/surveys", tags=["Surveys"])
 service = SurveyService()
 
 
-# ─────────────────────────────────────────────
-# CAP / OWNER — Déclenchement & Résultats
-# ─────────────────────────────────────────────
+# ── Cap / Owner ────────────────────────────────────────────
 
-@router.post(
-    "/trigger",
-    response_model=SurveyTriggerOut,
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Déclencher un survey",
-    description=(
-        "Le cap/owner déclenche un survey sur son équipage. "
-        "Types disponibles : post_charter, post_season, monthly_pulse, "
-        "conflict_event, exit_interview. "
-        "Notifie automatiquement les membres ciblés."
-    ),
-)
-def trigger_survey(
+@router.post("/trigger", response_model=SurveyOut, status_code=201)
+async def trigger_survey(
     payload: SurveyTriggerIn,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_employer: EmployerDep,   # v2
 ):
     try:
-        return service.trigger_survey(
+        return await service.trigger_survey(
             db,
             yacht_id=payload.yacht_id,
             trigger_type=payload.trigger_type,
-            triggered_by_id=current_user.id,
-            target_crew_ids=payload.target_crew_ids,
+            employer=current_employer,
+            target_crew_profile_ids=payload.target_crew_profile_ids,  # v2
         )
     except PermissionError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé.")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès refusé.")
 
 
-@router.get(
-    "/{survey_id}/results",
-    response_model=SurveyResultsOut,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Résultats agrégés d'un survey",
-    description=(
-        "Retourne les résultats anonymisés et agrégés. "
-        "Les réponses individuelles ne sont pas exposées ici (anonymat garanti)."
-    ),
-)
-def get_survey_results(
+@router.get("/{survey_id}/results", response_model=SurveyAggregatedOut)
+async def get_survey_results(
     survey_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_employer: EmployerDep,
 ):
     try:
-        results = service.get_survey_results(db, survey_id, requester_id=current_user.id)
+        results = await service.get_survey_results(
+            db, survey_id, employer=current_employer
+        )
     except PermissionError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé.")
-
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès refusé.")
     if not results:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Survey introuvable.")
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Survey introuvable.")
     return results
 
 
-@router.get(
-    "/yacht/{yacht_id}/history",
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Historique des surveys d'un yacht",
-)
-def get_yacht_survey_history(
+@router.get("/yacht/{yacht_id}/history")
+async def get_yacht_survey_history(
     yacht_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_employer: EmployerDep,
 ):
     try:
-        return service.get_yacht_survey_history(db, yacht_id, requester_id=current_user.id)
+        return await service.get_yacht_survey_history(db, yacht_id, employer=current_employer)
     except PermissionError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé.")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès refusé.")
 
 
-# ─────────────────────────────────────────────
-# CREW — Réception & Soumission
-# ─────────────────────────────────────────────
+# ── Crew ───────────────────────────────────────────────────
 
-@router.get(
-    "/pending",
-    response_model=List[PendingSurveyOut],
-    dependencies=[Depends(role_required(["candidate", "admin"]))],
-    summary="Mes surveys en attente",
-)
-def get_pending_surveys(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Retourne les surveys auxquels le marin doit encore répondre."""
-    return service.get_pending_surveys(db, user_id=current_user.id)
+@router.get("/pending", response_model=List[SurveyOut])
+async def get_pending_surveys(db: DbDep, current_crew: CrewDep):
+    """Surveys en attente pour ce marin."""
+    return await service.get_pending_surveys(db, crew=current_crew)
 
 
-@router.post(
-    "/{survey_id}/respond",
-    response_model=SurveyResponseOut,
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(role_required(["candidate", "admin"]))],
-    summary="Répondre à un survey",
-    description=(
-        "Le marin soumet sa réponse. "
-        "Déclenche la mise à jour du vessel_snapshot et du RecruitmentEvent associé. "
-        "Si le seuil ML est atteint, la régression est schedulée en background."
-    ),
-)
-def submit_survey_response(
+@router.post("/{survey_id}/respond", response_model=SurveyResponseOut, status_code=201)
+async def submit_survey_response(
     survey_id: int,
     payload: SurveyResponseIn,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_crew: CrewDep,   # v2
 ):
     try:
-        return service.submit_response(
+        return await service.submit_response(
             db,
             survey_id=survey_id,
-            respondent_id=current_user.id,
+            crew=current_crew,      # v2
             payload=payload,
         )
     except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(e))
     except ValueError as e:
         code = str(e)
         if code == "ALREADY_RESPONDED":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Vous avez déjà répondu à ce survey."
-            )
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=code)
-
-
+            raise HTTPException(status.HTTP_409_CONFLICT, "Vous avez déjà répondu.")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code)

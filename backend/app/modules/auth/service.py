@@ -3,7 +3,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
-from app.models import User, CrewProfile, EmployerProfile
+from app.shared.models import User, CrewProfile, EmployerProfile
 from app.shared.enums import UserRole
 from app.core.security import (
     hash_password, verify_password,

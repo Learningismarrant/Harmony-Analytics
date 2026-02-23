@@ -13,12 +13,12 @@ Ordre d'import : pas de dépendances circulaires car
 les FKs sont déclarées dans les migrations, pas dans les modèles.
 """
 
-from User       import User, CrewProfile, EmployerProfile, UserDocument
-from Yacht      import Yacht, CrewAssignment
-from Assessment import TestCatalogue, Question, TestResult
-from Campaign   import Campaign, CampaignCandidate
-from Pulse      import DailyPulse
-from Survey     import Survey, SurveyResponse, RecruitmentEvent, ModelVersion
+from .User       import User, CrewProfile, EmployerProfile, UserDocument
+from .Yacht      import Yacht, CrewAssignment
+from .Assessment import TestCatalogue, Question, TestResult
+from .Campaign   import Campaign, CampaignCandidate
+from .Pulse      import DailyPulse
+from .Survey     import Survey, SurveyResponse, RecruitmentEvent, ModelVersion
 
 __all__ = [
     # User

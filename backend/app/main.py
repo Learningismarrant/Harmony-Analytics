@@ -20,7 +20,7 @@ from app.modules.survey.router      import router as survey_router
 from app.modules.gateway.router     import router as gateway_router
 
 app = FastAPI(
-    title=settings.APP_NAME,
+    title=settings.PROJECT_NAME,
     version="2.0.0",
     docs_url="/docs" if settings.DEBUG else None,
 )

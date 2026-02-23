@@ -1,17 +1,16 @@
 # modules/assessment/router.py
 """
 Endpoints du cycle de vie des évaluations psychométriques.
-Catalogue → Questions → Soumission → Résultats
 
-Règle : ce fichier ne touche jamais la DB ni l'engine.
-Tout passe par assessment_service.
+Changements v2 :
+- current_user → current_crew (CrewProfile) pour les candidats
+- Accès client via employer (EmployerProfile)
+- service.submit_and_score reçoit crew (CrewProfile)
 """
-from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from typing import List
 
-from app.core.database import get_db
-from app.shared.deps import get_current_user, role_required
+from app.shared.deps import DbDep, CrewDep, EmployerDep, UserDep
 from app.modules.assessment.service import AssessmentService
 from app.modules.assessment.schemas import (
     TestInfoOut,
@@ -24,125 +23,80 @@ router = APIRouter(prefix="/assessments", tags=["Assessment"])
 service = AssessmentService()
 
 
-# ─────────────────────────────────────────────
-# CATALOGUE
-# ─────────────────────────────────────────────
+# ── Catalogue ──────────────────────────────────────────────
 
-@router.get(
-    "/catalogue",
-    response_model=List[TestInfoOut],
-    summary="Liste des tests disponibles",
-)
-def list_catalogue(db: Session = Depends(get_db)):
-    """
-    Retourne tous les tests actifs du catalogue.
-    Public pour les candidats authentifiés.
-    """
-    tests = service.get_catalogue(db)
+@router.get("/catalogue", response_model=List[TestInfoOut])
+async def list_catalogue(db: DbDep):
+    """Tests actifs — public pour tout utilisateur authentifié."""
+    tests = await service.get_catalogue(db)
     if not tests:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Aucun test disponible pour le moment."
-        )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Aucun test disponible.")
     return tests
 
 
-# ─────────────────────────────────────────────
-# SESSION DE TEST
-# ─────────────────────────────────────────────
+# ── Session de test ────────────────────────────────────────
 
-@router.get(
-    "/{test_id}/questions",
-    response_model=List[QuestionOut],
-    summary="Questions d'un test",
-)
-def get_questions(
+@router.get("/{test_id}/questions", response_model=List[QuestionOut])
+async def get_questions(
     test_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_crew: CrewDep,      # v2 : CrewProfile requis
 ):
-    """
-    Retourne les questions d'un test.
-    Vérifie que le candidat n'a pas déjà une session en cours.
-    """
-    questions = service.get_questions_for_user(db, test_id, current_user.id)
+    questions = await service.get_questions_for_crew(db, test_id, current_crew.id)
     if not questions:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Test introuvable ou sans questions."
-        )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Test introuvable ou sans questions.")
     return questions
 
 
-@router.post(
-    "/submit",
-    response_model=TestResultOut,
-    status_code=status.HTTP_201_CREATED,
-    summary="Soumettre les réponses d'un test",
-)
-def submit_test(
+@router.post("/submit", response_model=TestResultOut, status_code=201)
+async def submit_test(
     payload: SubmitTestIn,
     background_tasks: BackgroundTasks,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_crew: CrewDep,      # v2 : le marin qui soumet
 ):
     """
-    Traite les réponses, calcule les scores, déclenche la mise à jour
-    du psychometric_snapshot en arrière-plan.
-
-    Synchrone  : scoring + sauvegarde résultat + snapshot crew
-    Background : refresh vessel_snapshot + fleet_snapshot si applicable
+    Traite les réponses, calcule les scores.
+    Synchrone  : scoring + sauvegarde + refresh psychometric_snapshot
+    Background : refresh vessel_snapshot + fleet_snapshot
     """
     try:
-        result = service.submit_and_score(
+        return await service.submit_and_score(
             db=db,
-            user_id=current_user.id,
+            crew=current_crew,          # v2 : CrewProfile complet
             test_id=payload.test_id,
             responses=payload.responses,
             background_tasks=background_tasks,
         )
-        return result
     except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
     except PermissionError as e:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=str(e))
+        raise HTTPException(status.HTTP_403_FORBIDDEN, str(e))
 
 
-# ─────────────────────────────────────────────
-# RÉSULTATS (lecture)
-# ─────────────────────────────────────────────
+# ── Résultats (lecture) ────────────────────────────────────
 
-@router.get(
-    "/results/me",
-    response_model=List[TestResultOut],
-    summary="Mes résultats de tests",
-)
-def get_my_results(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Historique des résultats du candidat connecté."""
-    return service.get_results_for_user(db, current_user.id)
+@router.get("/results/me", response_model=List[TestResultOut])
+async def get_my_results(db: DbDep, current_crew: CrewDep):
+    """Mes résultats — filtré via crew_profile_id."""
+    return await service.get_results_for_crew(db, current_crew.id)
 
 
-@router.get(
-    "/results/{candidate_id}",
-    response_model=List[TestResultOut],
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Résultats d'un candidat (client/admin)",
-)
-def get_candidate_results(
-    candidate_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+@router.get("/results/{crew_profile_id}", response_model=List[TestResultOut])
+async def get_candidate_results(
+    crew_profile_id: int,
+    db: DbDep,
+    current_employer: EmployerDep,   # v2 : client via EmployerProfile
 ):
     """
     Accès client/admin aux résultats d'un candidat.
-    Le service vérifie que le candidat est bien dans une campagne du client.
+    Vérifie que le candidat est dans une campagne ou un équipage de l'employer.
     """
-    results = service.get_results_for_candidate(
-        db, candidate_id=candidate_id, requester_id=current_user.id
+    results = await service.get_results_for_candidate(
+        db,
+        crew_profile_id=crew_profile_id,
+        requester_employer_id=current_employer.id,  # v2
     )
     if results is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé.")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès refusé.")
     return results

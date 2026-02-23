@@ -11,11 +11,11 @@ Note sur psychometric_snapshot et snapshot_updated_at :
   Mis à jour de façon synchrone après chaque soumission de test.
   Format JSON défini dans engine/psychometrics/snapshot.py.
 """
-# app/models/user.py
 from sqlalchemy import (
     Column, Integer, String, Boolean, Float,
     DateTime, JSON, ForeignKey, Enum as SAEnum,
 )
+from sqlalchemy.dialects.postgresql import ENUM as PGENUM
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -35,7 +35,11 @@ class User(Base):
     hashed_password = Column(String, nullable=False)
 
     is_harmony_verified = Column(Boolean, default=False, index=True)
-    role      = Column(SAEnum(UserRole), default=UserRole.CANDIDATE, nullable=False, index=True)
+    role      = Column(PGENUM(UserRole, name="userrole",  values_callable=lambda enum: [e.value for e in enum]), 
+        server_default="candidate", # Optionnel: aligné sur ta migration
+        nullable=False, 
+        index=True)
+    
     is_active = Column(Boolean, default=True)
 
     location   = Column(String, nullable=True)    # ex: "Antibes, FR"
@@ -84,7 +88,7 @@ class CrewProfile(Base):
     id      = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
 
-    position_targeted   = Column(SAEnum(YachtPosition), default=YachtPosition.DECKHAND, nullable=False)
+    position_targeted   = Column(PGENUM(YachtPosition, name="yachtposition",values_callable=lambda enum: [e.value for e in enum]), default=YachtPosition.DECKHAND, nullable=False)
     experience_years    = Column(Integer, default=0)
     availability_status = Column(String, default="available")
     # "available" | "on_board" | "unavailable" | "soon"

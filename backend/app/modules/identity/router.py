@@ -3,17 +3,19 @@
 Endpoints de gestion du profil identitaire du candidat.
 Couvre : identité, expériences, documents, rapports psychométriques.
 
-Design : endpoints modulaires pour éviter l'over-fetching.
-Le full-profile reste disponible mais son usage est découragé en polling.
+Changements v2 :
+- Session sync → DbDep (AsyncSession)
+- get_current_user → CrewDep / EmployerDep / UserDep selon l'endpoint
+- candidate_id → crew_profile_id dans les paths
+- Toutes les fonctions sync → async
+- role_required() remplacé par EmployerDep directement
 """
-from fastapi import APIRouter, Depends, HTTPException, File, Form, UploadFile, BackgroundTasks, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, File, Form, UploadFile, BackgroundTasks, status
 from typing import Optional
 
-from app.core.database import get_db
-from app.shared.deps import get_current_user, role_required
-from .service import IdentityService
-from .schemas import (
+from app.shared.deps import DbDep, UserDep, CrewDep, EmployerDep
+from app.modules.identity.service import IdentityService
+from app.modules.identity.schemas import (
     FullCrewProfileOut,
     UserIdentityOut,
     IdentityUpdateIn,
@@ -29,139 +31,153 @@ router = APIRouter(prefix="/identity", tags=["Identity"])
 service = IdentityService()
 
 
-# ─────────────────────────────────────────────
-# FULL PROFILE — usage restreint
-# ─────────────────────────────────────────────
+# ── Full profile (usage restreint) ────────────────────────
 
 @router.get(
-    "/candidate/{candidate_id}",
+    "/candidate/{crew_profile_id}",           # v2 : crew_profile_id (était candidate_id)
     response_model=FullCrewProfileOut,
     summary="Profil complet ⚠️ endpoint lourd",
     description=(
-        "Récupère l'intégralité du profil : identité, expériences, documents, rapports. "
+        "Intégralité du profil : identité, expériences, documents, rapports. "
         "Utiliser uniquement au premier chargement. Ne pas utiliser pour du polling."
     ),
 )
-def get_full_profile(
-    candidate_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+async def get_full_profile(
+    crew_profile_id: int,
+    db: DbDep,
+    current_user: UserDep,    # v2 : UserDep — accès depuis crew OU employer
 ):
-    profile = service.get_full_profile(db, candidate_id=candidate_id, requester=current_user)
+    """
+    Accès depuis deux contextes :
+    - Candidat (CrewProfile) : auto-consultation
+    - Client (EmployerProfile) : candidat dans sa campagne ou son équipage
+    Le service.get_full_profile() résout le contexte via resolve_access_context().
+    """
+    profile = await service.get_full_profile(
+        db, crew_profile_id=crew_profile_id, requester=current_user
+    )
     if not profile:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès non autorisé.")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès non autorisé.")
     return profile
 
 
-# ─────────────────────────────────────────────
-# ENDPOINTS MODULAIRES — légers
-# ─────────────────────────────────────────────
+# ── Endpoints modulaires (légers) ─────────────────────────
 
 @router.get(
-    "/candidate/{candidate_id}/identity",
+    "/candidate/{crew_profile_id}/identity",
     response_model=UserIdentityOut,
     summary="Identité uniquement",
 )
-def get_identity(
-    candidate_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+async def get_identity(
+    crew_profile_id: int,
+    db: DbDep,
+    current_user: UserDep,
 ):
     """À utiliser après un PATCH /identity/me pour rafraîchir sans tout recharger."""
-    data = service.get_identity(db, candidate_id=candidate_id, requester=current_user)
+    data = await service.get_identity(
+        db, crew_profile_id=crew_profile_id, requester=current_user
+    )
     if not data:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès non autorisé.")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès non autorisé.")
     return data
 
 
 @router.get(
-    "/candidate/{candidate_id}/experiences",
+    "/candidate/{crew_profile_id}/experiences",
     response_model=list[ExperienceOut],
     summary="Expériences professionnelles",
 )
-def get_experiences(
-    candidate_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+async def get_experiences(
+    crew_profile_id: int,
+    db: DbDep,
+    current_user: UserDep,
 ):
-    data = service.get_experiences(db, candidate_id=candidate_id, requester=current_user)
+    data = await service.get_experiences(
+        db, crew_profile_id=crew_profile_id, requester=current_user
+    )
     if data is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès non autorisé.")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès non autorisé.")
     return data
 
 
 @router.get(
-    "/candidate/{candidate_id}/documents",
+    "/candidate/{crew_profile_id}/documents",
     response_model=list[DocumentOut],
     summary="Documents et certificats",
     description="Peut être utilisé en polling léger pour les vérifications Harmony.",
 )
-def get_documents(
-    candidate_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+async def get_documents(
+    crew_profile_id: int,
+    db: DbDep,
+    current_user: UserDep,
 ):
-    data = service.get_documents(db, candidate_id=candidate_id, requester=current_user)
+    data = await service.get_documents(
+        db, crew_profile_id=crew_profile_id, requester=current_user
+    )
     if data is None:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès non autorisé.")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès non autorisé.")
     return data
 
 
 @router.get(
-    "/candidate/{candidate_id}/reports",
+    "/candidate/{crew_profile_id}/reports",
     response_model=PsychometricReportOut,
     summary="Rapports psychométriques",
 )
-def get_reports(
-    candidate_id: int,
+async def get_reports(
+    crew_profile_id: int,
+    db: DbDep,
+    current_user: UserDep,
     view_mode: Optional[str] = None,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
 ):
     """
-    Retourne les rapports psychométriques issus du psychometric_snapshot.
-    view_mode='onboarding' → inclut les conseils d'intégration.
+    view_mode='onboarding' → inclut les conseils d'intégration personnalisés.
+    Accessible depuis tout contexte autorisé (candidat, recruteur, manager).
     """
-    data = service.get_reports(
+    data = await service.get_reports(
         db,
-        candidate_id=candidate_id,
+        crew_profile_id=crew_profile_id,
         requester=current_user,
         force_onboarding=(view_mode == "onboarding"),
     )
     if not data:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé.")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès refusé.")
     return data
 
 
 @router.get(
-    "/candidate/{candidate_id}/onboarding-advice",
+    "/candidate/{crew_profile_id}/onboarding-advice",
     response_model=OnboardingAdviceOut,
-    dependencies=[Depends(role_required(["client", "admin"]))],
     summary="Conseils d'onboarding post-recrutement",
+    description=(
+        "Accessible uniquement si le candidat est en statut JOINED "
+        "dans une campagne de cet employeur. "
+        "Extrait les onboarding_tips du psychometric_snapshot."
+    ),
 )
-def get_onboarding_advice(
-    candidate_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+async def get_onboarding_advice(
+    crew_profile_id: int,
+    db: DbDep,
+    current_employer: EmployerDep,    # v2 : EmployerDep (était role_required("client"))
 ):
     """
-    Accessible uniquement si le candidat est en statut JOINED dans une campagne du client.
-    Extrait les onboarding_tips du psychometric_snapshot.
+    v2 : EmployerDep garantit que le requester est bien un EmployerProfile.
+    Le service vérifie en plus que le candidat est JOINED dans une de ses campagnes.
     """
-    advice = service.get_onboarding_advice(
-        db, candidate_id=candidate_id, requester_id=current_user.id
+    advice = await service.get_onboarding_advice(
+        db,
+        crew_profile_id=crew_profile_id,
+        employer_profile_id=current_employer.id,    # v2
     )
     if not advice:
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Le candidat doit être recruté pour accéder aux conseils d'onboarding."
+            status.HTTP_400_BAD_REQUEST,
+            "Le candidat doit être recruté pour accéder aux conseils d'onboarding."
         )
     return advice
 
 
-# ─────────────────────────────────────────────
-# MISE À JOUR IDENTITÉ
-# ─────────────────────────────────────────────
+# ── Mise à jour identité ───────────────────────────────────
 
 @router.patch(
     "/me",
@@ -169,40 +185,45 @@ def get_onboarding_advice(
     summary="Mettre à jour mon identité",
     description=(
         "Retourne uniquement l'identité mise à jour. "
-        "Le frontend doit mettre à jour son cache local, sans refetch du full-profile."
+        "Le frontend met à jour son cache local sans refetch du full-profile."
     ),
 )
-def update_my_identity(
+async def update_my_identity(
     payload: IdentityUpdateIn,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_crew: CrewDep,    # v2 : CrewDep — seul le marin modifie son profil
 ):
-    service.update_identity(db, user=current_user, payload=payload)
-    return service.get_identity(db, candidate_id=current_user.id, requester=current_user)
+    """
+    v2 : current_crew (CrewProfile) remplace current_user.
+    Les champs identitaires modifiables (nom, bio, disponibilité...)
+    sont sur CrewProfile et User — le service orchestre les deux.
+    """
+    await service.update_identity(db, crew=current_crew, payload=payload)
+    return await service.get_identity(
+        db, crew_profile_id=current_crew.id, requester=current_crew.user
+    )
 
 
-# ─────────────────────────────────────────────
-# EXPÉRIENCES
-# ─────────────────────────────────────────────
+# ── Expériences ────────────────────────────────────────────
 
 @router.post(
     "/me/experiences",
     response_model=ExperienceOut,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(role_required(["candidate", "admin"]))],
     summary="Ajouter une expérience",
 )
-def add_experience(
+async def add_experience(
     payload: ExperienceCreateIn,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_crew: CrewDep,    # v2 : CrewDep
 ):
-    return service.add_experience(db, user=current_user, payload=payload)
+    """
+    v2 : lie l'expérience à crew_profile_id (pas user_id).
+    """
+    return await service.add_experience(db, crew=current_crew, payload=payload)
 
 
-# ─────────────────────────────────────────────
-# DOCUMENTS & UPLOAD
-# ─────────────────────────────────────────────
+# ── Documents & Upload ─────────────────────────────────────
 
 @router.post(
     "/me/documents",
@@ -212,19 +233,22 @@ def add_experience(
 )
 async def upload_document(
     background_tasks: BackgroundTasks,
+    db: DbDep,
+    current_crew: CrewDep,    # v2 : CrewDep
     title: str = Form(...),
     file: UploadFile = File(...),
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
 ):
     """
     Upload d'un document ou d'un avatar.
     - Avatar (title='AVATAR_USER') : traitement synchrone immédiat.
     - Document : sauvegarde immédiate + vérification Harmony en background.
+
+    v2 : current_crew.user_id → UserDocument.user_id (les documents restent
+    sur User pour l'accès cross-profil par l'admin).
     """
     return await service.upload_document(
         db=db,
-        user=current_user,
+        crew=current_crew,
         title=title,
         file=file,
         background_tasks=background_tasks,

@@ -1,16 +1,16 @@
 # modules/crew/router.py
 """
 Endpoints de gestion d'équipage et du Daily Pulse.
-Couvre : assignation, retrait, dashboard, historique pulse.
 
-Règle : zéro db.query ici. Tout passe par crew_service.
+Changements v2 :
+- Candidats : CrewDep (retourne CrewProfile directement)
+- Clients   : EmployerDep (retourne EmployerProfile directement)
+- crew_profile_id dans les paths au lieu de user_id
 """
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, status
 from typing import List, Optional
 
-from app.core.database import get_db
-from app.shared.deps import get_current_user, role_required
+from app.shared.deps import DbDep, CrewDep, EmployerDep
 from app.modules.crew.service import CrewService
 from app.modules.crew.schemas import (
     CrewAssignIn,
@@ -24,194 +24,110 @@ router = APIRouter(prefix="/crew", tags=["Crew"])
 service = CrewService()
 
 
-# ─────────────────────────────────────────────
-# AFFECTATION PERSONNELLE (candidat)
-# ─────────────────────────────────────────────
+# ── Affectation personnelle (candidat) ─────────────────────
 
-@router.get(
-    "/me/assignment",
-    response_model=Optional[CrewMemberOut],
-    dependencies=[Depends(role_required(["candidate", "admin"]))],
-    summary="Mon affectation active",
-)
-def get_my_assignment(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    """Retourne l'affectation active du marin connecté, ou null."""
-    return service.get_active_assignment(db, user_id=current_user.id)
+@router.get("/me/assignment", response_model=Optional[CrewMemberOut])
+async def get_my_assignment(db: DbDep, current_crew: CrewDep):
+    """Mon affectation active."""
+    return await service.get_active_assignment(db, current_crew.id)
 
 
-# ─────────────────────────────────────────────
-# GESTION ÉQUIPAGE (client / admin)
-# ─────────────────────────────────────────────
+# ── Gestion équipage (client) ──────────────────────────────
 
-@router.get(
-    "/{yacht_id}/members",
-    response_model=List[CrewMemberOut],
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Équipage actif d'un yacht",
-)
-def list_crew(
+@router.get("/{yacht_id}/members", response_model=List[CrewMemberOut])
+async def list_crew(
     yacht_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_employer: EmployerDep,   # v2
 ):
-    """
-    Liste les membres actifs d'un yacht.
-    Le service vérifie la propriété du yacht.
-    """
-    crew = service.get_active_crew(db, yacht_id=yacht_id, requester_id=current_user.id)
+    crew = await service.get_active_crew(db, yacht_id=yacht_id, employer=current_employer)
     if crew is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Yacht introuvable ou accès refusé."
-        )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Yacht introuvable ou accès refusé.")
     return crew
 
 
-@router.post(
-    "/{yacht_id}/members",
-    response_model=CrewMemberOut,
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Ajouter un membre à l'équipage",
-)
-def add_crew_member(
+@router.post("/{yacht_id}/members", response_model=CrewMemberOut, status_code=201)
+async def add_crew_member(
     yacht_id: int,
     payload: CrewAssignIn,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_employer: EmployerDep,
 ):
     """
     Assigne un marin à un yacht.
-    Déclenche le recalcul du vessel_snapshot en background.
-    Le service vérifie : ownership, doublon d'affectation active.
+    payload.crew_profile_id (v2) au lieu de payload.user_id.
     """
     try:
-        return service.assign_member(
-            db, yacht_id=yacht_id, payload=payload, requester_id=current_user.id
+        return await service.assign_member(
+            db, yacht_id=yacht_id, payload=payload, employer=current_employer
         )
     except PermissionError:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Accès refusé."
-        )
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès refusé.")
     except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
 
 
-@router.delete(
-    "/{yacht_id}/members/{user_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Retirer un membre (soft delete)",
-)
-def remove_crew_member(
+@router.delete("/{yacht_id}/members/{crew_profile_id}", status_code=204)
+async def remove_crew_member(
     yacht_id: int,
-    user_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    crew_profile_id: int,       # v2 : était user_id dans l'URL
+    db: DbDep,
+    current_employer: EmployerDep,
 ):
-    """
-    Clôture le contrat du marin.
-    Il passe en 'Past Crew' mais reste dans l'historique.
-    Déclenche le recalcul du vessel_snapshot.
-    """
+    """Clôture le contrat du marin (soft delete)."""
     try:
-        service.remove_member(
-            db, yacht_id=yacht_id, user_id=user_id, requester_id=current_user.id
+        await service.remove_member(
+            db,
+            yacht_id=yacht_id,
+            crew_profile_id=crew_profile_id,    # v2
+            employer=current_employer,
         )
     except PermissionError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé.")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès refusé.")
     except KeyError as e:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
 
 
-# ─────────────────────────────────────────────
-# DASHBOARD MANAGEMENT
-# ─────────────────────────────────────────────
+# ── Dashboard ──────────────────────────────────────────────
 
-@router.get(
-    "/{yacht_id}/dashboard",
-    response_model=DashboardOut,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Dashboard complet d'un yacht",
-)
-def get_dashboard(
+@router.get("/{yacht_id}/dashboard", response_model=DashboardOut)
+async def get_dashboard(
     yacht_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_employer: EmployerDep,
 ):
-    """
-    Retourne :
-    - Analyse harmony (performance + cohésion)
-    - Team Volatility Index + Hidden Conflict Detector
-    - Weather trend (pulse agrégé)
-    - Diagnostic combiné + recommandations
-
-    Alimenté par vessel_snapshot (cache) + pulse récent.
-    """
-    dashboard = service.get_full_dashboard(
-        db, yacht_id=yacht_id, requester_id=current_user.id
+    dashboard = await service.get_full_dashboard(
+        db, yacht_id=yacht_id, employer=current_employer
     )
     if dashboard is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Yacht introuvable ou accès refusé."
-        )
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Yacht introuvable ou accès refusé.")
     return dashboard
 
 
-# ─────────────────────────────────────────────
-# DAILY PULSE (candidat)
-# ─────────────────────────────────────────────
+# ── Daily Pulse (candidat) ─────────────────────────────────
 
-@router.post(
-    "/pulse",
-    response_model=DailyPulseOut,
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(role_required(["candidate", "admin"]))],
-    summary="Soumettre mon pulse du jour",
-)
-def submit_pulse(
+@router.post("/pulse", response_model=DailyPulseOut, status_code=201)
+async def submit_pulse(
     payload: DailyPulseIn,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_crew: CrewDep,      # v2
 ):
     """
-    Soumet l'humeur journalière du marin.
-    Contraintes : assignation active requise, une seule soumission par jour.
+    Soumet le pulse du jour.
+    Contraintes : assignation active requise, une soumission par jour.
     """
     try:
-        return service.submit_daily_pulse(db, user=current_user, payload=payload)
+        return await service.submit_daily_pulse(db, crew=current_crew, payload=payload)
     except ValueError as e:
         code = str(e)
         if code == "NO_ACTIVE_ASSIGNMENT":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Vous devez être assigné à un yacht actif."
-            )
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "Vous devez être assigné à un yacht actif.")
         if code == "ALREADY_SUBMITTED_TODAY":
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Votre pulse a déjà été transmis aujourd'hui."
-            )
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=code)
+            raise HTTPException(status.HTTP_409_CONFLICT, "Pulse déjà transmis aujourd'hui.")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
 
 
-@router.get(
-    "/pulse/history",
-    response_model=List[DailyPulseOut],
-    dependencies=[Depends(role_required(["candidate", "admin"]))],
-    summary="Mon historique de pulses",
-)
-def get_pulse_history(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
+@router.get("/pulse/history", response_model=List[DailyPulseOut])
+async def get_pulse_history(db: DbDep, current_crew: CrewDep):
     """30 derniers pulses du marin connecté."""
-    return service.get_pulse_history(db, user_id=current_user.id)
+    return await service.get_pulse_history(db, current_crew.id)

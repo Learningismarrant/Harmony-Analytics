@@ -2,64 +2,63 @@
 """
 Orchestration du cycle de vie des évaluations.
 
-Responsabilités :
-1. Interroger la DB via repository (questions, test info)
-2. Déléguer le calcul à engine/psychometrics/scoring.py
-3. Sauvegarder le résultat
-4. Déclencher la mise à jour du psychometric_snapshot (synchrone)
-5. Propager aux niveaux vessel + fleet (background)
+Changements v2 :
+- Toutes les méthodes reçoivent crew_profile (CrewProfile) au lieu de user_id
+- psychometric_snapshot lu/écrit sur CrewProfile
+- propagation background utilise crew_profile_id
 """
 from fastapi import BackgroundTasks
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
 
-from engine.psychometrics.scoring import calculate_scores
-from engine.psychometrics.snapshot import build_snapshot
-from modules.assessment.repository import AssessmentRepository
+from app.engine.psychometrics.scoring import calculate_scores
+from app.engine.psychometrics.snapshot import build_snapshot
+from app.modules.assessment.repository import AssessmentRepository
+from app.shared.models import CrewProfile
 
 repo = AssessmentRepository()
 
 
 class AssessmentService:
 
-    def get_catalogue(self, db: Session) -> List:
-        return repo.get_all_active_tests(db)
+    async def get_catalogue(self, db: AsyncSession) -> List:
+        return await repo.get_all_active_tests(db)
 
-    def get_questions_for_user(self, db: Session, test_id: int, user_id: int) -> Optional[List]:
+    async def get_questions_for_crew(
+        self, db: AsyncSession, test_id: int, crew_profile_id: int
+    ) -> Optional[List]:
         """
-        Retourne les questions.
-        TODO : Vérifier qu'il n'y a pas de session en cours (anti-triche).
+        Retourne les questions. Anti-triche Temps 2 : vérifier session en cours.
         """
-        return repo.get_questions_by_test(db, test_id)
+        return await repo.get_questions_by_test(db, test_id)
 
-    def submit_and_score(
+    async def submit_and_score(
         self,
-        db: Session,
-        user_id: int,
+        db: AsyncSession,
+        crew: CrewProfile,          # v2 : CrewProfile complet (pas user_id)
         test_id: int,
         responses: List,
         background_tasks: BackgroundTasks,
     ) -> Dict:
         """
-        Pipeline complet de soumission :
-        1. Validation des données
-        2. Calcul pur (engine)
-        3. Sauvegarde résultat
-        4. Refresh snapshot crew (synchrone — l'utilisateur voit son profil à jour)
-        5. Propagation vessel + fleet (background — 0ms ressenti)
+        Pipeline complet :
+        1. Validation + hydratation test
+        2. Calcul pur (engine — zéro DB)
+        3. Sauvegarde TestResult via crew_profile_id
+        4. Refresh psychometric_snapshot sur CrewProfile (synchrone)
+        5. Propagation vessel + fleet (background)
         """
         if not responses:
             raise ValueError("Aucune réponse fournie.")
 
-        # 1. Hydratation des données test (seul accès DB dans ce flux)
-        test_info = repo.get_test_info(db, test_id)
+        test_info = await repo.get_test_info(db, test_id)
         if not test_info:
             raise ValueError("Test introuvable.")
 
-        questions = repo.get_questions_by_test(db, test_id)
+        questions = await repo.get_questions_by_test(db, test_id)
         questions_map = {q.id: q for q in questions}
 
-        # 2. Calcul pur — engine ne touche pas la DB
+        # ── Calcul pur (engine) ───────────────────────────────
         result = calculate_scores(
             responses=responses,
             questions_map=questions_map,
@@ -67,87 +66,83 @@ class AssessmentService:
             max_score_per_question=test_info.max_score_per_question,
         )
 
-        # 3. Sauvegarde
-        saved = repo.save_result(
+        # ── Sauvegarde via crew_profile_id ────────────────────
+        saved = await repo.save_result(
             db,
-            user_id=user_id,
+            crew_profile_id=crew.id,    # v2
             test_id=test_id,
             scores=result,
             global_score=result["global_score"],
         )
 
-        # 4. Refresh psychometric_snapshot (SYNCHRONE)
-        self._refresh_crew_snapshot(db, user_id)
+        # ── Refresh snapshot (synchrone) ──────────────────────
+        await self._refresh_crew_snapshot(db, crew.id)
 
-        # 5. Propagation vessel + fleet (BACKGROUND — ne bloque pas la réponse HTTP)
+        # ── Propagation vessel + fleet (background) ───────────
         background_tasks.add_task(
-            self._propagate_to_vessel_and_fleet, user_id
+            self._propagate_to_vessel_and_fleet, crew.id
         )
 
         return saved
 
-    def get_results_for_user(self, db: Session, user_id: int) -> List:
-        return repo.get_results_by_user(db, user_id)
+    async def get_results_for_crew(
+        self, db: AsyncSession, crew_profile_id: int
+    ) -> List:
+        return await repo.get_results_by_crew(db, crew_profile_id)
 
-    def get_results_for_candidate(
-        self, db: Session, candidate_id: int, requester_id: int
+    async def get_results_for_candidate(
+        self,
+        db: AsyncSession,
+        crew_profile_id: int,
+        requester_employer_id: int,   # v2 : employer_profile_id du client
     ) -> Optional[List]:
-        """
-        Vérifie que le requester a accès au candidat
-        (campagne active ou équipage actif).
-        """
-        has_access = repo.check_requester_access(db, candidate_id, requester_id)
+        has_access = await repo.check_requester_access(
+            db, crew_profile_id, requester_employer_id
+        )
         if not has_access:
             return None
-        return repo.get_results_by_user(db, candidate_id)
+        return await repo.get_results_by_crew(db, crew_profile_id)
 
-    # ─────────────────────────────────────────────
-    # SNAPSHOT MANAGEMENT
-    # ─────────────────────────────────────────────
+    # ── Snapshot management ───────────────────────────────────
 
-    def _refresh_crew_snapshot(self, db: Session, user_id: int) -> None:
+    async def _refresh_crew_snapshot(
+        self, db: AsyncSession, crew_profile_id: int
+    ) -> None:
         """
-        Relit tous les TestResult du candidat et reconstruit le snapshot.
-        Synchrone — appelé immédiatement après la soumission.
+        Relit tous les TestResult du crew et reconstruit le snapshot.
+        v2 : opère sur CrewProfile.psychometric_snapshot.
         """
-        all_results = repo.get_results_by_user(db, user_id)
+        all_results = await repo.get_results_by_crew(db, crew_profile_id)
         snapshot = build_snapshot(all_results)
-        repo.update_crew_snapshot(db, user_id, snapshot)
+        await repo.update_crew_snapshot(db, crew_profile_id, snapshot)
 
-    def _propagate_to_vessel_and_fleet(self, user_id: int) -> None:
+    async def _propagate_to_vessel_and_fleet(self, crew_profile_id: int) -> None:
         """
         Background task : recalcule vessel_snapshot et fleet_snapshot.
-        Tourne après que la réponse HTTP est envoyée.
-
-        Utilise sa propre session DB (background task isolée).
+        v2 : utilise crew_profile_id partout.
+        Session DB indépendante (isolée du contexte HTTP).
         """
-        from core.database import SessionLocal
-        from modules.vessel.repository import VesselRepository
-        from modules.vessel.service import VesselService
+        from app.core.database import AsyncSessionLocal
+        from app.modules.vessel.repository import VesselRepository
+        from app.modules.vessel.service import VesselService
         from engine.team.harmony import compute as compute_harmony
 
-        db = SessionLocal()
         vessel_repo = VesselRepository()
         vessel_service = VesselService()
 
-        try:
-            # Quels yachts sont impactés par ce marin ?
-            active_yacht_ids = repo.get_active_yacht_ids(db, user_id)
+        async with AsyncSessionLocal() as db:
+            try:
+                active_yacht_ids = await repo.get_active_yacht_ids(db, crew_profile_id)
 
-            for yacht_id in active_yacht_ids:
-                # Récupère tous les snapshots de l'équipe
-                crew_snapshots = vessel_repo.get_crew_snapshots(db, yacht_id)
+                for yacht_id in active_yacht_ids:
+                    crew_snapshots = await vessel_repo.get_crew_snapshots(db, yacht_id)
+                    if len(crew_snapshots) >= 2:
+                        harmony = compute_harmony(crew_snapshots)
+                        await vessel_service.update_vessel_snapshot(db, yacht_id, harmony)
 
-                if len(crew_snapshots) >= 2:
-                    harmony = compute_harmony(crew_snapshots)
-                    vessel_service.update_vessel_snapshot(db, yacht_id, harmony)
+                employer_ids = await vessel_repo.get_employer_ids_for_yachts(db, active_yacht_ids)
+                for employer_id in employer_ids:
+                    await vessel_service.refresh_fleet_snapshot_if_stale(db, employer_id)
 
-            # Fleet si les yachts appartiennent à un office
-            office_ids = vessel_repo.get_office_ids_for_yachts(db, active_yacht_ids)
-            for office_id in office_ids:
-                vessel_service.refresh_fleet_snapshot_if_stale(db, office_id)
-
-        except Exception as e:
-            print(f"[BACKGROUND] Erreur propagation snapshot user {user_id}: {e}")
-        finally:
-            db.close()
+            except Exception as e:
+                print(f"[BACKGROUND] Propagation snapshot crew {crew_profile_id}: {e}")

@@ -1,443 +1,196 @@
 # modules/recruitment/router.py
 """
-Endpoints du cycle de vie complet d'une campagne de recrutement.
-Couvre : CRUD campagne, statuts, matching psychométrique, décisions candidats.
+Endpoints de recrutement — campagnes, matching, décisions.
 
-Architecture :
-- Toute logique métier → recruitment_service
-- Matching psychométrique → engine/matching/* via le service
-- Zéro import de crud/, models/ ou engine/ directement ici
+Changements v2 :
+- Employer → EmployerDep (EmployerProfile)
+- Candidat → CrewDep (CrewProfile)
+- crew_profile_id dans les paths (était candidate_id / user_id)
 """
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, status
 from typing import List, Optional
 
-from app.core.database import get_db
-from app.shared.deps import get_current_user, role_required
-from app.shared.enums import CampaignStatus
+from app.shared.deps import DbDep, CrewDep, EmployerDep
 from app.modules.recruitment.service import RecruitmentService
 from app.modules.recruitment.schemas import (
     CampaignCreateIn,
     CampaignUpdateIn,
     CampaignOut,
-    CampaignOverviewOut,
-    CampaignMatchResultOut,
-    CampaignStatisticsOut,
-    CandidateDecisionIn,
-    CandidateDecisionOut,
-    BulkRejectIn,
     CampaignPublicOut,
-    MyApplicationOut,
+    MatchResultOut,
     RecruitmentImpactOut,
+    CandidateDecisionIn,
+    CampaignStatsOut,
+    MyApplicationOut,
 )
 
 router = APIRouter(prefix="/recruitment", tags=["Recruitment"])
 service = RecruitmentService()
 
 
-# ─────────────────────────────────────────────
-# CRUD CAMPAGNES
-# ─────────────────────────────────────────────
+# ── Campagnes (employer) ───────────────────────────────────
 
-@router.post(
-    "/campaigns",
-    response_model=CampaignOut,
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Créer une campagne",
-)
-def create_campaign(
+@router.post("/campaigns", response_model=CampaignOut, status_code=201)
+async def create_campaign(
     payload: CampaignCreateIn,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_employer: EmployerDep,
 ):
-    """
-    Crée une campagne avec vérifications :
-    propriété du yacht, absence de doublon actif, validation des données.
-    """
-    try:
-        return service.create_campaign(db, payload=payload, client_id=current_user.id)
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    return await service.create_campaign(db, payload, employer=current_employer)
 
 
-@router.get(
-    "/campaigns",
-    response_model=List[CampaignOverviewOut],
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Mes campagnes",
-)
-def list_campaigns(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-    campaign_status: Optional[CampaignStatus] = Query(None, alias="status"),
-    is_archived: bool = Query(False),
+@router.get("/campaigns", response_model=List[CampaignOut])
+async def list_my_campaigns(
+    db: DbDep,
+    current_employer: EmployerDep,
+    archived: bool = False,
 ):
-    return service.list_campaigns(
-        db,
-        client_id=current_user.id,
-        campaign_status=campaign_status,
-        is_archived=is_archived,
-    )
+    return await service.get_my_campaigns(db, employer=current_employer, is_archived=archived)
 
 
-@router.get(
-    "/campaigns/{campaign_id}",
-    response_model=CampaignOut,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Détail d'une campagne",
-)
-def get_campaign(
-    campaign_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    campaign = service.get_campaign(db, campaign_id=campaign_id, client_id=current_user.id)
-    if not campaign:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campagne introuvable.")
-    return campaign
-
-
-@router.patch(
-    "/campaigns/{campaign_id}",
-    response_model=CampaignOut,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Modifier une campagne",
-)
-def update_campaign(
+@router.patch("/campaigns/{campaign_id}", response_model=CampaignOut)
+async def update_campaign(
     campaign_id: int,
     payload: CampaignUpdateIn,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_employer: EmployerDep,
 ):
     try:
-        return service.update_campaign(
-            db, campaign_id=campaign_id, payload=payload, client_id=current_user.id
-        )
+        return await service.update_campaign(db, campaign_id, payload, employer=current_employer)
     except PermissionError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé.")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès refusé.")
 
 
-@router.delete(
-    "/campaigns/{campaign_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Supprimer une campagne (soft delete)",
-)
-def delete_campaign(
+@router.delete("/campaigns/{campaign_id}", status_code=204)
+async def archive_campaign(
     campaign_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_employer: EmployerDep,
 ):
     try:
-        service.delete_campaign(db, campaign_id=campaign_id, client_id=current_user.id)
+        await service.archive_campaign(db, campaign_id, employer=current_employer)
     except PermissionError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé.")
-    except ValueError as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès refusé.")
 
 
-# ─────────────────────────────────────────────
-# STATUTS & CYCLE DE VIE
-# ─────────────────────────────────────────────
+# ── Matching ──────────────────────────────────────────────
 
-@router.patch(
-    "/campaigns/{campaign_id}/status",
-    response_model=CampaignOut,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Changer le statut (DRAFT → OPEN → CLOSED)",
-)
-def change_status(
+@router.get("/campaigns/{campaign_id}/matching", response_model=List[MatchResultOut])
+async def get_matching(
     campaign_id: int,
-    payload: dict,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_employer: EmployerDep,
 ):
+    """
+    Score MLPSM pour tous les candidats de la campagne.
+    Trié par y_success décroissant.
+    Utilise compute_batch(with_delta=True) → MLPSMResult riche.
+    """
     try:
-        new_status = CampaignStatus(payload.get("status"))
-        return service.change_status(
-            db, campaign_id=campaign_id, new_status=new_status, client_id=current_user.id
-        )
-    except ValueError:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Statut invalide. Valeurs acceptées : DRAFT, OPEN, CLOSED."
-        )
-
-
-@router.post(
-    "/campaigns/{campaign_id}/archive",
-    response_model=CampaignOut,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Archiver (rejette automatiquement les candidats non embauchés)",
-)
-def archive_campaign(
-    campaign_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    try:
-        return service.archive_campaign(
-            db, campaign_id=campaign_id, client_id=current_user.id
-        )
+        return await service.get_matching(db, campaign_id, employer=current_employer)
     except PermissionError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé.")
-
-
-# ─────────────────────────────────────────────
-# MATCHING & ANALYTICS
-# Alimentés par engine/matching/* via le service
-# ─────────────────────────────────────────────
-
-@router.get(
-    "/campaigns/{campaign_id}/matching",
-    response_model=List[CampaignMatchResultOut],
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Classement psychométrique des candidats",
-    description=(
-        "Retourne le matching sur 3 axes : "
-        "candidat vs SME, candidat vs pool, candidat vs équipe cible (T3). "
-        "Trié : Hired → Score décroissant → Rejected."
-    ),
-)
-def get_matching(
-    campaign_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    try:
-        return service.get_matching(
-            db, campaign_id=campaign_id, client_id=current_user.id
-        )
-    except PermissionError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé.")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès refusé.")
 
 
 @router.get(
-    "/campaigns/{campaign_id}/impact/{candidate_id}",
+    "/campaigns/{campaign_id}/impact/{crew_profile_id}",  # v2 : était candidate_id
     response_model=RecruitmentImpactOut,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Simulation d'impact recrutement (What-If)",
-    description=(
-        "Calcule le delta sur la dynamique d'équipe si ce candidat est recruté : "
-        "impact sur min(agréabilité), σ(conscienciosité), μ(stabilité émotionnelle), "
-        "score Ŷ_success."
-    ),
 )
-def get_recruitment_impact(
+async def get_candidate_impact(
     campaign_id: int,
-    candidate_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    crew_profile_id: int,   # v2
+    db: DbDep,
+    current_employer: EmployerDep,
 ):
     """
-    Endpoint What-If : 'Que se passe-t-il si j'embauche ce candidat ?'
-    Utilise engine/recruitment/simulator.py via le service.
+    Rapport What-If détaillé pour un candidat.
+    Retourne to_impact_report() du MLPSMResult complet.
     """
-    impact = service.simulate_recruitment_impact(
-        db,
-        campaign_id=campaign_id,
-        candidate_id=candidate_id,
-        client_id=current_user.id,
-    )
-    if not impact:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Candidat ou campagne introuvable."
-        )
-    return impact
-
-
-@router.get(
-    "/campaigns/{campaign_id}/statistics",
-    response_model=CampaignStatisticsOut,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Statistiques de la campagne",
-)
-def get_statistics(
-    campaign_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
     try:
-        return service.get_statistics(
-            db, campaign_id=campaign_id, client_id=current_user.id
+        return await service.get_candidate_impact(
+            db, campaign_id, crew_profile_id, employer=current_employer
         )
     except PermissionError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé.")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès refusé.")
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
 
 
-# ─────────────────────────────────────────────
-# DÉCISIONS CANDIDATS
-# ─────────────────────────────────────────────
+# ── Décisions (employer) ───────────────────────────────────
 
-@router.post(
-    "/campaigns/{campaign_id}/candidates/{candidate_id}/joined",
-    response_model=CandidateDecisionOut,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Passer en onboarding",
-)
-def joined_onboarding(
+@router.post("/campaigns/{campaign_id}/hire/{crew_profile_id}", status_code=200)
+async def hire_candidate(
     campaign_id: int,
-    candidate_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    crew_profile_id: int,   # v2
+    db: DbDep,
+    current_employer: EmployerDep,
 ):
+    """
+    Embauche un candidat + crée le RecruitmentEvent (pour ML Temps 2).
+    """
     try:
-        return service.process_joined_onboarding(
-            db, campaign_id=campaign_id, candidate_id=candidate_id, client_id=current_user.id
+        return await service.hire_candidate(
+            db, campaign_id, crew_profile_id, employer=current_employer
         )
-    except (PermissionError, ValueError) as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+    except PermissionError:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès refusé.")
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
 
 
-@router.post(
-    "/campaigns/{campaign_id}/candidates/{candidate_id}/hire",
-    response_model=CandidateDecisionOut,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Recruter un candidat",
-)
-def hire_candidate(
+@router.post("/campaigns/{campaign_id}/reject/{crew_profile_id}", status_code=200)
+async def reject_candidate(
     campaign_id: int,
-    candidate_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    try:
-        return service.process_hiring(
-            db, campaign_id=campaign_id, candidate_id=candidate_id, client_id=current_user.id
-        )
-    except (PermissionError, ValueError) as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.post(
-    "/campaigns/{campaign_id}/candidates/{candidate_id}/unhire",
-    response_model=CandidateDecisionOut,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Annuler le recrutement",
-)
-def unhire_candidate(
-    campaign_id: int,
-    candidate_id: int,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    try:
-        return service.process_unhire(
-            db, campaign_id=campaign_id, candidate_id=candidate_id, client_id=current_user.id
-        )
-    except (PermissionError, ValueError) as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.post(
-    "/campaigns/{campaign_id}/candidates/{candidate_id}/reject",
-    response_model=CandidateDecisionOut,
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Rejeter un candidat",
-)
-def reject_candidate(
-    campaign_id: int,
-    candidate_id: int,
+    crew_profile_id: int,   # v2
     payload: CandidateDecisionIn,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+    db: DbDep,
+    current_employer: EmployerDep,
 ):
     try:
-        return service.process_rejection(
+        return await service.reject_candidate(
             db,
-            campaign_id=campaign_id,
-            candidate_id=candidate_id,
-            reason=payload.rejected_reason,
-            client_id=current_user.id,
+            campaign_id,
+            crew_profile_id,
+            reason=payload.rejected_reason or "",
+            employer=current_employer,
         )
-    except (PermissionError, ValueError) as e:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
-
-
-@router.post(
-    "/campaigns/{campaign_id}/candidates/bulk-reject",
-    dependencies=[Depends(role_required(["client", "admin"]))],
-    summary="Rejet en masse",
-)
-def bulk_reject(
-    campaign_id: int,
-    payload: BulkRejectIn,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    try:
-        count = service.bulk_reject(
-            db,
-            campaign_id=campaign_id,
-            candidate_ids=payload.candidate_ids,
-            reason=payload.reason,
-            client_id=current_user.id,
-        )
-        return {"rejected_count": count}
     except PermissionError:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé.")
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès refusé.")
+    except ValueError as e:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
 
 
-# ─────────────────────────────────────────────
-# VUE CANDIDAT
-# ─────────────────────────────────────────────
-
-@router.get(
-    "/my-applications",
-    response_model=List[MyApplicationOut],
-    dependencies=[Depends(role_required(["candidate", "admin"]))],
-    summary="Mes candidatures",
-)
-def get_my_applications(
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
-):
-    return service.get_candidate_applications(db, candidate_id=current_user.id)
-
-
-# ─────────────────────────────────────────────
-# ENDPOINTS PUBLICS (sans auth ou auth candidat)
-# ─────────────────────────────────────────────
-
-@router.get(
-    "/public/{invite_token}",
-    response_model=CampaignPublicOut,
-    summary="Informations publiques d'une campagne (via QR code)",
-)
-def get_public_campaign(
-    invite_token: str,
-    db: Session = Depends(get_db),
-):
-    """Accessible sans authentification pour l'affichage pré-candidature."""
-    campaign = service.get_public_campaign(db, invite_token=invite_token)
-    if not campaign:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campagne introuvable.")
-    if campaign.get("is_archived"):
-        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Cette campagne n'est plus active.")
-    return campaign
-
-
-@router.post(
-    "/public/{invite_token}/join",
-    status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(role_required(["candidate"]))],
-    summary="Postuler via lien d'invitation",
-)
-def join_campaign(
-    invite_token: str,
-    db: Session = Depends(get_db),
-    current_user=Depends(get_current_user),
+@router.get("/campaigns/{campaign_id}/stats", response_model=CampaignStatsOut)
+async def get_campaign_stats(
+    campaign_id: int,
+    db: DbDep,
+    current_employer: EmployerDep,
 ):
     try:
-        return service.join_campaign(
-            db, invite_token=invite_token, candidate_id=current_user.id
-        )
+        return await service.get_campaign_statistics(db, campaign_id, employer=current_employer)
+    except PermissionError:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès refusé.")
+
+
+# ── Candidat ──────────────────────────────────────────────
+
+@router.post("/apply/{invite_token}", status_code=201)
+async def apply_to_campaign(
+    invite_token: str,
+    db: DbDep,
+    current_crew: CrewDep,   # v2
+):
+    """Le candidat postule via le token d'invitation (QR code / lien)."""
+    try:
+        return await service.apply_to_campaign(db, invite_token, crew=current_crew)
     except ValueError as e:
         code = str(e)
-        if code == "CAMPAIGN_CLOSED":
-            raise HTTPException(status_code=status.HTTP_410_GONE, detail="Cette campagne n'accepte plus de candidatures.")
         if code == "ALREADY_APPLIED":
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Vous avez déjà postulé.")
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=code)
+            raise HTTPException(status.HTTP_409_CONFLICT, "Vous avez déjà postulé.")
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, code)
+
+
+@router.get("/my-applications", response_model=List[MyApplicationOut])
+async def get_my_applications(db: DbDep, current_crew: CrewDep):
+    """Toutes mes candidatures — vue marin."""
+    return await service.get_my_applications(db, crew=current_crew)

@@ -1,183 +1,230 @@
 # modules/identity/repository.py
 """
 Accès DB pour les profils candidats, expériences et documents.
-Agrège les CRUD user.py, candidates.py et links.py existants.
+
+Changements v2 :
+- position_targeted et experience_years sur CrewProfile (pas User)
+- resolve_access_context utilise employer_profile_id
+- CrewAssignment.crew_profile_id (était user_id)
+- Yacht.employer_profile_id (était client_id)
 """
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 
-from app.models.user import User, UserDocument
-from app.models.yacht import CrewAssignment, Yacht
-from app.models.campaign import Campaign, CampaignCandidate
+from app.shared.models import (User, UserDocument, CrewProfile, EmployerProfile,
+                            CrewAssignment, Yacht,
+                            Campaign, CampaignCandidate)
+
 from app.core.security import hash_password
-from backend.app.shared.enums import ApplicationStatus, UserRole
+from app.shared.enums import ApplicationStatus, UserRole
 
 
 class IdentityRepository:
 
-    # ─────────────────────────────────────────────
-    # LECTURE UTILISATEUR
-    # ─────────────────────────────────────────────
+    # ── Lecture utilisateur ───────────────────────────────────
 
-    def get_by_id(self, db: Session, user_id: int) -> Optional[User]:
-        return db.query(User).filter(User.id == user_id).first()
+    async def get_user_by_id(self, db: AsyncSession, user_id: int) -> Optional[User]:
+        r = await db.execute(select(User).where(User.id == user_id))
+        return r.scalar_one_or_none()
 
-    def get_by_email(self, db: Session, email: str) -> Optional[User]:
-        return db.query(User).filter(User.email == email).first()
+    async def get_crew_by_id(
+        self, db: AsyncSession, crew_profile_id: int
+    ) -> Optional[CrewProfile]:
+        r = await db.execute(
+            select(CrewProfile).where(CrewProfile.id == crew_profile_id)
+        )
+        return r.scalar_one_or_none()
 
-    def create_user(self, db: Session, payload) -> User:
-        user_data = payload.model_dump()
-        password = user_data.pop("password")
-        user_data["hashed_password"] = hash_password(password)
-        db_obj = User(**user_data)
-        try:
-            db.add(db_obj)
-            db.commit()
-            db.refresh(db_obj)
-            return db_obj
-        except IntegrityError:
-            db.rollback()
-            raise ValueError("EMAIL_ALREADY_EXISTS")
+    async def get_crew_by_user_id(
+        self, db: AsyncSession, user_id: int
+    ) -> Optional[CrewProfile]:
+        r = await db.execute(
+            select(CrewProfile).where(CrewProfile.user_id == user_id)
+        )
+        return r.scalar_one_or_none()
 
-    # ─────────────────────────────────────────────
-    # MISE À JOUR IDENTITÉ
-    # ─────────────────────────────────────────────
+    # ── Mise à jour identité (User) ───────────────────────────
 
-    def update_identity(self, db: Session, user: User, data: Dict[str, Any]) -> User:
+    async def update_identity(
+        self, db: AsyncSession, user: User, data: Dict[str, Any]
+    ) -> User:
         for key, value in data.items():
             if value is not None and hasattr(user, key):
                 setattr(user, key, value)
-        db.commit()
-        db.refresh(user)
+        await db.commit()
+        await db.refresh(user)
         return user
 
-    def update_avatar(self, db: Session, user: User, new_url: str) -> User:
+    async def update_avatar(
+        self, db: AsyncSession, user: User, new_url: str
+    ) -> User:
         user.avatar_url = new_url
-        db.commit()
-        db.refresh(user)
+        await db.commit()
+        await db.refresh(user)
         return user
 
-    def invalidate_harmony_verification(self, db: Session, user: User) -> None:
-        """Appelé si le nom change — la vérification manuelle doit être rejouée."""
+    async def invalidate_harmony_verification(
+        self, db: AsyncSession, user: User
+    ) -> None:
         user.is_harmony_verified = False
-        db.commit()
+        await db.commit()
 
-    # ─────────────────────────────────────────────
-    # CONTRÔLE D'ACCÈS
-    # ─────────────────────────────────────────────
+    # ── Mise à jour profil crew (CrewProfile) ─────────────────
 
-    def resolve_access_context(
-        self, db: Session, subject_id: int, requester_id: int
+    async def update_crew_profile(
+        self, db: AsyncSession, crew: CrewProfile, data: Dict[str, Any]
+    ) -> CrewProfile:
+        """
+        v2 : position_targeted, availability_status, experience_years
+        sont sur CrewProfile, pas sur User.
+        """
+        for key, value in data.items():
+            if value is not None and hasattr(crew, key):
+                setattr(crew, key, value)
+        await db.commit()
+        await db.refresh(crew)
+        return crew
+
+    # ── Contrôle d'accès ─────────────────────────────────────
+
+    async def resolve_access_context(
+        self,
+        db: AsyncSession,
+        crew_profile_id: int,       # v2 : subject est un CrewProfile
+        requester_user_id: int,
     ) -> Optional[Dict]:
         """
-        Détermine le niveau d'accès et retourne le contexte métier.
-        Retourne None si l'accès est refusé.
+        Détermine le niveau d'accès du requester sur ce crew_profile.
 
-        Contextes possibles :
-        - CANDIDATE  : auto-consultation
-        - MANAGER    : client avec ce marin dans son équipage actif
-        - RECRUITER  : client avec ce marin candidat dans une campagne
-        - ONBOARDING : client avec ce marin embauché (status=JOINED)
+        v2 :
+        - Self-check via User.crew_profile.id
+        - Manager : employeur avec ce marin dans son équipage (employer_profile_id)
+        - Recruiter : campagne de cet employeur avec ce crew_profile_id candidat
+
+        Retourne None si accès refusé.
         """
         # Auto-consultation
-        if subject_id == requester_id:
-            subject = self.get_by_id(db, subject_id)
+        crew_check = await db.execute(
+            select(CrewProfile).where(
+                CrewProfile.id == crew_profile_id,
+                CrewProfile.user_id == requester_user_id,
+            )
+        )
+        if crew_check.scalar_one_or_none():
+            crew = await self.get_crew_by_id(db, crew_profile_id)
             return {
                 "view_mode": "candidate",
-                "context_position": subject.position_targeted if subject else None,
+                "context_position": str(crew.position_targeted) if crew else None,
                 "label": "Mon Profil",
                 "is_active_crew": False,
             }
 
-        requester = self.get_by_id(db, requester_id)
-        if not requester or requester.role not in (UserRole.CLIENT, UserRole.ADMIN):
-            return None
-
-        # Client : est-il dans l'équipage actif ?
-        crew = (
-            db.query(CrewAssignment)
-            .join(Yacht, Yacht.id == CrewAssignment.yacht_id)
-            .filter(
-                CrewAssignment.user_id == subject_id,
-                CrewAssignment.is_active == True,
-                Yacht.client_id == requester_id,
-            )
-            .first()
+        # Vérifier que le requester est bien un employer
+        r = await db.execute(
+            select(EmployerProfile).where(EmployerProfile.user_id == requester_user_id)
         )
-        if crew:
+        employer = r.scalar_one_or_none()
+        if not employer:
+            return None  # Ni self ni employer → refusé
+
+        # Équipage actif d'un yacht appartenant à cet employer
+        r = await db.execute(
+            select(CrewAssignment, Yacht)
+            .join(Yacht, Yacht.id == CrewAssignment.yacht_id)
+            .where(
+                CrewAssignment.crew_profile_id == crew_profile_id,   # v2
+                CrewAssignment.is_active == True,
+                Yacht.employer_profile_id == employer.id,             # v2
+            )
+        )
+        row = r.first()
+        if row:
+            assignment, yacht = row
             return {
                 "view_mode": "manager",
-                "context_position": crew.role,
-                "label": f"Équipage – {crew.yacht.name}",
+                "context_position": str(assignment.role),
+                "label": f"Équipage – {yacht.name}",
                 "is_active_crew": True,
             }
 
-        # Client : est-il candidat à une campagne ?
-        candidacy = (
-            db.query(CampaignCandidate)
+        # Candidat dans une campagne de cet employer
+        r = await db.execute(
+            select(CampaignCandidate, Campaign)
             .join(Campaign, Campaign.id == CampaignCandidate.campaign_id)
-            .filter(
-                CampaignCandidate.candidate_id == subject_id,
-                Campaign.client_id == requester_id,
+            .where(
+                CampaignCandidate.crew_profile_id == crew_profile_id,  # v2
+                Campaign.employer_profile_id == employer.id,            # v2
             )
-            .first()
         )
-        if candidacy:
+        row = r.first()
+        if row:
+            candidacy, campaign = row
             is_joined = candidacy.status == ApplicationStatus.JOINED
             return {
                 "view_mode": "onboarding" if is_joined else "recruiter",
-                "context_position": candidacy.campaign.position,
-                "label": f"{'Onboarding' if is_joined else 'Candidat'} – {candidacy.campaign.title}",
+                "context_position": campaign.position,
+                "label": f"{'Onboarding' if is_joined else 'Candidat'} – {campaign.title}",
                 "is_active_crew": False,
                 "campaign_id": candidacy.campaign_id,
             }
 
-        return None
+        return None  # Aucune relation trouvée
 
-    # ─────────────────────────────────────────────
-    # EXPÉRIENCES
-    # ─────────────────────────────────────────────
+    # ── Expériences (CrewAssignment) ──────────────────────────
 
-    def get_experiences(self, db: Session, user_id: int) -> List[CrewAssignment]:
-        return (
-            db.query(CrewAssignment)
-            .filter(CrewAssignment.user_id == user_id)
+    async def get_experiences(
+        self, db: AsyncSession, crew_profile_id: int   # v2
+    ) -> List[CrewAssignment]:
+        r = await db.execute(
+            select(CrewAssignment)
+            .where(CrewAssignment.crew_profile_id == crew_profile_id)
             .order_by(CrewAssignment.start_date.desc())
-            .all()
         )
+        return r.scalars().all()
 
-    def create_experience(self, db: Session, user_id: int, data: Dict) -> CrewAssignment:
+    async def create_experience(
+        self, db: AsyncSession, crew_profile_id: int, data: Dict  # v2
+    ) -> CrewAssignment:
         db_obj = CrewAssignment(
-            user_id=user_id,
+            crew_profile_id=crew_profile_id,
             is_harmony_approved=False,
             **data,
         )
         db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
+        await db.commit()
+        await db.refresh(db_obj)
         return db_obj
 
-    def approve_experience(self, db: Session, exp_id: int, comment: str) -> Optional[CrewAssignment]:
-        exp = db.query(CrewAssignment).filter(CrewAssignment.id == exp_id).first()
+    async def approve_experience(
+        self, db: AsyncSession, exp_id: int, comment: str
+    ) -> Optional[CrewAssignment]:
+        r = await db.execute(
+            select(CrewAssignment).where(CrewAssignment.id == exp_id)
+        )
+        exp = r.scalar_one_or_none()
         if not exp:
             return None
         exp.is_harmony_approved = True
         exp.reference_comment = comment
-        db.commit()
-        db.refresh(exp)
+        await db.commit()
+        await db.refresh(exp)
         return exp
 
-    # ─────────────────────────────────────────────
-    # DOCUMENTS
-    # ─────────────────────────────────────────────
+    # ── Documents ─────────────────────────────────────────────
 
-    def get_documents(self, db: Session, user_id: int) -> List[UserDocument]:
-        return db.query(UserDocument).filter(UserDocument.user_id == user_id).all()
+    async def get_documents(
+        self, db: AsyncSession, user_id: int
+    ) -> List[UserDocument]:
+        r = await db.execute(
+            select(UserDocument).where(UserDocument.user_id == user_id)
+        )
+        return r.scalars().all()
 
-    def create_pending_document(
-        self, db: Session, user_id: int, file_url: str, title: str
+    async def create_pending_document(
+        self, db: AsyncSession, user_id: int, file_url: str, title: str
     ) -> UserDocument:
         db_obj = UserDocument(
             user_id=user_id,
@@ -186,18 +233,18 @@ class IdentityRepository:
             is_verified=False,
         )
         db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
+        await db.commit()
+        await db.refresh(db_obj)
         return db_obj
 
-    def update_document_verification(
-        self, db: Session, doc_id: int, verification_result: Dict
+    async def update_document_verification(
+        self, db: AsyncSession, doc_id: int, verification_result: Dict
     ) -> Optional[UserDocument]:
-        """
-        Met à jour le statut de vérification d'un document.
-        Appelé par infra/verification.py après OCR + Promete.
-        """
-        doc = db.query(UserDocument).filter(UserDocument.id == doc_id).first()
+        """OCR + Promete → mise à jour du statut du document."""
+        r = await db.execute(
+            select(UserDocument).where(UserDocument.id == doc_id)
+        )
+        doc = r.scalar_one_or_none()
         if not doc:
             return None
 
@@ -205,21 +252,19 @@ class IdentityRepository:
         ocr_data = verification_result.get("ocr_data", {}).get("extracted", {})
 
         doc.is_verified = verification_result.get("is_officially_valid", False)
-        doc.verified_at = datetime.utcnow()
+        doc.verified_at = datetime.now(timezone.utc)
         doc.verification_metadata = verification_result
 
         if official:
-            doc.official_id = official.get("num_titre")
-            doc.official_brevet = official.get("brevet_libelle")
+            doc.official_id            = official.get("num_titre")
+            doc.official_brevet        = official.get("brevet_libelle")
             doc.num_titulaire_officiel = official.get("num_titulaire")
             if doc.official_brevet:
                 doc.title = doc.official_brevet
 
-            # Date expiration : officiel en priorité, OCR en fallback
             expiry_str = official.get("date_expiration")
             if not expiry_str or expiry_str == "N/A":
                 expiry_str = ocr_data.get("date_expiration")
-
             if expiry_str:
                 try:
                     import re
@@ -229,36 +274,47 @@ class IdentityRepository:
                 except Exception:
                     pass
 
-        db.commit()
-        db.refresh(doc)
+        await db.commit()
+        await db.refresh(doc)
         return doc
 
-    # ─────────────────────────────────────────────
-    # GATEWAY (token boarding / campagne)
-    # ─────────────────────────────────────────────
+    # ── Gateway (token boarding / campagne) ───────────────────
 
-    def get_yacht_by_boarding_token(self, db: Session, token: str) -> Optional[Yacht]:
-        return db.query(Yacht).filter(Yacht.boarding_token == token).first()
+    async def get_yacht_by_boarding_token(
+        self, db: AsyncSession, token: str
+    ) -> Optional[Yacht]:
+        r = await db.execute(
+            select(Yacht).where(Yacht.boarding_token == token)
+        )
+        return r.scalar_one_or_none()
 
-    def join_crew_via_token(self, db: Session, yacht: Yacht, user_id: int) -> Optional[CrewAssignment]:
+    async def join_crew_via_token(
+        self, db: AsyncSession, yacht: Yacht, crew_profile_id: int  # v2
+    ) -> Optional[CrewAssignment]:
+        """
+        Le marin rejoint un yacht via QR code.
+        v2 : utilise crew_profile_id.
+        Rotation du boarding_token après usage (1 usage par token).
+        """
         import secrets
-        existing = db.query(CrewAssignment).filter(
-            CrewAssignment.yacht_id == yacht.id,
-            CrewAssignment.user_id == user_id,
-            CrewAssignment.is_active == True,
-        ).first()
-        if existing:
-            return None
+        r = await db.execute(
+            select(CrewAssignment).where(
+                CrewAssignment.yacht_id == yacht.id,
+                CrewAssignment.crew_profile_id == crew_profile_id,
+                CrewAssignment.is_active == True,
+            )
+        )
+        if r.scalar_one_or_none():
+            return None  # Déjà assigné
 
         assignment = CrewAssignment(
             yacht_id=yacht.id,
-            user_id=user_id,
+            crew_profile_id=crew_profile_id,    # v2
             role="Deckhand",
             is_active=True,
         )
         db.add(assignment)
-        # Rotation du token après usage
         yacht.boarding_token = secrets.token_urlsafe(16)
-        db.commit()
-        db.refresh(assignment)
+        await db.commit()
+        await db.refresh(assignment)
         return assignment

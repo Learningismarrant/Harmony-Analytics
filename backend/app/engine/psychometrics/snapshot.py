@@ -45,7 +45,7 @@ Structure du snapshot :
 from datetime import datetime
 from typing import List, Dict, Any
 
-from content.sme_profiles import CATEGORY_MAPPING
+from app.content.sme_profiles import CATEGORY_MAPPING
 
 # Mapping trait → catégorie snapshot (plus granulaire que CATEGORY_MAPPING)
 TRAIT_TO_SNAPSHOT_CAT = {

@@ -1,195 +1,182 @@
 # modules/assessment/repository.py
 """
 Accès DB pour le module assessment.
-Toute la logique SQL est ici — les services n'écrivent jamais de queries directes.
+Adapté split User → CrewProfile / EmployerProfile.
+
+Changements v2 :
+- TestResult.crew_profile_id  (était user_id)
+- psychometric_snapshot sur   CrewProfile (était User)
+- CampaignCandidate.crew_profile_id (était candidate_id)
+- CrewAssignment.crew_profile_id    (était user_id)
+- Yacht.employer_profile_id         (était client_id)
 """
-from sqlalchemy.orm import Session
-from sqlalchemy import func, cast, String
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, cast, String
 from typing import List, Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timezone
 
-from app.models.assessment import TestCatalogue, Question, TestResult
-from app.models.user import User
-from app.models.yacht import CrewAssignment, Yacht
-from app.models.campaign import Campaign, CampaignCandidate
-
+from app.shared.models import TestCatalogue, Question, TestResult, User, CrewProfile,Yacht, CrewAssignment, Campaign, CampaignCandidate
 
 class AssessmentRepository:
 
-    # ─────────────────────────────────────────────
-    # CATALOGUE
-    # ─────────────────────────────────────────────
+    # ── Catalogue ─────────────────────────────────────────────
 
-    def get_all_active_tests(self, db: Session) -> List[TestCatalogue]:
-        return db.query(TestCatalogue).all()
+    async def get_all_active_tests(self, db: AsyncSession) -> List[TestCatalogue]:
+        r = await db.execute(select(TestCatalogue).where(TestCatalogue.is_active == True))
+        return r.scalars().all()
 
-    def get_test_info(self, db: Session, test_id: int) -> Optional[TestCatalogue]:
-        return db.query(TestCatalogue).filter(TestCatalogue.id == test_id).first()
+    async def get_test_info(self, db: AsyncSession, test_id: int) -> Optional[TestCatalogue]:
+        r = await db.execute(select(TestCatalogue).where(TestCatalogue.id == test_id))
+        return r.scalar_one_or_none()
 
-    def get_questions_by_test(self, db: Session, test_id: int) -> List[Question]:
-        return db.query(Question).filter(Question.test_id == test_id).all()
+    async def get_questions_by_test(self, db: AsyncSession, test_id: int) -> List[Question]:
+        r = await db.execute(
+            select(Question).where(Question.test_id == test_id).order_by(Question.order)
+        )
+        return r.scalars().all()
 
-    # ─────────────────────────────────────────────
-    # RÉSULTATS
-    # ─────────────────────────────────────────────
+    # ── Résultats ─────────────────────────────────────────────
 
-    def save_result(
+    async def save_result(
         self,
-        db: Session,
-        user_id: int,
+        db: AsyncSession,
+        crew_profile_id: int,   # v2 : était user_id
         test_id: int,
         scores: Dict[str, Any],
         global_score: float,
     ) -> TestResult:
         db_obj = TestResult(
-            user_id=user_id,
+            crew_profile_id=crew_profile_id,
             test_id=test_id,
             scores=scores,
             global_score=global_score,
         )
         db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
+        await db.commit()
+        await db.refresh(db_obj)
         return db_obj
 
-    def get_results_by_user(self, db: Session, user_id: int) -> List[TestResult]:
-        return (
-            db.query(TestResult)
-            .filter(TestResult.user_id == user_id)
+    async def get_results_by_crew(
+        self, db: AsyncSession, crew_profile_id: int
+    ) -> List[TestResult]:
+        r = await db.execute(
+            select(TestResult)
+            .where(TestResult.crew_profile_id == crew_profile_id)
             .order_by(TestResult.created_at.asc())
-            .all()
         )
+        return r.scalars().all()
 
-    def get_latest_result_for_test(
-        self, db: Session, user_id: int, test_id: int
+    async def get_latest_result_for_test(
+        self, db: AsyncSession, crew_profile_id: int, test_id: int
     ) -> Optional[TestResult]:
-        return (
-            db.query(TestResult)
-            .filter(TestResult.user_id == user_id, TestResult.test_id == test_id)
+        r = await db.execute(
+            select(TestResult)
+            .where(
+                TestResult.crew_profile_id == crew_profile_id,
+                TestResult.test_id == test_id,
+            )
             .order_by(TestResult.created_at.desc())
-            .first()
         )
+        return r.scalars().first()
 
-    def get_distinct_test_ids(self, db: Session, user_id: int) -> List[int]:
-        rows = (
-            db.query(TestResult.test_id)
-            .filter(TestResult.user_id == user_id)
-            .distinct()
-            .all()
-        )
-        return [r.test_id for r in rows]
+    # ── Benchmarking normatif ─────────────────────────────────
 
-    # ─────────────────────────────────────────────
-    # BENCHMARKING — pool de comparaison
-    # ─────────────────────────────────────────────
-
-    def get_pool_scores_for_trait(
+    async def get_pool_scores_for_trait(
         self,
-        db: Session,
+        db: AsyncSession,
         trait: str,
         position_key: str,
         test_id: int,
     ) -> List[float]:
         """
-        Récupère les scores d'un trait pour tous les candidats
-        ciblant le même poste — utilisé par l'engine de benchmarking.
+        v2 : joint via CrewProfile.
+        position_targeted est sur CrewProfile, pas sur User.
         """
-        rows = (
-            db.query(TestResult.scores)
-            .join(User, User.id == TestResult.user_id)
-            .filter(
+        r = await db.execute(
+            select(TestResult.scores)
+            .join(CrewProfile, CrewProfile.id == TestResult.crew_profile_id)
+            .where(
                 TestResult.test_id == test_id,
-                func.lower(cast(User.position_targeted, String)) == position_key.lower(),
+                func.lower(cast(CrewProfile.position_targeted, String)) == position_key.lower(),
             )
-            .all()
         )
-
         pool = []
-        for (scores,) in rows:
+        for (scores,) in r.all():
             if not scores:
                 continue
-            # Support ancien et nouveau format
             traits_data = scores.get("traits", scores)
             val = traits_data.get(trait)
             if val is None:
                 continue
             pool.append(val.get("score", 0) if isinstance(val, dict) else val)
-
         return pool
 
-    # ─────────────────────────────────────────────
-    # SNAPSHOT MANAGEMENT
-    # ─────────────────────────────────────────────
+    # ── Snapshot management ───────────────────────────────────
 
-    def update_crew_snapshot(
-        self, db: Session, user_id: int, snapshot: Dict[str, Any]
+    async def update_crew_snapshot(
+        self, db: AsyncSession, crew_profile_id: int, snapshot: Dict[str, Any]
     ) -> None:
-        """
-        Met à jour le psychometric_snapshot sur le profil candidat.
-        Appelé après chaque soumission de test (synchrone).
-        """
-        user = db.query(User).filter(User.id == user_id).first()
-        if user:
-            user.psychometric_snapshot = snapshot
-            user.snapshot_updated_at = datetime.utcnow()
-            db.commit()
+        """v2 : psychometric_snapshot sur CrewProfile, pas sur User."""
+        r = await db.execute(select(CrewProfile).where(CrewProfile.id == crew_profile_id))
+        crew = r.scalar_one_or_none()
+        if crew:
+            crew.psychometric_snapshot = snapshot
+            crew.snapshot_updated_at = datetime.now(timezone.utc)
+            await db.commit()
 
-    def get_crew_snapshot(self, db: Session, user_id: int) -> Optional[Dict]:
-        user = db.query(User).filter(User.id == user_id).first()
-        return user.psychometric_snapshot if user else None
+    async def get_crew_snapshot(
+        self, db: AsyncSession, crew_profile_id: int
+    ) -> Optional[Dict]:
+        r = await db.execute(
+            select(CrewProfile.psychometric_snapshot)
+            .where(CrewProfile.id == crew_profile_id)
+        )
+        return r.scalar_one_or_none()
 
-    # ─────────────────────────────────────────────
-    # CONTRÔLE D'ACCÈS
-    # ─────────────────────────────────────────────
+    # ── Contrôle d'accès ─────────────────────────────────────
 
-    def check_requester_access(
-        self, db: Session, candidate_id: int, requester_id: int
+    async def check_requester_access(
+        self,
+        db: AsyncSession,
+        crew_profile_id: int,
+        requester_employer_id: int,   # v2 : employer_profile_id
     ) -> bool:
         """
-        Vérifie que le requester est :
-        - le candidat lui-même
-        - un client avec ce candidat dans une campagne active
-        - un client avec ce candidat dans son équipage actif
+        Le requester est un EmployerProfile.
+        Vérifie : campagne active OU équipage actif sur un de ses yachts.
         """
-        if candidate_id == requester_id:
-            return True
-
-        in_campaign = (
-            db.query(CampaignCandidate)
+        r = await db.execute(
+            select(CampaignCandidate)
             .join(Campaign, Campaign.id == CampaignCandidate.campaign_id)
-            .filter(
-                CampaignCandidate.candidate_id == candidate_id,
-                Campaign.client_id == requester_id,
+            .where(
+                CampaignCandidate.crew_profile_id == crew_profile_id,
+                Campaign.employer_profile_id == requester_employer_id,
             )
-            .first()
         )
-        if in_campaign:
+        if r.scalar_one_or_none():
             return True
 
-        in_crew = (
-            db.query(CrewAssignment)
+        r = await db.execute(
+            select(CrewAssignment)
             .join(Yacht, Yacht.id == CrewAssignment.yacht_id)
-            .filter(
-                CrewAssignment.user_id == candidate_id,
+            .where(
+                CrewAssignment.crew_profile_id == crew_profile_id,
                 CrewAssignment.is_active == True,
-                Yacht.client_id == requester_id,
+                Yacht.employer_profile_id == requester_employer_id,
             )
-            .first()
         )
-        return bool(in_crew)
+        return r.scalar_one_or_none() is not None
 
-    # ─────────────────────────────────────────────
-    # PROPAGATION BACKGROUND
-    # ─────────────────────────────────────────────
+    # ── Propagation background ────────────────────────────────
 
-    def get_active_yacht_ids(self, db: Session, user_id: int) -> List[int]:
-        """Yachts où le marin est actuellement actif — pour la propagation background."""
-        rows = (
-            db.query(CrewAssignment.yacht_id)
-            .filter(
-                CrewAssignment.user_id == user_id,
+    async def get_active_yacht_ids(
+        self, db: AsyncSession, crew_profile_id: int
+    ) -> List[int]:
+        r = await db.execute(
+            select(CrewAssignment.yacht_id)
+            .where(
+                CrewAssignment.crew_profile_id == crew_profile_id,
                 CrewAssignment.is_active == True,
             )
-            .all()
         )
-        return [r.yacht_id for r in rows]
+        return list(r.scalars().all())

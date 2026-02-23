@@ -23,7 +23,7 @@ class Campaign(Base):
     title       = Column(String, nullable=False)
     position    = Column(String, nullable=False)
     description = Column(String, nullable=True)
-    status      = Column(SAEnum(CampaignStatus), default=CampaignStatus.OPEN, nullable=False)
+    status      = Column(SAEnum(CampaignStatus, values_callable=lambda enum: [e.value for e in enum]), default=CampaignStatus.OPEN, nullable=False)
     is_archived = Column(Boolean, default=False)
     invite_token = Column(String, default=lambda: secrets.token_urlsafe(16), unique=True, nullable=False)
 
@@ -57,7 +57,7 @@ class CampaignCandidate(Base):
     campaign_id     = Column(Integer, ForeignKey("campaigns.id"), nullable=False, index=True)
     crew_profile_id = Column(Integer, ForeignKey("crew_profiles.id"), nullable=False, index=True)
 
-    status      = Column(SAEnum(ApplicationStatus), default=ApplicationStatus.PENDING)
+    status      = Column(SAEnum(ApplicationStatus, values_callable=lambda enum: [e.value for e in enum]), default=ApplicationStatus.PENDING)
     is_hired    = Column(Boolean, default=False)
     is_rejected = Column(Boolean, default=False)
 

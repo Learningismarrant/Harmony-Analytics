@@ -21,10 +21,11 @@ from app.core.database import Base
 class TestCatalogue(Base):
     __tablename__ = "test_catalogues"
     id                     = Column(Integer, primary_key=True, index=True)
-    nom_du_test            = Column(String, nullable=False)
-    description_courte     = Column(String, nullable=True)
+    name                   = Column(String, nullable=False)
+    description            = Column(String, nullable=True)
     instructions           = Column(Text, nullable=True)
     test_type              = Column(String, nullable=False)   # "likert" | "cognitive"
+    n_questions            = Column(Integer, default=1)
     max_score_per_question = Column(Integer, default=5)
     is_active              = Column(Boolean, default=True)
     created_at             = Column(DateTime(timezone=True), server_default=func.now())
@@ -33,7 +34,7 @@ class TestCatalogue(Base):
     results   = relationship("TestResult", back_populates="test")
 
     def __repr__(self):
-        return f"<TestCatalogue id={self.id} nom={self.nom_du_test}>"
+        return f"<TestCatalogue id={self.id} nom={self.name}>"
 
 
 class Question(Base):
@@ -62,13 +63,14 @@ class TestResult(Base):
     global_score    = Column(Float,   nullable=False)
     scores          = Column(JSON,    nullable=False)   # {traits, reliability, meta, global_score}
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
+    # reliability=Column(Boolean, nullable= False), "reasons": []},
 
     crew_profile = relationship("CrewProfile", back_populates="test_results")
     test         = relationship("TestCatalogue", back_populates="results")
 
     @property
     def test_name(self) -> str:
-        return self.test.nom_du_test if self.test else f"test_{self.test_id}"
+        return self.test.name if self.test else f"test_{self.test_id}"
 
     def __repr__(self):
         return f"<TestResult id={self.id} crew={self.crew_profile_id} score={self.global_score}>"
