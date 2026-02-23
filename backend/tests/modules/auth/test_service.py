@@ -31,6 +31,7 @@ Couverture :
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import HTTPException
+from jose import JWTError
 
 from app.modules.auth.service import AuthService
 from app.modules.auth.schemas import RegisterCrewIn, RegisterEmployerIn, LoginIn
@@ -229,7 +230,7 @@ class TestRefresh:
     async def test_token_invalide_leve_401(self):
         db = make_async_db()
 
-        with patch("app.modules.auth.service.decode_token", side_effect=Exception("bad token")):
+        with patch("app.modules.auth.service.decode_token", side_effect=JWTError("bad token")):
             with pytest.raises(HTTPException) as exc_info:
                 await service.refresh(db, "bad_token")
 

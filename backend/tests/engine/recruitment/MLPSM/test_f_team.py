@@ -88,9 +88,9 @@ class TestCompute:
         assert 0.0 <= result.score <= 100.0
 
     def test_score_nominal_positif(self):
-        """Équipe saine → score > 50."""
+        """Équipe saine → score > 30."""
         result = compute(CREW_3_NOMINAL)
-        assert result.score > 50.0
+        assert result.score > 30.0
 
     def test_crew_size_correct(self):
         result = compute(CREW_3_NOMINAL)

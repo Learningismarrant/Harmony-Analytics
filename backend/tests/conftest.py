@@ -374,6 +374,7 @@ async def crew_client():
     mock_db = AsyncMock(spec=AsyncSession)
     mock_crew = make_crew_profile()
     mock_user = make_user(crew_profile=mock_crew)
+    mock_crew.user = mock_user  # required by identity router (current_crew.user)
     app.dependency_overrides[get_db] = lambda: mock_db
     app.dependency_overrides[get_current_user] = lambda: mock_user
     app.dependency_overrides[get_current_crew] = lambda: mock_crew

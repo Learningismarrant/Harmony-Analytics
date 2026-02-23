@@ -54,7 +54,7 @@ def _snap(
             "feedback_preference":  0.5,
             "structure_preference": 0.4,
         },
-        "resilience": {"global": 65.0},
+        "resilience": 65.0,
     }
 
 

@@ -68,7 +68,7 @@ async def test_register_crew_201(client, mocker):
     data = resp.json()
     assert "access_token" in data
     assert "refresh_token" in data
-    assert data["role"] == "CANDIDATE"
+    assert data["role"] == "candidate"
 
 
 @pytest.mark.asyncio
@@ -119,7 +119,7 @@ async def test_register_employer_201(client, mocker):
         "company_name": "Sea Ventures",
     })
     assert resp.status_code == 201
-    assert resp.json()["role"] == "CLIENT"
+    assert resp.json()["role"] == "client"
 
 
 # ── POST /auth/login ──────────────────────────────────────────────────────────

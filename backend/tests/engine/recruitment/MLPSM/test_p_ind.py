@@ -26,7 +26,7 @@ pytestmark = pytest.mark.engine
 def snap_full(gca=72.0, conscientiousness=75.0):
     """Snapshot avec GCA pré-calculé et Conscienciosité."""
     return {
-        "cognitive": {"gca_score": gca},
+        "cognitive": {"gca_score": gca, "n_tests": 1},
         "big_five": {"conscientiousness": conscientiousness},
     }
 

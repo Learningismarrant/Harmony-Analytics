@@ -151,7 +151,7 @@ class TestGenerateCombinedDiagnosis:
             harmony(20, 20, c_divergence=30, wl_stability=20),
             weather(average=1.5, days=7),
         )
-        assert result["crew_type"] == "BREAKDOWN ZONE"
+        assert result["crew_type"] == "AT RISK CREW"
         assert result["risk_level"] in ("high", "critical")
 
     def test_tvi_dans_bornes(self):

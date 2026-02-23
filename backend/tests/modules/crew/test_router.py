@@ -86,7 +86,7 @@ async def test_add_crew_member_201(employer_client, mocker):
         "app.modules.crew.router.service.assign_member",
         AsyncMock(return_value=_assignment()),
     )
-    resp = await employer_client.post("/crew/1/members", json={"crew_profile_id": 1})
+    resp = await employer_client.post("/crew/1/members", json={"crew_profile_id": 1, "role": "Bosun"})
     assert resp.status_code == 201
 
 
@@ -96,7 +96,7 @@ async def test_add_crew_member_acces_refuse_403(employer_client, mocker):
         "app.modules.crew.router.service.assign_member",
         AsyncMock(side_effect=PermissionError("Accès refusé.")),
     )
-    resp = await employer_client.post("/crew/1/members", json={"crew_profile_id": 1})
+    resp = await employer_client.post("/crew/1/members", json={"crew_profile_id": 1, "role": "Bosun"})
     assert resp.status_code == 403
 
 
@@ -106,7 +106,7 @@ async def test_add_crew_member_deja_assigne_400(employer_client, mocker):
         "app.modules.crew.router.service.assign_member",
         AsyncMock(side_effect=ValueError("Ce marin est déjà assigné à ce yacht.")),
     )
-    resp = await employer_client.post("/crew/1/members", json={"crew_profile_id": 1})
+    resp = await employer_client.post("/crew/1/members", json={"crew_profile_id": 1, "role": "Bosun"})
     assert resp.status_code == 400
 
 

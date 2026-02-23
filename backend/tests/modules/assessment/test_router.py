@@ -21,8 +21,12 @@ pytestmark = pytest.mark.router
 
 
 def _catalogue_item():
-    tc = make_test_catalogue(id=1)
-    return tc
+    return make_test_catalogue(
+        id=1,
+        nom_du_test="Big Five v1",
+        description_courte="Test de personnalité",
+        test_type="likert",
+    )
 
 
 def _result_item():
@@ -77,7 +81,7 @@ async def test_get_questions_sans_auth_401(client):
 async def test_submit_sans_auth_401(client):
     resp = await client.post("/assessments/submit", json={
         "test_id": 1,
-        "responses": [{"question_id": 1, "value": 3, "time_seconds": 5}],
+        "responses": [{"question_id": 1, "valeur_choisie": "3", "seconds_spent": 5.0}],
     })
     assert resp.status_code in (401, 403)
 
@@ -90,7 +94,7 @@ async def test_submit_200_avec_auth(crew_client, mocker):
     )
     resp = await crew_client.post("/assessments/submit", json={
         "test_id": 1,
-        "responses": [{"question_id": 1, "value": 3, "time_seconds": 5}],
+        "responses": [{"question_id": 1, "valeur_choisie": "3", "seconds_spent": 5.0}],
     })
     assert resp.status_code == 201
 
@@ -103,7 +107,7 @@ async def test_submit_test_inconnu_400(crew_client, mocker):
     )
     resp = await crew_client.post("/assessments/submit", json={
         "test_id": 999,
-        "responses": [{"question_id": 1, "value": 3, "time_seconds": 5}],
+        "responses": [{"question_id": 1, "valeur_choisie": "3", "seconds_spent": 5.0}],
     })
     assert resp.status_code == 400
 

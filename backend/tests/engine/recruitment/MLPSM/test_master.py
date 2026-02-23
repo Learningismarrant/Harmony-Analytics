@@ -66,7 +66,7 @@ def _snap(
             "feedback_preference":   feedback,
             "structure_preference":  structure,
         },
-        "resilience": {"global": resilience},
+        "resilience": resilience,
     }
 
 

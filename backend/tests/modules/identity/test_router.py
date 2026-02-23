@@ -11,54 +11,60 @@ Couverture :
 """
 import pytest
 from unittest.mock import AsyncMock
-from types import SimpleNamespace
 
 pytestmark = pytest.mark.router
 
 
-def _full_profile():
+def _identity():
+    """UserIdentityOut — champs obligatoires : id, name, email, is_harmony_verified, is_active, created_at."""
     return {
-        "crew_profile_id": 1,
-        "view_mode": "candidate",
-        "context_label": "Mon profil",
-        "is_active_crew": False,
-        "identity": {
-            "crew_profile_id": 1, "user_id": 1,
-            "name": "Jean Marin", "email": "j@test.com",
-            "avatar_url": None, "location": None,
-            "phone": None, "bio": None,
-            "is_harmony_verified": False,
-            "position_targeted": "Deckhand",
-            "availability_status": "available",
-            "experience_years": 2,
-            "nationality": None, "languages": [],
-        },
-        "experiences": [],
-        "documents": [],
-        "reports": {"has_data": False, "view_mode": "candidate", "message": "Aucun test."},
+        "id": 1,
+        "name": "Jean Marin",
+        "email": "j@test.com",
+        "phone": None,
+        "avatar_url": None,
+        "location": None,
+        "is_harmony_verified": False,
+        "is_active": True,
+        "created_at": "2025-01-01T00:00:00",
     }
 
 
-def _identity():
+def _full_profile():
+    """FullCrewProfileOut — context + identity + crew + experiences + documents + reports."""
     return {
-        "crew_profile_id": 1, "user_id": 1,
-        "name": "Jean Marin", "email": "j@test.com",
-        "avatar_url": None, "location": None,
-        "phone": None, "bio": None,
-        "is_harmony_verified": False,
-        "position_targeted": "Deckhand",
-        "availability_status": "available",
-        "experience_years": 2,
-        "nationality": None, "languages": [],
+        "context": {
+            "view_mode": "candidate",
+            "label": "Mon profil",
+            "context_position": None,
+            "is_active_crew": False,
+        },
+        "identity": _identity(),
+        "crew": {
+            "id": 1,
+            "user_id": 1,
+            "position_targeted": "Deckhand",
+            "experience_years": 2,
+            "availability_status": "available",
+        },
+        "experiences": [],
+        "documents": [],
+        "reports": [],
     }
 
 
 def _experience():
+    """ExperienceOut — yacht_name (str), role (str), start_date (datetime), is_harmony_approved."""
     return {
-        "id": 1, "yacht_id": None, "role": "Deckhand",
-        "start_date": "2024-01-01", "end_date": None,
-        "is_active": True, "is_harmony_approved": False,
+        "id": 1,
+        "yacht_name": "Lady Aurora",
+        "role": "bosun",
+        "start_date": "2024-01-01T00:00:00",
+        "end_date": None,
+        "is_harmony_approved": False,
         "reference_comment": None,
+        "candidate_comment": None,
+        "contract_type": None,
     }
 
 
@@ -74,6 +80,7 @@ async def test_get_full_profile_200(crew_client, mocker):
     assert resp.status_code == 200
     data = resp.json()
     assert "identity" in data
+    assert "context" in data
 
 
 @pytest.mark.asyncio
@@ -119,9 +126,14 @@ async def test_get_identity_acces_refuse_403(crew_client, mocker):
 
 @pytest.mark.asyncio
 async def test_patch_identity_me_200(crew_client, mocker):
+    # PATCH /me calls update_identity then get_identity — mock both
     mocker.patch(
         "app.modules.identity.router.service.update_identity",
         AsyncMock(return_value=None),
+    )
+    mocker.patch(
+        "app.modules.identity.router.service.get_identity",
+        AsyncMock(return_value=_identity()),
     )
     resp = await crew_client.patch("/identity/me", json={"name": "New Name"})
     assert resp.status_code == 200
@@ -142,10 +154,9 @@ async def test_add_experience_201(crew_client, mocker):
         AsyncMock(return_value=_experience()),
     )
     resp = await crew_client.post("/identity/me/experiences", json={
-        "yacht_id": None,
-        "role": "Deckhand",
+        "external_yacht_name": "Lady Aurora",
+        "role": "Bosun",
         "start_date": "2024-01-01",
-        "is_active": True,
     })
     assert resp.status_code == 201
 
