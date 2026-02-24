@@ -285,6 +285,28 @@ export interface CampaignCreateIn {
   yacht_id: number;
 }
 
+export interface ProfileFitOut {
+  g_fit: number;
+  fit_label: string;
+  overall_centile: number;
+  centile_by_competency: Record<string, number>;
+  safety_level: string;
+  safety_flags: string[];
+}
+
+export interface TeamIntegrationOut {
+  available: boolean;
+  y_success: number | null;
+  success_label: string | null;
+  p_ind: number | null;
+  f_team: number | null;
+  f_env: number | null;
+  f_lmx: number | null;
+  team_delta: number | null;
+  confidence: "HIGH" | "MEDIUM" | "LOW" | null;
+  reason: string | null;
+}
+
 export interface MatchResultOut {
   crew_profile_id: number;
   name: string;
@@ -292,11 +314,10 @@ export interface MatchResultOut {
   location: string | null;
   experience_years: number;
   test_status: "completed" | "pending";
-  global_fit: number;
-  y_success: number;
-  f_team_delta: number;
-  impact_flags: string[];
-  confidence: "HIGH" | "MEDIUM" | "LOW";
+  is_pipeline_pass: boolean;
+  filtered_at: string | null;
+  profile_fit: ProfileFitOut;
+  team_integration: TeamIntegrationOut;
   is_hired: boolean;
   is_rejected: boolean;
   application_status: ApplicationStatus;

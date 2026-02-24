@@ -62,7 +62,7 @@ async def get_yacht(
     db: DbDep,
     employer: EmployerDep,
 ):
-    yacht = await service.get_secure(db, yacht_id=yacht_id, requester_id=employer.user_id)
+    yacht = await service.get_secure(db, yacht_id=yacht_id, employer=employer)
     if not yacht:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -84,7 +84,7 @@ async def update_yacht(
 ):
     try:
         return await service.update(
-            db, yacht_id=yacht_id, payload=payload, requester_id=employer.user_id
+            db, yacht_id=yacht_id, payload=payload, employer=employer
         )
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé.")
@@ -101,7 +101,7 @@ async def delete_yacht(
     employer: EmployerDep,
 ):
     try:
-        await service.delete(db, yacht_id=yacht_id, requester_id=employer.user_id)
+        await service.delete(db, yacht_id=yacht_id, employer=employer)
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé.")
 
@@ -127,7 +127,7 @@ async def update_environment(
 ):
     try:
         return await service.update_environment(
-            db, yacht_id=yacht_id, payload=payload, requester_id=employer.user_id
+            db, yacht_id=yacht_id, payload=payload, employer=employer
         )
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé.")
@@ -150,7 +150,7 @@ async def refresh_boarding_token(
     """Génère un nouveau boarding_token. L'ancien est immédiatement invalidé."""
     try:
         return await service.refresh_boarding_token(
-            db, yacht_id=yacht_id, requester_id=employer.user_id
+            db, yacht_id=yacht_id, employer=employer
         )
     except PermissionError:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accès refusé.")

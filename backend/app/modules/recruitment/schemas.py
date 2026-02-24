@@ -57,33 +57,46 @@ class CampaignPublicOut(BaseModel):
 
 # ── Matching ───────────────────────────────────────────────
 
-class CategoryScoreOut(BaseModel):
-    normative_score: float
-    relative_percentile: Optional[float] = None
-    feedback: str
+class ProfileFitOut(BaseModel):
+    """Étage 1 DNRE — adéquation profil / poste."""
+    g_fit: float
+    fit_label: str
+    overall_centile: float = 0.0
+    centile_by_competency: Dict[str, float] = {}
+    safety_level: str = "CLEAR"
+    safety_flags: List[str] = []
+
+
+class TeamIntegrationOut(BaseModel):
+    """Étage 2 MLPSM — intégration dans l'équipe du yacht."""
+    available: bool
+    y_success: Optional[float] = None
+    success_label: Optional[str] = None
+    p_ind: Optional[float] = None
+    f_team: Optional[float] = None
+    f_env: Optional[float] = None
+    f_lmx: Optional[float] = None
+    team_delta: Optional[float] = None
+    confidence: Optional[str] = None
+    reason: Optional[str] = None      # présent quand available=False
 
 
 class MatchResultOut(BaseModel):
     """
-    Résultat de matching fusionné :
-    - global_fit : score SME normative (engine/matching/sme.py)
-    - y_success  : équation maîtresse Ŷ (engine/recruitment/master.py)
-    - f_team_delta : impact sur l'équipe (engine/recruitment/simulator.py)
+    Résultat du pipeline DNRE → MLPSM pour un candidat.
+    Les deux dimensions sont exposées côte à côte sans agrégation.
     """
     crew_profile_id: int
     name: str
     avatar_url: Optional[str] = None
     location: Optional[str] = None
     experience_years: int = 0
-    test_status: str            # "completed" | "pending"
+    test_status: str                  # "completed" | "pending"
+    is_pipeline_pass: bool = True
+    filtered_at: Optional[str] = None
 
-    global_fit: float
-    categories: Optional[Dict[str, CategoryScoreOut]] = None
-
-    y_success: Optional[float] = None
-    f_team_delta: Optional[float] = None
-    impact_flags: List[str] = []
-    confidence: Optional[str] = None   # "HIGH" | "MEDIUM" | "LOW"
+    profile_fit: ProfileFitOut
+    team_integration: TeamIntegrationOut
 
     is_hired: bool = False
     is_rejected: bool = False

@@ -3,20 +3,20 @@
 import { use } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { recruitmentApi, queryKeys } from "@harmony/api";
-import type { MatchResultOut } from "@harmony/types";
 import Link from "next/link";
 
 interface PageProps {
   params: Promise<{ campaignId: string }>;
 }
 
-function ConfidenceBadge({ confidence }: { confidence: MatchResultOut["confidence"] }) {
-  const styles: Record<MatchResultOut["confidence"], string> = {
+function ConfidenceBadge({ confidence }: { confidence: string | null }) {
+  const styles: Record<string, string> = {
     HIGH: "badge-success",
     MEDIUM: "badge-warning",
     LOW: "badge-danger",
   };
-  return <span className={`badge ${styles[confidence]}`}>{confidence}</span>;
+  if (!confidence) return null;
+  return <span className={`badge ${styles[confidence] ?? "badge-info"}`}>{confidence}</span>;
 }
 
 function ScoreRing({ value, label }: { value: number; label: string }) {
@@ -112,7 +112,7 @@ export default function MatchingPage({ params }: PageProps) {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-0.5">
                       <p className="font-medium text-sm">{r.name}</p>
-                      <ConfidenceBadge confidence={r.confidence} />
+                      <ConfidenceBadge confidence={r.team_integration.confidence} />
                       {r.test_status === "pending" && (
                         <span className="badge badge-warning">Tests pending</span>
                       )}
@@ -121,9 +121,9 @@ export default function MatchingPage({ params }: PageProps) {
                       {r.experience_years} yr exp
                       {r.location ? ` · ${r.location}` : ""}
                     </p>
-                    {r.impact_flags.length > 0 && (
+                    {r.profile_fit.safety_flags.length > 0 && (
                       <div className="flex gap-1 mt-1">
-                        {r.impact_flags.slice(0, 2).map((flag) => (
+                        {r.profile_fit.safety_flags.slice(0, 2).map((flag) => (
                           <span key={flag} className="badge badge-warning text-xs">
                             ⚠ {flag}
                           </span>
@@ -134,19 +134,21 @@ export default function MatchingPage({ params }: PageProps) {
 
                   {/* Scores */}
                   <div className="flex gap-4 shrink-0">
-                    <ScoreRing value={r.global_fit} label="Fit" />
-                    <ScoreRing value={r.y_success} label="Ŷ" />
-                    <div className="flex flex-col items-center gap-1">
-                      <div
-                        className={`text-sm font-semibold ${
-                          r.f_team_delta >= 0 ? "text-green-400" : "text-red-400"
-                        }`}
-                      >
-                        {r.f_team_delta >= 0 ? "+" : ""}
-                        {r.f_team_delta.toFixed(1)}
+                    <ScoreRing value={r.profile_fit.g_fit} label="Fit" />
+                    <ScoreRing value={r.team_integration.y_success ?? 0} label="Ŷ" />
+                    {r.team_integration.team_delta != null && (
+                      <div className="flex flex-col items-center gap-1">
+                        <div
+                          className={`text-sm font-semibold ${
+                            r.team_integration.team_delta >= 0 ? "text-green-400" : "text-red-400"
+                          }`}
+                        >
+                          {r.team_integration.team_delta >= 0 ? "+" : ""}
+                          {r.team_integration.team_delta.toFixed(1)}
+                        </div>
+                        <span className="text-muted text-xs">ΔTeam</span>
                       </div>
-                      <span className="text-muted text-xs">ΔTeam</span>
-                    </div>
+                    )}
                   </div>
 
                   {/* Actions */}

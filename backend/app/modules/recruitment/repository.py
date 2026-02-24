@@ -11,6 +11,7 @@ Changements v2 :
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import selectinload
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 
@@ -23,6 +24,25 @@ from app.shared.enums import CampaignStatus, ApplicationStatus
 
 
 class RecruitmentRepository:
+
+    # ── Helpers ───────────────────────────────────────────────
+
+    def _with_relations(self, q):
+        """Eager-load yacht and candidates to avoid lazy-load greenlet errors
+        when FastAPI serialises CampaignOut outside the async session."""
+        return q.options(
+            selectinload(Campaign.yacht),
+            selectinload(Campaign.candidates),
+        )
+
+    async def _refetch(self, db: AsyncSession, campaign_id: int) -> Optional[Campaign]:
+        """Reload a Campaign with all relations needed for serialisation."""
+        r = await db.execute(
+            self._with_relations(
+                select(Campaign).where(Campaign.id == campaign_id)
+            )
+        )
+        return r.scalar_one_or_none()
 
     # ── Campagnes ─────────────────────────────────────────────
 
@@ -38,8 +58,7 @@ class RecruitmentRepository:
         )
         db.add(db_obj)
         await db.commit()
-        await db.refresh(db_obj)
-        return db_obj
+        return await self._refetch(db, db_obj.id)
 
     async def get_campaign_by_id(
         self, db: AsyncSession, campaign_id: int
@@ -65,9 +84,11 @@ class RecruitmentRepository:
         campaign_status: Optional[CampaignStatus] = None,
         is_archived: bool = False,
     ) -> List[Campaign]:
-        q = select(Campaign).where(
-            Campaign.employer_profile_id == employer_profile_id,
-            Campaign.is_archived == is_archived,
+        q = self._with_relations(
+            select(Campaign).where(
+                Campaign.employer_profile_id == employer_profile_id,
+                Campaign.is_archived == is_archived,
+            )
         )
         if campaign_status:
             q = q.where(Campaign.status == campaign_status)
@@ -87,15 +108,13 @@ class RecruitmentRepository:
             if hasattr(campaign, field):
                 setattr(campaign, field, value)
         await db.commit()
-        await db.refresh(campaign)
-        return campaign
+        return await self._refetch(db, campaign.id)
 
     async def archive_campaign(self, db: AsyncSession, campaign: Campaign) -> Campaign:
         campaign.is_archived = True
         campaign.status = CampaignStatus.CLOSED
         await db.commit()
-        await db.refresh(campaign)
-        return campaign
+        return await self._refetch(db, campaign.id)
 
     # ── Candidatures ──────────────────────────────────────────
 
@@ -333,7 +352,7 @@ class RecruitmentRepository:
 
     async def get_active_model_betas(self, db: AsyncSession) -> Dict:
         """Betas du ModelVersion actif — fallback sur DEFAULT_BETAS si absent."""
-        from engine.recruitment.master import DEFAULT_BETAS
+        from app.engine.recruitment.MLPSM.master import DEFAULT_BETAS
         r = await db.execute(
             select(ModelVersion)
             .where(ModelVersion.is_active == True)

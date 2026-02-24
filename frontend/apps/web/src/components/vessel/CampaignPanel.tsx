@@ -7,14 +7,14 @@ import type { CampaignOut, MatchResultOut, YachtPosition } from "@harmony/types"
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const CONFIDENCE_CLS: Record<MatchResultOut["confidence"], string> = {
+const CONFIDENCE_CLS: Record<string, string> = {
   HIGH: "badge-success",
   MEDIUM: "badge-warning",
   LOW: "badge-danger",
 };
 
-function deltaColor(v: number) {
-  return v >= 0 ? "text-green-400" : "text-red-400";
+function deltaColor(v: number | null) {
+  return (v ?? 0) >= 0 ? "text-green-400" : "text-red-400";
 }
 
 // ── New-campaign inline form ───────────────────────────────────────────────────
@@ -148,28 +148,32 @@ function CandidateCard({
             <p className="text-xs text-muted truncate">{c.location}</p>
           )}
         </div>
-        <span className={`badge text-xs ${CONFIDENCE_CLS[c.confidence]}`}>
-          {c.confidence}
+        <span className={`badge text-xs ${CONFIDENCE_CLS[c.team_integration.confidence ?? "LOW"]}`}>
+          {c.team_integration.confidence ?? "—"}
         </span>
       </div>
 
       {/* Score row */}
       <div className="flex items-center gap-3 text-xs pl-7">
         <span className="text-muted">
-          Fit <span className="text-text-primary font-medium">{Math.round(c.global_fit)}</span>
+          Fit <span className="text-text-primary font-medium">{Math.round(c.profile_fit.g_fit)}</span>
         </span>
         <span className="text-muted">
-          Ŷ <span className="text-text-primary font-medium">{Math.round(c.y_success)}</span>
+          Ŷ <span className="text-text-primary font-medium">
+            {c.team_integration.y_success != null ? Math.round(c.team_integration.y_success) : "—"}
+          </span>
         </span>
-        <span className={`font-medium ${deltaColor(c.f_team_delta)}`}>
-          {c.f_team_delta >= 0 ? "+" : ""}{c.f_team_delta.toFixed(1)} ΔTeam
-        </span>
+        {c.team_integration.team_delta != null && (
+          <span className={`font-medium ${deltaColor(c.team_integration.team_delta)}`}>
+            {c.team_integration.team_delta >= 0 ? "+" : ""}{c.team_integration.team_delta.toFixed(1)} ΔTeam
+          </span>
+        )}
       </div>
 
-      {/* Flags */}
-      {c.impact_flags.length > 0 && (
+      {/* Safety flags */}
+      {c.profile_fit.safety_flags.length > 0 && (
         <div className="flex gap-1 mt-1.5 pl-7 flex-wrap">
-          {c.impact_flags.slice(0, 2).map((f) => (
+          {c.profile_fit.safety_flags.slice(0, 2).map((f) => (
             <span key={f} className="badge badge-warning text-xs">⚠ {f}</span>
           ))}
         </div>
@@ -255,7 +259,7 @@ export function CampaignPanel({
   const sortedCandidates = [...(candidates ?? [])].sort((a, b) => {
     if (a.is_hired && !b.is_hired) return 1;
     if (!a.is_hired && b.is_hired) return -1;
-    return b.y_success - a.y_success;
+    return (b.team_integration.y_success ?? 0) - (a.team_integration.y_success ?? 0);
   });
 
   return (
