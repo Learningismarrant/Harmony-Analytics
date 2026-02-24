@@ -1,0 +1,83 @@
+/* @import must come before any other rules (CSS spec + PostCSS requirement) */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg-primary: #07090F;
+  --bg-secondary: #0D1117;
+  --bg-elevated: #13191F;
+  --bg-border: #1E2733;
+  --brand-primary: #0EA5E9;
+  --brand-secondary: #6366F1;
+  --text-primary: #E8EFF7;
+  --text-muted: #8FA3B8;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: Inter, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  height: 100%;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-border);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
+}
+
+/* Focus ring — accessibility */
+:focus-visible {
+  outline: 2px solid var(--brand-primary);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* Utility classes */
+@layer components {
+  .card {
+    @apply bg-bg-secondary border border-bg-border rounded-xl p-4 shadow-card;
+  }
+
+  .btn-primary {
+    @apply bg-brand-primary text-bg-primary font-semibold px-4 py-2 rounded-lg
+           hover:bg-brand-glow transition-colors duration-150
+           focus-visible:outline-brand-primary disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply text-muted hover:text-text-primary px-4 py-2 rounded-lg
+           hover:bg-bg-elevated transition-colors duration-150;
+  }
+
+  .badge {
+    @apply inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full;
+  }
+
+  .badge-success { @apply badge bg-green-500/15 text-green-400; }
+  .badge-warning { @apply badge bg-amber-500/15 text-amber-400; }
+  .badge-danger  { @apply badge bg-red-500/15 text-red-400; }
+  .badge-info    { @apply badge bg-sky-500/15 text-sky-400; }
+}

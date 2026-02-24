@@ -78,3 +78,41 @@ class DashboardOut(BaseModel):
     harmony_metrics: HarmonyMetricsOut
     weather_trend: WeatherTrendOut
     full_diagnosis: FullDiagnosisOut
+
+
+# ── Sociogram ───────────────────────────────────────────────
+
+class SociogramNodeOut(BaseModel):
+    crew_profile_id: int
+    name: str
+    avatar_url: Optional[str] = None
+    position: str
+    psychometric_completeness: float = 0.0
+    p_ind: float = 0.0
+
+
+class SociogramEdgeOut(BaseModel):
+    source_id: int
+    target_id: int
+    dyad_score: float                     # 0–100
+    agreeableness_compatibility: float    # 0–100
+    conscientiousness_compatibility: float
+    es_compatibility: float
+    risk_flags: List[str] = []
+
+
+class SociogramOut(BaseModel):
+    nodes: List[SociogramNodeOut]
+    edges: List[SociogramEdgeOut]
+    f_team_global: float
+    computed_at: str                      # ISO datetime
+
+
+class SimulationPreviewOut(BaseModel):
+    candidate_id: int
+    candidate_name: str
+    delta_f_team: float
+    delta_cohesion: float
+    new_edges: List[SociogramEdgeOut]
+    impact_flags: List[str]
+    recommendation: str  # "STRONG_FIT" | "MODERATE_FIT" | "WEAK_FIT" | "RISK"

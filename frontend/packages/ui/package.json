@@ -1,0 +1,18 @@
+{
+  "name": "@harmony/ui",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./tokens": "./src/tokens.ts"
+  },
+  "scripts": {
+    "type-check": "tsc --noEmit",
+    "clean": "echo 'nothing to clean'"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
+  }
+}

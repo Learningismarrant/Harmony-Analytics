@@ -18,6 +18,8 @@ from app.modules.crew.schemas import (
     DailyPulseIn,
     DailyPulseOut,
     DashboardOut,
+    SociogramOut,
+    SimulationPreviewOut,
 )
 
 router = APIRouter(prefix="/crew", tags=["Crew"])
@@ -102,6 +104,49 @@ async def get_dashboard(
     if dashboard is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Yacht introuvable ou accès refusé.")
     return dashboard
+
+
+# ── Sociogramme 3D ────────────────────────────────────────
+
+@router.get("/{yacht_id}/sociogram", response_model=SociogramOut)
+async def get_sociogram(
+    yacht_id: int,
+    db: DbDep,
+    current_employer: EmployerDep,
+):
+    """
+    Données complètes pour le sociogramme 3D.
+    Nœuds (crew), liens (compatibilité pairwise), score F_team global.
+    """
+    result = await service.get_sociogram(db, yacht_id=yacht_id, employer=current_employer)
+    if result is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Yacht introuvable ou accès refusé.")
+    return result
+
+
+@router.get("/{yacht_id}/simulate/{candidate_id}", response_model=SimulationPreviewOut)
+async def simulate_candidate(
+    yacht_id: int,
+    candidate_id: int,
+    db: DbDep,
+    current_employer: EmployerDep,
+):
+    """
+    Prévisualise l'impact de l'ajout d'un candidat sur la dynamique d'équipe.
+    Retourne ΔF_team, ΔCohésion, nouveaux liens et recommandation.
+    """
+    try:
+        result = await service.simulate_candidate(
+            db,
+            yacht_id=yacht_id,
+            candidate_id=candidate_id,
+            employer=current_employer,
+        )
+    except KeyError as e:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, str(e))
+    if result is None:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, "Accès refusé.")
+    return result
 
 
 # ── Daily Pulse (candidat) ─────────────────────────────────

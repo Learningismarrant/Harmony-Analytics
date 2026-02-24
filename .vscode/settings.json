@@ -1,0 +1,22 @@
+{
+  // Use the workspace TypeScript instead of VS Code's built-in version.
+  // The built-in TS may not resolve @types/react correctly in a Turborepo
+  // monorepo where node_modules are hoisted to frontend/node_modules.
+  "typescript.tsdk": "frontend/node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+
+  // Tell the TS language server which tsconfig governs each sub-project.
+  // Without this VS Code sometimes picks the wrong tsconfig for files deep
+  // inside a monorepo, causing false "JSX.IntrinsicElements" errors.
+  "typescript.tsserver.experimental.enableProjectDiagnostics": false,
+
+  // ESLint — run on save for the web and mobile packages.
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+
+  // File associations
+  "files.associations": {
+    "*.css": "tailwindcss"
+  }
+}

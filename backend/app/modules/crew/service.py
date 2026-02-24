@@ -15,10 +15,11 @@ Unification moteur d'équipe (v2.1) :
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
-from datetime import date
+from datetime import date, datetime, timezone
 
 from app.engine.recruitment.MLPSM.f_team import compute_baseline, compute_delta, FTeamResult
 from app.engine.benchmarking.diagnosis import generate_combined_diagnosis
+from app.engine.benchmarking.matrice import compute_sociogram
 from app.modules.crew.repository import CrewRepository
 from app.modules.vessel.repository import VesselRepository
 from app.shared.models import CrewProfile, EmployerProfile
@@ -204,6 +205,101 @@ class CrewService:
             "status":         status,
         }
 
+    # ── Sociogram ─────────────────────────────────────────────
+
+    async def get_sociogram(
+        self, db: AsyncSession, yacht_id: int, employer: EmployerProfile
+    ) -> Optional[Dict]:
+        if not await vessel_repo.is_owner(db, yacht_id, employer.id):
+            return None
+
+        crew = await crew_repo.get_active_crew_with_profiles(db, yacht_id)
+        pulse_data = await crew_repo.get_recent_pulse_data(db, yacht_id, days=7)
+        weather = self._compute_weather_trend(pulse_data)
+
+        crew_members = [
+            {
+                "crew_profile_id": str(m["crew_profile_id"]),
+                "name": m["name"],
+                "role": m["role"],
+                "snapshot": m["snapshot"],
+            }
+            for m in crew
+        ]
+
+        sociogram = compute_sociogram(yacht_id, crew_members, weather)
+        return _sociogram_to_out(sociogram, crew)
+
+    async def simulate_candidate(
+        self,
+        db: AsyncSession,
+        yacht_id: int,
+        candidate_id: int,
+        employer: EmployerProfile,
+    ) -> Optional[Dict]:
+        if not await vessel_repo.is_owner(db, yacht_id, employer.id):
+            return None
+
+        crew = await crew_repo.get_active_crew_with_profiles(db, yacht_id)
+        crew_snapshots = [m["snapshot"] for m in crew]
+
+        candidate = await crew_repo.get_crew_profile_with_snapshot(db, candidate_id)
+        if not candidate:
+            raise KeyError("Candidat introuvable.")
+
+        cand_snapshot = candidate["snapshot"]
+
+        # F_team before and after
+        f_before = compute_baseline(crew_snapshots) if crew_snapshots else None
+        f_after  = compute_delta(crew_snapshots, cand_snapshot)
+
+        delta_f_team = f_after.delta.delta if f_after.delta else 0.0
+
+        before_cohesion = 0.0
+        if f_before:
+            before_cohesion = (
+                f_before.jerk_filter.min_agreeableness
+                + f_before.emotional.mean_emotional_stability
+            ) / 2.0
+        after_cohesion = (
+            f_after.jerk_filter.min_agreeableness
+            + f_after.emotional.mean_emotional_stability
+        ) / 2.0
+        delta_cohesion = after_cohesion - before_cohesion
+
+        # Candidate ↔ existing crew edges
+        new_edges = [
+            {
+                "source_id": candidate_id,
+                "target_id": m["crew_profile_id"],
+                **_edge_details(cand_snapshot, m["snapshot"]),
+            }
+            for m in crew
+        ]
+
+        # Flags
+        flags: List[str] = list(f_after.flags)
+        if f_after.delta:
+            if f_after.delta.net_impact == "NEGATIVE":
+                flags.insert(0, f"TEAM_NEGATIVE_IMPACT: F_team {delta_f_team:+.1f}")
+            elif f_after.delta.net_impact == "POSITIVE":
+                flags.insert(0, f"TEAM_POSITIVE_IMPACT: F_team {delta_f_team:+.1f}")
+
+        if delta_f_team >= 5.0:    recommendation = "STRONG_FIT"
+        elif delta_f_team >= 0.0:  recommendation = "MODERATE_FIT"
+        elif delta_f_team >= -5.0: recommendation = "WEAK_FIT"
+        else:                      recommendation = "RISK"
+
+        return {
+            "candidate_id": candidate_id,
+            "candidate_name": candidate["name"],
+            "delta_f_team": round(delta_f_team, 2),
+            "delta_cohesion": round(delta_cohesion, 2),
+            "new_edges": new_edges,
+            "impact_flags": flags,
+            "recommendation": recommendation,
+        }
+
     def _empty_dashboard(self, yacht_id: int) -> Dict:
         return {
             "yacht_id": yacht_id,
@@ -268,4 +364,108 @@ def _to_harmony_metrics(f_team: FTeamResult) -> Dict:
             "conscientiousness_divergence": round(sigma_c, 1),
             "weakest_link_stability":       round(min_es, 1),
         }
+    }
+
+
+# ── Sociogram helpers ──────────────────────────────────────────────────────────
+
+def _snap_get(snapshot: Dict, trait: str) -> Optional[float]:
+    """Extract a psychometric trait from snapshot (handles both formats)."""
+    if trait == "emotional_stability":
+        val = snapshot.get("emotional_stability")
+        if val is not None:
+            return float(val)
+        bf = snapshot.get("big_five") or {}
+        n = bf.get("neuroticism")
+        if n is None:
+            return None
+        n_score = n.get("score", n) if isinstance(n, dict) else n
+        return 100.0 - float(n_score)
+    if trait == "gca":
+        return (snapshot.get("cognitive") or {}).get("gca_score")
+    bf = snapshot.get("big_five") or {}
+    val = bf.get(trait)
+    if val is None:
+        return None
+    return float(val.get("score", val)) if isinstance(val, dict) else float(val)
+
+
+def _compute_p_ind(snapshot: Dict) -> float:
+    """Simplified P_ind proxy: 0.6 × GCA + 0.4 × conscientiousness."""
+    gca = _snap_get(snapshot, "gca") or 50.0
+    c   = _snap_get(snapshot, "conscientiousness") or 50.0
+    return round(0.6 * gca + 0.4 * c, 1)
+
+
+def _compute_completeness(snapshot: Dict) -> float:
+    """Estimate psychometric completeness from snapshot keys."""
+    if not snapshot:
+        return 0.0
+    if "completeness" in snapshot:
+        return float(snapshot["completeness"])
+    sections = ["big_five", "cognitive", "motivation"]
+    present = sum(1 for s in sections if snapshot.get(s))
+    return round(present / len(sections), 2)
+
+
+def _edge_details(snap_a: Dict, snap_b: Dict) -> Dict:
+    """Compute pairwise compatibility components for a sociogram edge."""
+    def g(snap: Dict, trait: str) -> float:
+        v = _snap_get(snap, trait)
+        return v if v is not None else 50.0
+
+    a_a, c_a, es_a = g(snap_a, "agreeableness"), g(snap_a, "conscientiousness"), g(snap_a, "emotional_stability")
+    a_b, c_b, es_b = g(snap_b, "agreeableness"), g(snap_b, "conscientiousness"), g(snap_b, "emotional_stability")
+
+    sim_a   = 1.0 - abs(a_a - a_b) / 100.0
+    sim_c   = 1.0 - abs(c_a - c_b) / 100.0
+    es_bond = (es_a / 100.0) * (es_b / 100.0)
+
+    dyad = (0.40 * sim_a + 0.35 * sim_c + 0.25 * es_bond) * 100.0
+
+    flags = []
+    if sim_a < 0.5:    flags.append("agreeableness_mismatch")
+    if sim_c < 0.5:    flags.append("conscientiousness_faultline")
+    if es_bond < 0.2:  flags.append("low_es_bond")
+
+    return {
+        "dyad_score":                    round(max(0.0, min(100.0, dyad)), 1),
+        "agreeableness_compatibility":   round(sim_a * 100.0, 1),
+        "conscientiousness_compatibility": round(sim_c * 100.0, 1),
+        "es_compatibility":              round(es_bond * 100.0, 1),
+        "risk_flags":                    flags,
+    }
+
+
+def _sociogram_to_out(sociogram, crew_with_profiles: List[Dict]) -> Dict:
+    """Convert engine SociogramData to the frontend SociogramOut format."""
+    profile_map = {str(m["crew_profile_id"]): m for m in crew_with_profiles}
+
+    nodes = []
+    for node in sociogram.nodes:
+        profile  = profile_map.get(node.id, {})
+        snapshot = profile.get("snapshot") or {}
+        nodes.append({
+            "crew_profile_id":           int(node.id),
+            "name":                      node.label,
+            "avatar_url":                profile.get("avatar_url"),
+            "position":                  node.role,
+            "psychometric_completeness": _compute_completeness(snapshot),
+            "p_ind":                     _compute_p_ind(snapshot),
+        })
+
+    snap_map = {str(m["crew_profile_id"]): m.get("snapshot") or {} for m in crew_with_profiles}
+    edges = []
+    for edge in sociogram.edges:
+        edges.append({
+            "source_id": int(edge.source),
+            "target_id": int(edge.target),
+            **_edge_details(snap_map.get(edge.source, {}), snap_map.get(edge.target, {})),
+        })
+
+    return {
+        "nodes":          nodes,
+        "edges":          edges,
+        "f_team_global":  sociogram.team_state.f_team_score,
+        "computed_at":    datetime.now(timezone.utc).isoformat(),
     }

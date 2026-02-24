@@ -37,7 +37,7 @@ async def create_yacht(
     db: DbDep,
     employer: EmployerDep,
 ):
-    return await service.create(db, payload=payload, owner_id=employer.user_id)
+    return await service.create(db, payload, employer)
 
 
 @router.get(
@@ -49,7 +49,7 @@ async def list_my_yachts(
     db: DbDep,
     employer: EmployerDep,
 ):
-    return await service.get_all_for_owner(db, owner_id=employer.user_id)
+    return await service.get_all_for_employer(db, employer)
 
 
 @router.get(

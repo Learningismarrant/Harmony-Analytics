@@ -11,7 +11,7 @@ from sqlalchemy import select, func
 from typing import List, Optional
 from datetime import datetime, date, timezone, timedelta
 
-from app.shared.models import CrewAssignment, DailyPulse
+from app.shared.models import CrewAssignment, DailyPulse, CrewProfile, User as UserModel
 
 
 class CrewRepository:
@@ -131,3 +131,65 @@ class CrewRepository:
             .limit(limit)
         )
         return r.scalars().all()
+
+    # ── Sociogram helpers ─────────────────────────────────────
+
+    async def get_active_crew_with_profiles(
+        self, db: AsyncSession, yacht_id: int
+    ) -> List[dict]:
+        """Active crew enriched with name, avatar_url, role and psychometric snapshot."""
+        r = await db.execute(
+            select(
+                CrewAssignment.crew_profile_id,
+                CrewAssignment.role,
+                UserModel.name,
+                UserModel.avatar_url,
+                CrewProfile.psychometric_snapshot,
+            )
+            .join(CrewProfile, CrewProfile.id == CrewAssignment.crew_profile_id)
+            .join(UserModel, UserModel.id == CrewProfile.user_id)
+            .where(
+                CrewAssignment.yacht_id == yacht_id,
+                CrewAssignment.is_active == True,
+            )
+        )
+        rows = r.all()
+        return [
+            {
+                "crew_profile_id": row.crew_profile_id,
+                "role": row.role.value if hasattr(row.role, "value") else str(row.role),
+                "name": row.name or f"Membre {i + 1}",
+                "avatar_url": row.avatar_url,
+                "snapshot": row.psychometric_snapshot or {},
+            }
+            for i, row in enumerate(rows)
+        ]
+
+    async def get_crew_profile_with_snapshot(
+        self, db: AsyncSession, crew_profile_id: int
+    ) -> Optional[dict]:
+        """Single crew profile enriched with user identity and psychometric snapshot."""
+        r = await db.execute(
+            select(
+                CrewProfile.id,
+                CrewProfile.position_targeted,
+                CrewProfile.psychometric_snapshot,
+                UserModel.name,
+                UserModel.avatar_url,
+            )
+            .join(UserModel, UserModel.id == CrewProfile.user_id)
+            .where(CrewProfile.id == crew_profile_id)
+        )
+        row = r.one_or_none()
+        if not row:
+            return None
+        pos = row.position_targeted
+        return {
+            "crew_profile_id": row.id,
+            "role": pos.value if hasattr(pos, "value") else str(pos or "Deckhand"),
+            "name": row.name,
+            "avatar_url": row.avatar_url,
+            "snapshot": row.psychometric_snapshot or {},
+            "dnre_fit_label": "",
+            "dnre_safety_level": "CLEAR",
+        }
