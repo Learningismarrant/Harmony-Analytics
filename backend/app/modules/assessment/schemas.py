@@ -8,8 +8,8 @@ from datetime import datetime
 
 class TestInfoOut(BaseModel):
     id: int
-    nom_du_test: str
-    description_courte: str
+    name: str
+    description: str
     instructions: Optional[str] = None
     max_score_per_question: int = 5
     test_type: str
