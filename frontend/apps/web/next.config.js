@@ -1,7 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Transpile internal workspace packages (source TypeScript — no pre-build needed)
-  transpilePackages: ["@harmony/api", "@harmony/types", "@harmony/ui"],
+  transpilePackages: [
+    "@harmony/api", "@harmony/types", "@harmony/ui",
+    // d3-force and deps are ESM-only — must transpile for Jest + Next.js bundler
+    "d3-force", "d3-dispatch", "d3-quadtree", "d3-timer",
+  ],
 
   // Allow Next.js to resolve files outside of apps/web (monorepo packages)
   experimental: {

@@ -6,12 +6,12 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { crewApi, recruitmentApi, queryKeys } from "@harmony/api";
 import type { SimulationPreviewOut } from "@harmony/types";
 import { useState, Suspense } from "react";
-import { Sidebar } from "@/components/layout/Sidebar";
+import { Sidebar } from "@/shared/components/Sidebar";
 
 // Lazy-load the 3D canvas — Three.js is large and SSR-incompatible
 const SociogramCanvas = dynamic(
   () =>
-    import("@/components/sociogram/SociogramCanvas").then(
+    import("@/features/sociogram/components/SociogramCanvas").then(
       (m) => m.SociogramCanvas,
     ),
   {

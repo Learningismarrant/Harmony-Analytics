@@ -4,7 +4,7 @@ import { useState, FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { authApi } from "@harmony/api";
-import { useAuthStore } from "@/store/auth.store";
+import { useAuthStore } from "@/features/auth/store";
 import type { UserRole, YachtPosition } from "@harmony/types";
 
 const POSITIONS: YachtPosition[] = [

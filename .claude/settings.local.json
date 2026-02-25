@@ -2,7 +2,9 @@
   "permissions": {
     "allow": [
       "Bash(npm install:*)",
-      "Bash(npx jest --no-coverage --testPathPatterns=\"vessel-cockpit\")"
+      "Bash(npx jest --no-coverage --testPathPatterns=\"vessel-cockpit\")",
+      "Bash(npm test)",
+      "Bash(npx jest --testPathPatterns=\"CampaignPanel\")"
     ]
   }
 }

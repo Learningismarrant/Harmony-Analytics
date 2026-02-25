@@ -1,57 +1,59 @@
 /**
  * Design tokens — Harmony dark maritime theme
  *
- * Shared between web (Tailwind CSS variables) and mobile (NativeWind).
- * All color values: hex strings suitable for both CSS and Three.js.
+ * Palette philosophy: deep desaturated navy, weathered brass as prestige accent.
+ * Color is reserved for data meaning — never decorative.
+ * Contrast is calibrated to feel refined, not harsh.
  */
 
 export const colors = {
   // ── Background ──────────────────────────────────────────
   bg: {
-    primary: "#07090F",    // near-black ocean depth
-    secondary: "#0D1117",  // card backgrounds
-    elevated: "#13191F",   // modals, sidebars
-    border: "#1E2733",     // subtle borders
+    primary:   "#07090F",    // ocean depth — near-black
+    secondary: "#0B1018",    // panel backgrounds
+    elevated:  "#101720",    // cards, modals, sidebars
+    border:    "#1A2634",    // barely-there borders
   },
 
   // ── Brand ───────────────────────────────────────────────
   brand: {
-    primary: "#0EA5E9",    // sky-500 — ocean surface blue
-    secondary: "#6366F1",  // indigo-500 — psychometric accent
-    glow: "#38BDF8",       // sky-400 — hover/active glow
+    primary:   "#4A90B8",    // maritime steel blue (desaturated from #0EA5E9)
+    secondary: "#50528A",    // muted slate-indigo
+    glow:      "#6AAFCC",    // lighter steel for hover/active
+    gold:      "#A8864A",    // champagne bronze — prestige accent
   },
 
   // ── Text ────────────────────────────────────────────────
   text: {
-    primary: "#E8EFF7",    // near-white
-    secondary: "#8FA3B8",  // muted
-    disabled: "#3D5169",   // disabled state
-    inverse: "#07090F",    // on bright backgrounds
+    primary:   "#C8D8E4",    // soft cool white (less stark than near-white)
+    secondary: "#5A7890",    // recessed label text
+    disabled:  "#2D4358",    // disabled state
+    inverse:   "#07090F",    // on bright backgrounds
   },
 
-  // ── Semantic ─────────────────────────────────────────────
-  success: "#22C55E",      // green-500
-  warning: "#F59E0B",      // amber-500
-  danger: "#EF4444",       // red-500
-  info: "#06B6D4",         // cyan-500
+  // ── Semantic — fully desaturated, convey meaning without screaming ────────
+  success: "#2E7A52",        // deep muted emerald
+  warning: "#9A7230",        // weathered brass
+  danger:  "#884040",        // deep muted crimson
+  info:    "#287890",        // deep muted teal
 
-  // ── Sociogram node colors (by score range) ───────────────
+  // ── Sociogram node/edge colors ───────────────────────────
   sociogram: {
-    excellent: "#22C55E",  // > 80 dyad score
-    good: "#84CC16",       // 65–80
-    moderate: "#F59E0B",   // 45–65
-    weak: "#EF4444",       // < 45
-    node: "#1E40AF",       // default node fill
-    nodeGlow: "#3B82F6",   // node hover
-    edge: "#1E2733",       // low-compatibility edge
-    candidate: "#A855F7",  // simulated candidate (purple)
+    excellent:  "#2E8A5C",   // muted emerald  (dyad ≥ 80)
+    good:       "#5A8A30",   // muted sage      (dyad 65–80)
+    moderate:   "#9A7030",   // weathered brass (dyad 45–65)
+    weak:       "#883838",   // muted crimson   (dyad < 45)
+    node:       "#1A3A60",   // deep navy node fill
+    nodeGlow:   "#4A90B8",   // matches brand primary
+    edge:       "#1A2634",   // low-compatibility edge (same as border)
+    candidate:  "#7850A8",   // muted amethyst for simulated candidate
   },
 
-  // ── Score level colors ───────────────────────────────────
+  // ── Score level colors (slightly lighter for readability in UI) ──────────
   score: {
-    high: "#22C55E",
-    medium: "#F59E0B",
-    low: "#EF4444",
+    high:   "#3D9A6A",       // readable muted emerald
+    medium: "#A88540",       // readable brass
+    low:    "#9A4848",       // readable muted crimson
   },
 } as const;
 
@@ -98,16 +100,16 @@ export const typography = {
 
 /** Three.js hex integers — use with THREE.Color */
 export const threeColors = {
-  nodeFill: 0x1e40af,
-  nodeGlow: 0x3b82f6,
-  edgeExcellent: 0x22c55e,
-  edgeGood: 0x84cc16,
-  edgeModerate: 0xf59e0b,
-  edgeWeak: 0xef4444,
-  candidateNode: 0xa855f7,
-  background: 0x07090f,
-  fog: 0x0d1117,
-  ambient: 0x1e2733,
+  nodeFill:      0x1a3a60,   // deep navy
+  nodeGlow:      0x4a90b8,   // maritime steel blue
+  edgeExcellent: 0x2e8a5c,   // muted emerald
+  edgeGood:      0x5a8a30,   // muted sage
+  edgeModerate:  0x9a7030,   // weathered brass
+  edgeWeak:      0x883838,   // muted crimson
+  candidateNode: 0x7850a8,   // muted amethyst
+  background:    0x07090f,
+  fog:           0x0b1018,
+  ambient:       0x1a2634,
 } as const;
 
 /** Dyad score → hex color for edge rendering */

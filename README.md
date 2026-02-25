@@ -200,9 +200,14 @@ pytest tests/ -v -m service           # Services (mock DB)
 pytest tests/ -v -m router            # HTTP (httpx AsyncClient)
 ```
 
-### Frontend — à venir
+### Frontend web — 126 tests, 0 failures
 
-Les tests frontend (Vitest + Testing Library pour web, Jest + RNTL pour mobile) sont listés dans le backlog.
+```bash
+cd frontend/apps/web
+npm test
+```
+
+Les tests mobile (Jest + RNTL) sont listés dans le backlog.
 
 ---
 

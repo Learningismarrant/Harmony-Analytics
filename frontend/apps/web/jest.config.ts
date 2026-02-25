@@ -17,8 +17,13 @@ const config: Config = {
     "^@harmony/api$": "<rootDir>/../../packages/api/src/index.ts",
     "^@harmony/types$": "<rootDir>/../../packages/types/src/index.ts",
     "^@harmony/ui$": "<rootDir>/../../packages/ui/src/index.ts",
+    // Force all react requires (including react-dom internals) to the app-level
+    // copy (apps/web/node_modules/react, v19). Root node_modules has React 18
+    // which is incompatible with react-dom v19's __CLIENT_INTERNALS access.
+    "^react$": "<rootDir>/node_modules/react",
+    "^react/(.*)$": "<rootDir>/node_modules/react/$1",
   },
-  testMatch: ["**/__tests__/**/*.test.{ts,tsx}"],
+  testMatch: ["**/*.test.{ts,tsx}"],
   collectCoverageFrom: [
     "src/**/*.{ts,tsx}",
     "!src/**/*.d.ts",

@@ -4,17 +4,17 @@ import { use, useState } from "react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Suspense } from "react";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { vesselApi, crewApi, recruitmentApi, queryKeys } from "@harmony/api";
-import type { SimulationPreviewOut } from "@harmony/types";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { CockpitStrip } from "@/components/vessel/CockpitStrip";
-import { CampaignPanel } from "@/components/vessel/CampaignPanel";
+import { Sidebar } from "@/shared/components/Sidebar";
+import { CockpitStrip } from "@/features/vessel/components/CockpitStrip";
+import { CampaignPanel } from "@/features/recruitment/components/CampaignPanel";
+import { useVessel } from "@/features/vessel/hooks/useVessel";
+import { useCockpit } from "@/features/sociogram/hooks/useCockpit";
+import { useSimulation } from "@/features/vessel/hooks/useSimulation";
 
 // Three.js canvas — SSR-incompatible, lazy-loaded on client only
 const SociogramCanvas = dynamic(
   () =>
-    import("@/components/sociogram/SociogramCanvas").then(
+    import("@/features/sociogram/components/SociogramCanvas").then(
       (m) => m.SociogramCanvas,
     ),
   {
@@ -38,81 +38,31 @@ interface PageProps {
 export default function VesselCockpitPage({ params }: PageProps) {
   const { id } = use(params);
   const yachtId = parseInt(id, 10);
-  const queryClient = useQueryClient();
 
   // ── UI state ──────────────────────────────────────────────────────────────
   const [activeCampaignId, setActiveCampaignId] = useState<number | null>(null);
-  const [simulationPreview, setSimulationPreview] =
-    useState<SimulationPreviewOut | null>(null);
-  const [simulatingFor, setSimulatingFor] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState(false);
 
-  // ── Queries ───────────────────────────────────────────────────────────────
-  const { data: vessel } = useQuery({
-    queryKey: queryKeys.vessel.byId(yachtId),
-    queryFn: () => vesselApi.getById(yachtId),
-  });
+  // ── Data hooks ────────────────────────────────────────────────────────────
+  const { vessel } = useVessel(yachtId);
+  const { sociogram, dashboard, sociogramLoading } = useCockpit(yachtId);
+  const {
+    simulationPreview,
+    simulatingFor,
+    isMutating,
+    handleSimulateCandidate,
+    handleHire,
+    handleCancelSimulation,
+  } = useSimulation(yachtId, activeCampaignId, setActiveCampaignId);
 
-  const { data: sociogram, isLoading: sociogramLoading } = useQuery({
-    queryKey: queryKeys.crew.sociogram(yachtId),
-    queryFn: () => crewApi.getSociogram(yachtId),
-    retry: false,
-  });
-
-  const { data: dashboard } = useQuery({
-    queryKey: queryKeys.crew.dashboard(yachtId),
-    queryFn: () => crewApi.getDashboard(yachtId),
-    retry: false,
-  });
-
-  // ── Mutations ─────────────────────────────────────────────────────────────
-  const simulateMutation = useMutation({
-    mutationFn: (crewProfileId: number) =>
-      recruitmentApi.simulateImpact(yachtId, crewProfileId),
-    onSuccess: (preview) => setSimulationPreview(preview),
-    onError: () => setSimulatingFor(null),
-  });
-
-  const hireMutation = useMutation({
-    mutationFn: () => {
-      if (!activeCampaignId || !simulatingFor)
-        throw new Error("No campaign or candidate selected");
-      return recruitmentApi.hire(activeCampaignId, simulatingFor);
-    },
-    onSuccess: () => {
-      setSimulationPreview(null);
-      setSimulatingFor(null);
-      queryClient.invalidateQueries({ queryKey: queryKeys.crew.sociogram(yachtId) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.crew.dashboard(yachtId) });
-      if (activeCampaignId) {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.recruitment.matching(activeCampaignId),
-        });
-      }
-    },
-  });
-
-  // ── Handlers ──────────────────────────────────────────────────────────────
-  const handleSimulateCandidate = (crewProfileId: number, campaignId?: number) => {
-    setSimulatingFor(crewProfileId);
-    if (campaignId !== undefined) setActiveCampaignId(campaignId);
-    simulateMutation.mutate(crewProfileId);
-  };
-
-  const handleCancelSimulation = () => {
-    setSimulationPreview(null);
-    setSimulatingFor(null);
-  };
-
+  // ── Drag handlers ─────────────────────────────────────────────────────────
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
-    // dataTransfer is null for programmatically dispatched events (HTML spec §6.11.3)
     if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
     setDragOver(true);
   };
 
   const handleDragLeave = (e: React.DragEvent<HTMLDivElement>) => {
-    // Only clear when leaving the drop zone itself, not child elements
     if (!e.currentTarget.contains(e.relatedTarget as Node)) {
       setDragOver(false);
     }
@@ -127,8 +77,6 @@ export default function VesselCockpitPage({ params }: PageProps) {
       handleSimulateCandidate(crewProfileId, isNaN(campaignId) ? undefined : campaignId);
     }
   };
-
-  const isMutating = simulateMutation.isPending || hireMutation.isPending;
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -189,7 +137,7 @@ export default function VesselCockpitPage({ params }: PageProps) {
                   onSimulationRequest={(crewProfileId) =>
                     handleSimulateCandidate(crewProfileId)
                   }
-                  onHireCandidate={() => hireMutation.mutate()}
+                  onHireCandidate={handleHire}
                   onCancelSimulation={handleCancelSimulation}
                   loadingSimulation={isMutating}
                   className="flex-1 h-full"

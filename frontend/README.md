@@ -51,9 +51,9 @@ Component → useQuery/useMutation → @harmony/api → Axios (avec token Bearer
 |---|---|
 | `app/(auth)/` | Pages publiques — login, register |
 | `app/(candidate)/` | Pages protégées candidat — tabs Expo Router |
-| `src/components/sociogram/` | Composants React Three Fiber |
-| `src/lib/` | Utilitaires pur (pas de hooks React) |
-| `src/store/` | Stores Zustand |
+| `src/features/<feature>/components/` | Composants React par fonctionnalité (feature-centered) |
+| `src/features/<feature>/hooks/` | Hooks personnalisés par fonctionnalité |
+| `src/shared/` | Composants et utilitaires transverses |
 
 ---
 
@@ -102,12 +102,13 @@ Couleurs principales :
 | Token | Valeur | Usage |
 |-------|--------|-------|
 | `colors.bg.primary` | `#07090F` | Fond général |
-| `colors.bg.secondary` | `#0D1117` | Cards |
-| `colors.brand.primary` | `#0EA5E9` | CTA, accents |
-| `colors.brand.secondary` | `#6366F1` | Psychométrie |
-| `colors.sociogram.excellent` | `#22C55E` | Edge score ≥ 80 |
-| `colors.sociogram.moderate` | `#F59E0B` | Edge score 45–65 |
-| `colors.sociogram.weak` | `#EF4444` | Edge score < 45 |
+| `colors.bg.secondary` | `#0B1018` | Cards |
+| `colors.brand.primary` | `#4A90B8` | CTA, accents (maritime steel blue) |
+| `colors.brand.secondary` | `#50528A` | Psychométrie (muted slate-indigo) |
+| `colors.sociogram.excellent` | `#2E8A5C` | Edge score ≥ 80 |
+| `colors.sociogram.good` | `#5A8A30` | Edge score 65–80 |
+| `colors.sociogram.moderate` | `#9A7030` | Edge score 45–65 |
+| `colors.sociogram.weak` | `#883838` | Edge score < 45 |
 
 Helpers :
 ```typescript
@@ -123,24 +124,29 @@ import { dyadScoreToColor, dyadScoreToThickness } from "@harmony/ui";
 
 **Déploiement :** Vercel
 
+Architecture feature-centered (`src/features/<feature>/`) — chaque module regroupe composants, hooks et tests co-localisés :
+- `features/auth/` — store Zustand + hook `useAuth`
+- `features/sociogram/` — composants R3F + `physics.ts` + hooks `useCockpit`
+- `features/recruitment/` — `CampaignPanel` (+ sous-composants) + hooks `useCampaigns`, `useMatching`
+- `features/vessel/` — `CockpitStrip` + hooks `useVessel`, `useSimulation`
+- `shared/` — `Sidebar`, `providers.tsx`, `query-client.ts`
+
 | Route | Description |
 |---|---|
 | `/login` | Authentification employeur |
 | `/register` | Création de compte *(à construire)* |
 | `/dashboard` | Vue flotte — liste des yachts |
-| `/sociogram?yacht=<id>` | **Sociogramme 3D interactif** |
-| `/recruitment/[id]/matching` | Résultats de matching DNRE + MLPSM |
-| `/vessel/[id]` | Détail yacht + paramètres JD-R *(à construire)* |
+| `/vessel/[id]` | Cockpit — sociogramme 3D + CampaignPanel + simulation |
 
 #### Sociogramme 3D
 
-La page `/sociogram` est le MVP "wow effect". Elle combine :
+Intégré dans `/vessel/[id]`. Combine :
 - **D3-force** pour la physique 3D (positions calculées CPU)
 - **React Three Fiber** pour le rendu GPU (WebGL)
 - **OrbitControls** pour la navigation
 - **Simulation d'impact** : drag-and-drop d'un candidat dans la molécule → calcul des deltas F_team en temps réel
 
-Architecture des composants :
+Architecture des composants (`src/features/sociogram/components/`) :
 
 ```
 SociogramCanvas              # Canvas R3F + boucle physique + HUD
@@ -150,7 +156,7 @@ SociogramCanvas              # Canvas R3F + boucle physique + HUD
 └── SimulationOverlay        # Overlay résultat simulation — ΔF_team, flags, embauche
 ```
 
-Physics engine : [`src/lib/sociogram-physics.ts`](apps/web/src/lib/sociogram-physics.ts)
+Physics engine : [`src/features/sociogram/physics.ts`](apps/web/src/features/sociogram/physics.ts)
 
 ### `apps/mobile` — Application candidat
 
@@ -203,6 +209,14 @@ npx expo start
 # Scanner le QR code avec Expo Go (iOS/Android)
 ```
 
+### Tests web
+
+```bash
+cd frontend/apps/web
+npm test
+# → 126 tests, 13 suites, 0 failures
+```
+
 ### Build complet
 
 ```bash
@@ -229,7 +243,7 @@ npx turbo type-check     # Vérification TypeScript
 6. Sur fermeture d'onglet/redémarrage app : l'access token est perdu, le refresh token permet de restaurer la session
 
 **Implémentation :**
-- Web : [`apps/web/src/store/auth.store.ts`](apps/web/src/store/auth.store.ts)
+- Web : [`apps/web/src/features/auth/store.ts`](apps/web/src/features/auth/store.ts)
 - Mobile : [`apps/mobile/src/lib/auth.ts`](apps/mobile/src/lib/auth.ts)
 - Client : [`packages/api/src/client.ts`](packages/api/src/client.ts) (intercepteur 401)
 
@@ -317,7 +331,7 @@ Ces endpoints sont appelés par le frontend mais n'existent pas encore dans le b
 | Gestion offline mobile | Cache TanStack Query + indicateur de connectivité |
 | Deep linking mobile | Schéma `harmony://` — liens d'invitation campaign, onboarding |
 | Internationalisation | Le projet mélange français et anglais — choisir une langue et uniformiser |
-| Tests frontend | Vitest + Testing Library (web) · Jest + RNTL (mobile) |
+| Tests mobile | Jest + RNTL (mobile) |
 | Storybook | Documentation des composants partagés |
 
 ### 🟢 Priorité basse (optimisations)
@@ -344,8 +358,8 @@ Ces endpoints sont appelés par le frontend mais n'existent pas encore dans le b
 | Web — auth (login + guard middleware) | ✅ Complet |
 | Web — layout maritime sombre + sidebar | ✅ Complet |
 | Web — dashboard flotte | ✅ Complet |
-| Web — sociogramme 3D + simulation | ✅ Complet *(endpoint backend manquant)* |
-| Web — matching DNRE/MLPSM | ✅ Complet |
+| Web — cockpit `/vessel/[id]` (sociogramme 3D + simulation + matching) | ✅ Complet *(endpoint backend manquant)* |
+| Web — tests Jest + Testing Library | ✅ 126 tests, 0 failures (13 suites) |
 | Mobile — auth (login + SecureStore) | ✅ Complet |
 | Mobile — profile candidat | ✅ Complet |
 | Mobile — catalogue + passation tests | ✅ Complet |
