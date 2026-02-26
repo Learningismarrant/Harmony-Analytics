@@ -47,13 +47,25 @@ export default function CandidateLayout() {
         }}
       />
       <Tabs.Screen
-        name="applications/index"
+        name="survey/index"
         options={{
-          title: "Applications",
-          tabBarLabel: "Applications",
-          tabBarIcon: ({ focused }) => <TabIcon label="⊕" focused={focused} />,
-          headerTitle: "My Applications",
+          title: "Survey",
+          tabBarLabel: "Survey",
+          tabBarIcon: ({ focused }) => <TabIcon label="◎" focused={focused} />,
+          headerTitle: "Surveys & Pulse",
         }}
+      />
+      <Tabs.Screen
+        name="assessment/[testId]"
+        options={{ href: null, headerTitle: "Take Test" }}
+      />
+      <Tabs.Screen
+        name="assessment/result"
+        options={{ href: null, headerTitle: "Results" }}
+      />
+      <Tabs.Screen
+        name="survey/[surveyId]"
+        options={{ href: null, headerTitle: "Survey Response" }}
       />
     </Tabs>
   );

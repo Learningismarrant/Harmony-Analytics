@@ -18,6 +18,7 @@ export { recruitmentApi } from "./endpoints/recruitment";
 export { crewApi } from "./endpoints/crew";
 export { vesselApi } from "./endpoints/vessel";
 export { identityApi } from "./endpoints/identity";
+export { surveyApi } from "./endpoints/survey";
 
 // ── Query key factories — centralized for cache invalidation ──────────────────
 // Pattern: queryKeys.module.action(params)
@@ -44,6 +45,7 @@ export const queryKeys = {
     dashboard: (yachtId: number) => ["crew", "dashboard", yachtId] as const,
     sociogram: (yachtId: number) => ["crew", "sociogram", yachtId] as const,
     assignment: () => ["crew", "assignment"] as const,
+    pulseHistory: () => ["crew", "pulse", "history"] as const,
   },
   vessel: {
     all: () => ["vessel", "all"] as const,
@@ -52,5 +54,8 @@ export const queryKeys = {
   identity: {
     fullProfile: (id: number) => ["identity", "profile", id] as const,
     identity: (id: number) => ["identity", "identity", id] as const,
+  },
+  survey: {
+    pending: () => ["survey", "pending"] as const,
   },
 } as const;

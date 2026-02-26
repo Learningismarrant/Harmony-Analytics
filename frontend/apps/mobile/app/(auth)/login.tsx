@@ -33,17 +33,12 @@ export default function LoginScreen() {
     try {
       const token = await authApi.login(email.trim().toLowerCase(), password);
 
-      // Mobile: save refresh token to SecureStore
-      // Note: FastAPI returns it in the response body for mobile
-      // (web uses HttpOnly cookie — mobile gets it in JSON)
-      if ("refresh_token" in token) {
-        await saveRefreshToken(token.refresh_token as string);
-      }
+      await saveRefreshToken(token.refresh_token);
 
       await login({
         accessToken: token.access_token,
         role: token.role as UserRole,
-        crewProfileId: token.crew_profile_id,
+        crewProfileId: token.profile_id,
         name: email,
       });
 
@@ -115,6 +110,14 @@ export default function LoginScreen() {
               <Text className="text-bg-primary font-semibold text-base">Sign in</Text>
             )}
           </TouchableOpacity>
+
+          {/* Register link */}
+          <View className="flex-row justify-center mt-2">
+            <Text className="text-muted text-sm">No account yet? </Text>
+            <TouchableOpacity onPress={() => router.replace("/(auth)/register")}>
+              <Text className="text-brand-primary text-sm font-medium">Create one</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </KeyboardAvoidingView>

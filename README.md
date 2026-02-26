@@ -244,7 +244,7 @@ Les tests mobile (Jest + RNTL) sont listés dans le backlog.
 |---|---|
 | Monorepo + packages partagés (types, api, ui) | ✅ Complet |
 | Web — auth + layout + dashboard flotte | ✅ Complet |
-| Web — sociogramme 3D + mode simulation | ✅ Complet *(endpoint backend manquant)* |
+| Web — sociogramme 3D + mode simulation | ✅ Complet |
 | Web — matching DNRE/MLPSM | ✅ Complet |
 | Mobile — auth + profil candidat | ✅ Complet |
 | Mobile — passation tests psychométriques | ✅ Complet |
