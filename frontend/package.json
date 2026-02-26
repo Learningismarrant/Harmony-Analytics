@@ -19,6 +19,9 @@
   "overrides": {
     "three-mesh-bvh": "^0.9.0"
   },
+  "dependencies": {
+    "react-native-screens": "4.4.0"
+  },
   "engines": {
     "node": ">=20.0.0"
   },

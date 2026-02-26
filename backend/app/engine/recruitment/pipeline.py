@@ -283,6 +283,7 @@ def run_batch(
     betas: Optional[Dict] = None,
     sme_weights_override: Optional[Dict[str, Dict[str, float]]] = None,
     competency_weights: Optional[Dict[str, float]] = None,
+    p_ind_omegas: Optional[Dict[str, float]] = None,  # P3 : depuis JobWeightConfig
 ) -> List[PipelineResult]:
     """
     Exécute le pipeline complet à deux étages sur tous les candidats.
@@ -368,6 +369,7 @@ def run_batch(
                 betas=betas,
                 experience_years=exp_years,
                 position_key=position,
+                p_ind_omegas=p_ind_omegas,
             )
             mlpsm_stage = PipelineStage(
                 stage_name  = "MLPSM — Intégration Équipe",
@@ -424,6 +426,7 @@ def run_single(
     position_key: Optional[str] = None,
     experience_years: int = 0,
     crew_profile_id: Optional[str] = None,
+    p_ind_omegas: Optional[Dict[str, float]] = None,  # P3 : depuis JobWeightConfig
 ) -> PipelineResult:
     """
     Pipeline complet pour un seul candidat (rapport What-If détaillé).
@@ -481,6 +484,7 @@ def run_single(
             betas=betas,
             experience_years=experience_years,
             position_key=position_key or "",
+            p_ind_omegas=p_ind_omegas,
         )
         mlpsm_stage = PipelineStage(
             stage_name = "MLPSM — Intégration Équipe",

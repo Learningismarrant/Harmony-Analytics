@@ -1,0 +1,12 @@
+module.exports = {
+  preset: "jest-expo",
+  setupFilesAfterEnv: ["./jest.setup.ts"],
+  moduleNameMapper: {
+    "^@/(.*)$": "<rootDir>/src/$1",
+  },
+  testMatch: ["**/*.test.{ts,tsx}"],
+  // Extend jest-expo's default to also transform @harmony/* workspace packages
+  transformIgnorePatterns: [
+    "node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg|nativewind|react-native-css-interop|@harmony/.*)",
+  ],
+};

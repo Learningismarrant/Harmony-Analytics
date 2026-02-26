@@ -3,7 +3,26 @@
 MLPSM — Multi-Level Predictive Stability Model
 Équation maîtresse du moteur de recrutement Harmony.
 
-Ŷ_success = β₁·P_ind + β₂·F_team + β₃·F_env + β₄·F_lmx + ε
+SKILL.md V1 — Équation maîtresse :
+    Ŷ_success = β₁·P_ind + β₂·F_team + β₃·F_env + β₄·F_lmx + ε
+    P(success) = 1 / (1 + e^{-Ŷ_normalized})
+
+La sortie passe par une transformation sigmoïde centrée sur l'échelle 0-100 :
+    z = (Ŷ_raw - SIGMOID_CENTER) / SIGMOID_SCALE
+    P(success) = sigmoid(z) × 100   ∈ (0, 100)
+
+    Comportement :
+        Ŷ_raw = 50  → y_success = 50.0  (point médian préservé)
+        Ŷ_raw > 50  → y_success amplifié (bons candidats encore mieux discriminés)
+        Ŷ_raw < 50  → y_success atténué (candidats faibles encore plus pénalisés)
+
+    Différence avec la V1 linéaire (clamp) :
+        La sigmoïde crée un effet de "seuil psychologique" non-linéaire :
+        l'écart entre un bon et un excellent candidat est plus visible qu'entre
+        deux candidats moyens — ce qui correspond au comportement réel des
+        recruteurs maritimes (Schelling, 1978 — tipping point theory).
+
+    y_raw_linear est exposé dans MLPSMResult pour comparaison/audit.
 
 Architecture :
     master.py orchestre les 4 sous-modules.
@@ -25,7 +44,8 @@ Architecture :
     │  candidate_snapshot + captain_vector ──► f_lmx()   │
     │                         └─► FLmxResult              │
     │                                                      │
-    │  Ŷ = β₁·P + β₂·FT + β₃·FE + β₄·FL                 │
+    │  Ŷ_raw = β₁·P + β₂·FT + β₃·FE + β₄·FL             │
+    │  y_success = sigmoid((Ŷ_raw − 50) / SCALE) × 100   │
     │  └─► MLPSMResult (tout consolidé)                   │
     └──────────────────────────────────────────────────────┘
 
@@ -40,6 +60,7 @@ Règles d'architecture :
     - Le résultat MLPSMResult est sérialisable (pour RecruitmentEvent)
 """
 from __future__ import annotations
+import math
 from dataclasses import dataclass, field, asdict
 from typing import Dict, List, Optional
 
@@ -63,6 +84,48 @@ DEFAULT_BETAS: Dict[str, float] = {
 }
 
 
+# ── Paramètres de la transformation sigmoïde ─────────────────────────────────
+
+SIGMOID_CENTER: float = 50.0
+"""Point médian de l'échelle 0-100. y_raw = 50 → y_success = 50 (invariant)."""
+
+SIGMOID_SCALE: float = 15.0
+"""
+Contrôle l'étalement de la courbe.
+    - Élevé (ex: 30) : courbe plate, proche du linéaire
+    - Bas   (ex: 8)  : courbe très raide, forte discrimination aux extrêmes
+    Valeur 15 : compromis — préserve la lisibilité tout en amplifiant les écarts.
+
+Correspondances numériques avec SCALE=15 :
+    y_raw=20 → y_success≈ 8.6
+    y_raw=35 → y_success≈22.7
+    y_raw=50 → y_success≈50.0
+    y_raw=65 → y_success≈77.3
+    y_raw=80 → y_success≈91.4
+"""
+
+
+def _sigmoid_transform(y_raw: float) -> float:
+    """
+    Applique la transformation sigmoïde centrée sur SIGMOID_CENTER.
+
+    Formule :
+        z = (y_raw − SIGMOID_CENTER) / SIGMOID_SCALE
+        result = 100 × σ(z) = 100 / (1 + e^{−z})
+
+    La valeur retournée est dans (0, 100) (jamais exactement 0 ou 100
+    sauf aux extrêmes théoriques ±∞).
+
+    Args:
+        y_raw : score linéaire brut Σ βᵢ·Fᵢ (typiquement 0-100)
+
+    Returns:
+        float ∈ (0.0, 100.0)
+    """
+    z = (y_raw - SIGMOID_CENTER) / SIGMOID_SCALE
+    return round(100.0 / (1.0 + math.exp(-z)), 1)
+
+
 # ── Labels de confiance selon la qualité des données ─────────────────────────
 
 def _confidence_label(data_quality: float) -> str:
@@ -75,6 +138,15 @@ def _confidence_label(data_quality: float) -> str:
 
 
 def _success_label(score: float) -> str:
+    """
+    Labels de succès appliqués au score sigmoïde y_success.
+
+    Les seuils sont définis dans l'espace sigmoïde (0-100) :
+        STRONG_FIT   ≥ 75  (≈ y_raw ≥ 74 dans l'espace linéaire)
+        GOOD_FIT     ≥ 60  (≈ y_raw ≥ 59)
+        MODERATE_FIT ≥ 45  (≈ y_raw ≥ 45)
+        POOR_FIT      < 45
+    """
     if score >= 75:
         return "STRONG_FIT"
     elif score >= 60:
@@ -93,14 +165,17 @@ class MLPSMResult:
     Résultat complet du MLPSM pour un candidat sur un yacht donné.
 
     ── Scores ──────────────────────────────────────────────────────────────────
-    y_success    → score final Ŷ (0-100), stocké dans RecruitmentEvent
-    p_ind_score  → sous-score P_ind (0-100)
-    f_team_score → sous-score F_team (0-100)
-    f_env_score  → sous-score F_env (0-100)
-    f_lmx_score  → sous-score F_lmx (0-100)
+    y_success     → score final P(success) × 100, après transformation sigmoïde.
+                    Stocké dans RecruitmentEvent. ∈ (0, 100).
+    y_raw_linear  → score linéaire brut Σ βᵢ·Fᵢ avant sigmoïde. ∈ [0, 100].
+                    Utile pour l'audit et la comparaison avec la V1 linéaire.
+    p_ind_score   → sous-score P_ind (0-100)
+    f_team_score  → sous-score F_team (0-100)
+    f_env_score   → sous-score F_env (0-100)
+    f_lmx_score   → sous-score F_lmx (0-100)
 
     ── Détails complets de chaque sous-module ──────────────────────────────────
-    p_ind_detail  → PIndResult  (GCA, C, experience)
+    p_ind_detail  → PIndResult  (GCA, C, interaction, experience)
     f_team_detail → FTeamResult (jerk filter, faultline, emotional buffer, delta)
     f_env_detail  → FEnvResult  (ressources, demandes, ratio JD-R, résilience)
     f_lmx_detail  → FLmxResult  (vecteurs, distance, écart par dimension)
@@ -114,11 +189,12 @@ class MLPSMResult:
     formula_snapshot → equation résolue avec valeurs numériques (audit/debug)
     """
     # Scores principaux
-    y_success:    float
-    p_ind_score:  float
-    f_team_score: float
-    f_env_score:  float
-    f_lmx_score:  float
+    y_success:     float
+    y_raw_linear:  float    # Score linéaire brut avant sigmoïde (audit)
+    p_ind_score:   float
+    f_team_score:  float
+    f_env_score:   float
+    f_lmx_score:   float
 
     # Détails complets (accès direct aux sous-mesures)
     p_ind_detail:  PIndResult
@@ -138,28 +214,32 @@ class MLPSMResult:
         """
         Sérialise les données nécessaires pour stocker dans RecruitmentEvent.
         Ne contient pas les détails internes (allège le JSON en DB).
+        Inclut à la fois y_success (sigmoïde) et y_raw_linear (linéaire) pour audit.
         """
         return {
-            "y_success_predicted": self.y_success,
-            "p_ind_score":         self.p_ind_score,
-            "f_team_score":        self.f_team_score,
-            "f_env_score":         self.f_env_score,
-            "f_lmx_score":         self.f_lmx_score,
+            "y_success_predicted":   self.y_success,
+            "y_raw_linear":          self.y_raw_linear,
+            "p_ind_score":           self.p_ind_score,
+            "f_team_score":          self.f_team_score,
+            "f_env_score":           self.f_env_score,
+            "f_lmx_score":           self.f_lmx_score,
             "beta_weights_snapshot": self.betas_used,
-            "data_quality":        self.data_quality,
-            "confidence":          self.confidence,
-            "flags_summary":       self.all_flags[:10],  # Cap à 10 flags en DB
+            "data_quality":          self.data_quality,
+            "confidence":            self.confidence,
+            "flags_summary":         self.all_flags[:10],  # Cap à 10 flags en DB
         }
 
     def to_impact_report(self) -> Dict:
         """
         Rapport What-If structuré — exposé par l'endpoint /impact.
         Inclut les deltas F_team si compute_with_delta() a été appelé.
+        Expose les deux scores (sigmoïde + linéaire) pour la transparence.
         """
         delta = self.f_team_detail.delta
 
         return {
             "y_success_predicted": self.y_success,
+            "y_raw_linear":        self.y_raw_linear,
             "success_label":       self.success_label,
             "confidence":          self.confidence,
             "data_quality":        round(self.data_quality * 100),
@@ -182,9 +262,9 @@ class MLPSMResult:
             },
 
             "environment": {
-                "jdr_ratio":         self.f_env_detail.jdr_ratio.raw_ratio,
-                "jdr_status":        self.f_env_detail.jdr_ratio.equilibrium_status,
-                "resilience":        self.f_env_detail.resilience.resilience_raw,
+                "jdr_ratio":   self.f_env_detail.jdr_ratio.raw_ratio,
+                "jdr_status":  self.f_env_detail.jdr_ratio.equilibrium_status,
+                "resilience":  self.f_env_detail.resilience.resilience_raw,
             },
 
             "leadership": {
@@ -192,16 +272,16 @@ class MLPSMResult:
                 "normalized_distance": self.f_lmx_detail.distance.normalized_distance,
                 "dimension_gaps": [
                     {
-                        "dimension":   d.dimension,
-                        "gap":         d.gap,
-                        "direction":   d.gap_direction,
-                        "label":       d.gap_label,
+                        "dimension": d.dimension,
+                        "gap":       d.gap,
+                        "direction": d.gap_direction,
+                        "label":     d.gap_label,
                     }
                     for d in self.f_lmx_detail.dimensions
                 ],
             },
 
-            "flags": self.all_flags,
+            "flags":   self.all_flags,
             "formula": self.formula_snapshot,
         }
 
@@ -216,6 +296,7 @@ def compute(
     betas: Optional[Dict[str, float]] = None,
     experience_years: int = 0,
     position_key: Optional[str] = None,
+    p_ind_omegas: Optional[Dict[str, float]] = None,  # P3 : injectés depuis JobWeightConfig
 ) -> MLPSMResult:
     """
     Calcule le score de succès prédit pour un candidat sur un yacht donné.
@@ -229,9 +310,10 @@ def compute(
         betas                   : betas actifs depuis ModelVersion (DEFAULT_BETAS si None)
         experience_years        : CrewProfile.experience_years
         position_key            : YachtPosition.value (réservé Temps 2)
+        p_ind_omegas            : omegas P_ind depuis JobWeightConfig (None = defaults module)
 
     Returns:
-        MLPSMResult complet — scores + détails de chaque sous-module
+        MLPSMResult complet — scores (sigmoïde + linéaire) + détails de chaque sous-module
     """
     betas = betas or DEFAULT_BETAS
 
@@ -240,6 +322,7 @@ def compute(
         candidate_snapshot,
         experience_years=experience_years,
         position_key=position_key,
+        omegas=p_ind_omegas,
     )
 
     # ── 2. F_team (avec candidat intégré) ────────────────────
@@ -266,6 +349,7 @@ def compute_with_delta(
     betas: Optional[Dict[str, float]] = None,
     experience_years: int = 0,
     position_key: Optional[str] = None,
+    p_ind_omegas: Optional[Dict[str, float]] = None,  # P3 : injectés depuis JobWeightConfig
 ) -> MLPSMResult:
     """
     Variante avec calcul du delta F_team (impact marginal du candidat).
@@ -282,7 +366,7 @@ def compute_with_delta(
     """
     betas = betas or DEFAULT_BETAS
 
-    p_ind_result  = _p_ind.compute(candidate_snapshot, experience_years, position_key)
+    p_ind_result  = _p_ind.compute(candidate_snapshot, experience_years, position_key, omegas=p_ind_omegas)
     f_team_result = _f_team.compute_delta(current_crew_snapshots, candidate_snapshot)
     f_env_result  = _f_env.compute(candidate_snapshot, vessel_params)
     f_lmx_result  = _f_lmx.compute(candidate_snapshot, captain_vector)
@@ -302,7 +386,14 @@ def _aggregate(
     betas: Dict[str, float],
 ) -> MLPSMResult:
     """
-    Applique l'équation maîtresse et consolide tous les résultats.
+    Applique l'équation maîtresse, la transformation sigmoïde, et consolide les résultats.
+
+    Étape 1 — Score linéaire brut :
+        Ŷ_raw = β₁·P_ind + β₂·F_team + β₃·F_env + β₄·F_lmx   ∈ [0, 100]
+
+    Étape 2 — Transformation sigmoïde (SKILL.md V1) :
+        z = (Ŷ_raw − SIGMOID_CENTER) / SIGMOID_SCALE
+        y_success = 100 × σ(z) = 100 / (1 + e^{−z})            ∈ (0, 100)
     """
     p  = p_ind_result.score
     ft = f_team_result.score
@@ -314,8 +405,12 @@ def _aggregate(
     b3 = betas["b3_f_env"]
     b4 = betas["b4_f_lmx"]
 
-    y_raw = (b1 * p) + (b2 * ft) + (b3 * fe) + (b4 * fl)
-    y_success = round(max(0.0, min(100.0, y_raw)), 1)
+    # Étape 1 : score linéaire (clampé pour stabilité numérique)
+    y_raw   = (b1 * p) + (b2 * ft) + (b3 * fe) + (b4 * fl)
+    y_linear = round(max(0.0, min(100.0, y_raw)), 1)
+
+    # Étape 2 : transformation sigmoïde
+    y_success = _sigmoid_transform(y_linear)
 
     # ── Qualité globale des données ───────────────────────────
     # Moyenne pondérée par les betas (le sous-module le plus influent
@@ -342,13 +437,15 @@ def _aggregate(
 
     # ── Formula snapshot ──────────────────────────────────────
     formula = (
-        f"Ŷ = {b1}×{p} + {b2}×{ft} + {b3}×{fe} + {b4}×{fl}"
+        f"Ŷ_raw = {b1}×{p} + {b2}×{ft} + {b3}×{fe} + {b4}×{fl}"
         f" = {b1*p:.1f} + {b2*ft:.1f} + {b3*fe:.1f} + {b4*fl:.1f}"
-        f" = {y_raw:.1f} → {y_success}"
+        f" = {y_raw:.1f} (linéaire)"
+        f" → sigmoid({y_linear:.1f}) = {y_success} (P(success)×100)"
     )
 
     return MLPSMResult(
         y_success=y_success,
+        y_raw_linear=y_linear,
         p_ind_score=p,
         f_team_score=ft,
         f_env_score=fe,

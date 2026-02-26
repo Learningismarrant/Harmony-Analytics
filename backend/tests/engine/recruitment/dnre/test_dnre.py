@@ -220,30 +220,140 @@ class TestCentileRank:
 
 
 # ═══════════════════════════════════════════════════════════
-# TESTS SAFETY BARRIER
+# TESTS SAFETY BARRIER — Pénalité Continue (SKILL.md V1)
 # ═══════════════════════════════════════════════════════════
 
 class TestSafetyBarrier:
+    """
+    SKILL.md V1 — La barrière de sécurité utilise une pénalité logistique continue.
+    La fonction _logistic_penalty(x, threshold, k) = sigmoid(k·(x−threshold)).
+
+    Comportement attendu :
+        - CLEAR      : penalty_multiplier=1.0, adjusted_score=None
+        - ADVISORY   : penalty_multiplier=1.0, adjusted_score=None
+        - HIGH_RISK  : 0 < penalty_multiplier < 1, adjusted_score < g_fit
+        - DISQUALIFIED : penalty_multiplier ≈ 0, adjusted_score ≈ 0 (quasi-nul)
+    """
 
     def test_strong_candidate_clear(self, snapshot_strong):
         result = safety_barrier.evaluate(snapshot_strong, g_fit_score=70.0)
         assert result.safety_level == SafetyLevel.CLEAR
         assert not result.g_fit_suspended
         assert result.adjusted_score is None
+        assert result.penalty_multiplier == 1.0
 
-    def test_disqualified_es_below_15(self, snapshot_disqualified):
+    def test_disqualified_es_below_15_penalty_near_zero(self, snapshot_disqualified):
+        """
+        ES=8 (< seuil HARD 15) → safety_level=DISQUALIFIED.
+        Pénalité logistique : adjusted_score est quasi-nul (< 5% du g_fit)
+        mais PAS exactement 0.0 (pénalité continue, pas de couperet binaire).
+        """
         result = safety_barrier.evaluate(snapshot_disqualified, g_fit_score=65.0)
         assert result.safety_level == SafetyLevel.DISQUALIFIED
         assert result.g_fit_suspended
-        assert result.adjusted_score == 0.0
         hard_triggers = [t for t in result.triggers if t.veto_type == VetoType.HARD]
         assert len(hard_triggers) >= 1
 
-    def test_high_risk_es_between_15_30(self, snapshot_high_risk):
-        result = safety_barrier.evaluate(snapshot_high_risk, g_fit_score=60.0)
+        # Score quasi-nul (bien sous le seuil → pénalité sévère) mais continu
+        assert result.adjusted_score is not None
+        assert result.adjusted_score < 5.0          # Quasi-nul (non binaire)
+        assert result.adjusted_score > 0.0          # Jamais exactement 0
+        assert result.penalty_multiplier < 0.10     # Multiplicateur très faible
+
+    def test_disqualified_penalty_multiplier_logged_per_trigger(self, snapshot_disqualified):
+        """Chaque VetoTrigger porte son penalty_multiplier individuel."""
+        result = safety_barrier.evaluate(snapshot_disqualified, g_fit_score=65.0)
+        for t in result.triggers:
+            if t.veto_type == VetoType.HARD:
+                assert 0.0 < t.penalty_multiplier < 0.5  # Bien sous le seuil → pénalité forte
+
+    def test_high_risk_es_between_15_30_score_reduced(self, snapshot_high_risk):
+        """
+        ES=24 (entre seuils HARD 15 et SOFT 30) → HIGH_RISK.
+        adjusted_score doit être < g_fit (réduit par la pénalité)
+        mais pas quasi-nul (pénalité SOFT moins sévère que HARD).
+        """
+        g_fit = 60.0
+        result = safety_barrier.evaluate(snapshot_high_risk, g_fit_score=g_fit)
         assert result.safety_level == SafetyLevel.HIGH_RISK
         assert result.g_fit_suspended
-        assert result.adjusted_score == 60.0   # Score maintenu mais annoté
+
+        # Pénalité continue : score réduit mais non nul
+        assert result.adjusted_score is not None
+        assert result.adjusted_score < g_fit        # Réduit
+        assert result.adjusted_score > 0.0          # Pas quasi-nul (SOFT vs HARD)
+        assert 0.0 < result.penalty_multiplier < 1.0
+
+    def test_penalite_croissante_avec_distance_au_seuil(self):
+        """
+        Plus le score est loin sous le seuil, plus la pénalité est sévère.
+        ES=25 (proche du seuil SOFT 30) doit avoir une pénalité plus faible
+        qu'ES=18 (plus loin sous le seuil).
+        """
+        snap_close = {
+            "big_five": {
+                "agreeableness":     {"score": 60.0},
+                "conscientiousness": {"score": 65.0},
+                "neuroticism":       {"score": 75.0},   # ES = 25 → juste sous seuil SOFT 30
+            }
+        }
+        snap_far = {
+            "big_five": {
+                "agreeableness":     {"score": 60.0},
+                "conscientiousness": {"score": 65.0},
+                "neuroticism":       {"score": 82.0},   # ES = 18 → plus loin sous seuil SOFT 30
+            }
+        }
+        result_close = safety_barrier.evaluate(snap_close, g_fit_score=65.0)
+        result_far   = safety_barrier.evaluate(snap_far,   g_fit_score=65.0)
+
+        # Les deux sont HIGH_RISK
+        assert result_close.safety_level == SafetyLevel.HIGH_RISK
+        assert result_far.safety_level   == SafetyLevel.HIGH_RISK
+
+        # Le candidat plus loin du seuil est plus pénalisé
+        assert result_close.penalty_multiplier > result_far.penalty_multiplier
+        assert result_close.adjusted_score > result_far.adjusted_score
+
+    def test_penalite_continue_dans_zone_declenchee(self):
+        """
+        Continuité de la pénalité logistique DANS la zone en dessous du seuil.
+
+        Pour 3 candidats de plus en plus éloignés sous le seuil SOFT ES=30 :
+            ES=27  →  sigmoid(0.2 × (27−30)) = sigmoid(−0.6) ≈ 0.35
+            ES=22  →  sigmoid(0.2 × (22−30)) = sigmoid(−1.6) ≈ 0.17
+            ES=16  →  sigmoid(0.2 × (16−30)) = sigmoid(−2.8) ≈ 0.06
+
+        La pénalité doit décroître progressivement (pas de saut binaire).
+        Chaque palier doit être strictement plus pénalisé que le précédent.
+        """
+        def make_snap(es: float) -> dict:
+            neuroticism = 100.0 - es
+            return {
+                "big_five": {
+                    "agreeableness":     {"score": 60.0},
+                    "conscientiousness": {"score": 65.0},
+                    "neuroticism":       {"score": neuroticism},
+                }
+            }
+
+        result_27 = safety_barrier.evaluate(make_snap(27.0), g_fit_score=65.0)
+        result_22 = safety_barrier.evaluate(make_snap(22.0), g_fit_score=65.0)
+        result_16 = safety_barrier.evaluate(make_snap(16.0), g_fit_score=65.0)
+
+        # Tous HIGH_RISK (ES < seuil SOFT 30, >= seuil HARD 15)
+        assert result_27.safety_level == SafetyLevel.HIGH_RISK
+        assert result_22.safety_level == SafetyLevel.HIGH_RISK
+        assert result_16.safety_level == SafetyLevel.HIGH_RISK
+
+        # La pénalité croît progressivement avec l'éloignement du seuil
+        assert result_27.penalty_multiplier > result_22.penalty_multiplier > result_16.penalty_multiplier
+
+        # L'incrément doit être raisonnable (pas de saut binaire)
+        diff_27_22 = result_27.penalty_multiplier - result_22.penalty_multiplier
+        diff_22_16 = result_22.penalty_multiplier - result_16.penalty_multiplier
+        assert diff_27_22 < 0.30, f"Saut trop brusque entre ES=27 et ES=22 : {diff_27_22:.3f}"
+        assert diff_22_16 < 0.30, f"Saut trop brusque entre ES=22 et ES=16 : {diff_22_16:.3f}"
 
     def test_advisory_resilience_low(self):
         snapshot = {
@@ -258,6 +368,23 @@ class TestSafetyBarrier:
         result = safety_barrier.evaluate(snapshot, g_fit_score=65.0)
         assert result.safety_level == SafetyLevel.ADVISORY
         assert not result.g_fit_suspended
+        # ADVISORY n'affecte pas le score
+        assert result.adjusted_score is None
+        assert result.penalty_multiplier == 1.0
+
+    def test_advisory_ne_penalise_pas_le_score(self):
+        """Même en ADVISORY, le score n'est jamais pénalisé."""
+        snap_advisory = {
+            "big_five": {
+                "agreeableness":     {"score": 80.0},
+                "conscientiousness": {"score": 28.0},  # < 35 → ADVISORY (mais > 25)
+                "neuroticism":       {"score": 30.0},
+            },
+            "resilience": 32.0,  # < 35 → ADVISORY
+        }
+        result = safety_barrier.evaluate(snap_advisory, g_fit_score=70.0)
+        assert result.safety_level == SafetyLevel.ADVISORY
+        assert result.penalty_multiplier == 1.0
         assert result.adjusted_score is None
 
     def test_custom_rules_applied(self, snapshot_strong):
@@ -269,11 +396,32 @@ class TestSafetyBarrier:
                 label="GCA insuffisant pour ce poste",
             )
         ]
-        # GCA fort = 76 mais seuil = 80 → SOFT VETO
+        # GCA fort = 76 mais seuil = 80 → SOFT VETO → score réduit
         result = safety_barrier.evaluate(
             snapshot_strong, g_fit_score=70.0, veto_rules=custom_rules
         )
         assert result.safety_level == SafetyLevel.HIGH_RISK
+        assert result.adjusted_score < 70.0   # Score réduit par pénalité continue
+
+    def test_custom_rule_steepness_override(self, snapshot_strong):
+        """Une règle avec steepness personnalisé surcharge le défaut."""
+        custom_rules = [
+            VetoRule(
+                trait="gca",
+                threshold=80.0,
+                veto_type=VetoType.SOFT,
+                label="Règle test steepness personnalisé",
+                steepness=0.50,   # Raideur HARD appliquée sur une règle SOFT
+            )
+        ]
+        # GCA=76, threshold=80, steepness=0.50 → sigmoid(0.50×(76−80)) = sigmoid(−2) ≈ 0.12
+        result = safety_barrier.evaluate(
+            snapshot_strong, g_fit_score=70.0, veto_rules=custom_rules
+        )
+        assert result.safety_level == SafetyLevel.HIGH_RISK
+        # Avec steepness=0.5, la pénalité pour GCA=76 sous seuil 80 est forte
+        trigger = result.triggers[0]
+        assert trigger.penalty_multiplier < 0.20
 
     def test_position_scoped_rule_not_applied(self, snapshot_strong):
         """Règle scoped à Captain ne s'applique pas à un Deckhand."""
@@ -290,17 +438,29 @@ class TestSafetyBarrier:
             snapshot_strong,
             g_fit_score=70.0,
             veto_rules=captain_rules,
-            position_key="Deckhand",    # Pas dans positions_scope
+            position_key="Deckhand",
         )
         assert result.safety_level == SafetyLevel.CLEAR
 
     def test_unmeasured_trait_no_veto(self):
         """Un trait non mesuré ne déclenche pas de veto."""
         snapshot = {"big_five": {"agreeableness": {"score": 70.0}}}
-        # ES absent → veto ES non applicable
         result = safety_barrier.evaluate(snapshot, g_fit_score=65.0)
         es_triggers = [t for t in result.triggers if t.trait == "emotional_stability"]
         assert len(es_triggers) == 0
+
+    def test_penalty_multiplier_expose_dans_result(self, snapshot_strong):
+        """SafetyBarrierResult doit exposer penalty_multiplier."""
+        result = safety_barrier.evaluate(snapshot_strong, g_fit_score=70.0)
+        assert hasattr(result, "penalty_multiplier")
+        assert isinstance(result.penalty_multiplier, float)
+        assert 0.0 <= result.penalty_multiplier <= 1.0
+
+    def test_audit_trail_contient_penalite(self, snapshot_high_risk):
+        """L'audit trail doit mentionner la pénalité calculée pour chaque règle."""
+        result = safety_barrier.evaluate(snapshot_high_risk, g_fit_score=60.0)
+        penalty_entries = [line for line in result.audit_trail if "penalty=" in line]
+        assert len(penalty_entries) > 0
 
 
 # ═══════════════════════════════════════════════════════════

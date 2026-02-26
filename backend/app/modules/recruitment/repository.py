@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from app.shared.models import (Campaign, CampaignCandidate,
                                Yacht,
                                User, CrewProfile,
-                               RecruitmentEvent, ModelVersion)
+                               RecruitmentEvent, ModelVersion, JobWeightConfig)
 
 from app.shared.enums import CampaignStatus, ApplicationStatus
 
@@ -366,4 +366,30 @@ class RecruitmentRepository:
             "b2_f_team": version.b2_f_team,
             "b3_f_env":  version.b3_f_env,
             "b4_f_lmx":  version.b4_f_lmx,
+        }
+
+    async def get_active_job_weight_config(self, db: AsyncSession) -> Optional[Dict]:
+        """
+        Config de pondération active (JobWeightConfig) — None si absente.
+
+        Retourne un dict avec :
+            sme_weights  : Dict[str, Dict[str, float]] | None
+            p_ind_omegas : Dict[str, float] | None
+        Les appelants passent None aux modules concernés si absent (= defaults module).
+        """
+        r = await db.execute(
+            select(JobWeightConfig)
+            .where(JobWeightConfig.is_active == True)
+            .order_by(JobWeightConfig.created_at.desc())
+        )
+        config = r.scalars().first()
+        if not config:
+            return None
+        return {
+            "sme_weights": config.sme_weights,
+            "p_ind_omegas": {
+                "omega_gca":               config.omega_gca,
+                "omega_conscientiousness": config.omega_conscientiousness,
+                "omega_interaction":       config.omega_interaction,
+            },
         }

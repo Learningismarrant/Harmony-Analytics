@@ -42,7 +42,7 @@ backend/app/
 │       ├── Yacht.py       # Yacht, CrewAssignment
 │       ├── Assessment.py  # TestCatalogue, Question, TestResult
 │       ├── Campaign.py    # Campaign, CampaignCandidate
-│       ├── Survey.py      # Survey, SurveyResponse, RecruitmentEvent, ModelVersion
+│       ├── Survey.py      # Survey, SurveyResponse, RecruitmentEvent, ModelVersion, JobWeightConfig
 │       └── Pulse.py       # DailyPulse
 │
 ├── modules/               # Vertical slices — each owns its HTTP, service, and repo layer
@@ -158,6 +158,11 @@ RecruitmentEvent             one record per hiring decision
 
 ModelVersion                 OLS-fitted β weights, versioned
   └── is_active              single active version at a time
+
+JobWeightConfig              DB-injectable weight configuration (P3)
+  ├── sme_weights (JSON)     SME trait weights per competency — overrides DNRE defaults
+  ├── omega_gca/C/interaction P_ind omegas — overrides p_ind.py module constants
+  └── is_active              single active config at a time (ML scripts update nightly)
 ```
 
 ---
@@ -274,19 +279,22 @@ Default β weights (literature priors, v1.0):
 | $\beta_3$ F_env | 0.20 | Structural burnout risk |
 | $\beta_4$ F_lmx | 0.20 | Management relationship quality |
 
-**Planned for v2:** The full theoretical model adds an interaction term $\beta_5 (F_{\text{env}} \times \text{TypeYacht})$ to capture that a Heavy Charter yacht amplifies environmental demands non-linearly. It also replaces the linear clamp with a **sigmoid** $P(\text{success}) = 1 / (1 + e^{-\hat{Y}})$ to model the psychological tipping point at which a crew member decides to leave — a non-linear threshold phenomenon (Schelling, 1978). Both are tracked in the backlog pending sufficient training data.
+**v1 active (SKILL.md P1):** The raw score is passed through a **sigmoid** $P(\text{success}) = 1 / (1 + e^{-k(\hat{Y} - 50)})$ centred at 50 to model the psychological tipping point at which a crew member decides to leave (Schelling, 1978). This transforms the unbounded linear sum into a probability-like output in [0, 100] before clamping. Planned for v2: interaction term $\beta_5 (F_{\text{env}} \times \text{TypeYacht})$ for Heavy Charter non-linearity.
 
 **Implementation:** `engine/recruitment/MLPSM/master.py` — `compute()`, `compute_with_delta()`, `compute_batch()`. β weights are passed explicitly at call time; `MLPSMResult.to_event_snapshot()` serialises them immutably for audit.
 
 #### A. Individual Performance Potential — $P_{\text{ind}}$
 
-$$P_{\text{ind}} = \omega_1 \cdot GCA + \omega_2 \cdot C \qquad (\omega_1 = 0.60,\ \omega_2 = 0.40)$$
+$$P_{\text{ind}} = \omega_1 \cdot GCA + \omega_2 \cdot C + \omega_3 \cdot \frac{GCA \times C}{100}$$
+$$\omega_1 = 0.55,\quad \omega_2 = 0.35,\quad \omega_3 = 0.10 \qquad (\Sigma\,\omega = 1.0 \text{ at } GCA=C=100)$$
 
-**Planned for v2:** $+ \omega_3 \cdot (GCA \times C)$ interaction term (reserved, currently disabled).
+The interaction term $\omega_3 \cdot (GCA \times C / 100)$ captures the synergistic effect: cognitive capacity is only mobilised when the motivation to apply effort (Conscientiousness) is present. A candidate with GCA=90 and C=20 is penalised relative to GCA=70 and C=75 — capability without engagement is not enough.
 
-**Theoretical basis:** The meta-analytic finding of Schmidt & Hunter (1998) — the single strongest predictor of job performance across 85 years of research is the combination of general cognitive ability (GCA) and conscientiousness. GCA sets the learning ceiling; conscientiousness determines whether that ceiling is reached through sustained effort. Without both, the prediction degrades.
+**Theoretical basis:** Schmidt & Hunter (1998) — the combination of GCA and Conscientiousness is the strongest predictor of job performance. GCA sets the learning ceiling; Conscientiousness determines whether that ceiling is reached through sustained effort.
 
-**Implementation:** `engine/recruitment/MLPSM/p_ind.py` — extracts GCA from the cognitive sub-scores (logical, numerical, verbal mean), applies a reliability flag if `n_tests = 0` (GCA_MISSING), tracks data quality penalty of −0.35 for absent cognitive data.
+**Injectable weights (P3):** omegas are resolved at runtime from `JobWeightConfig` if an active config exists in the DB — ML scripts can update nightly without touching Python code. Module constants (`OMEGA_GCA`, `OMEGA_CONSCIENTIOUSNESS`, `OMEGA_INTERACTION`) are the fallback.
+
+**Implementation:** `engine/recruitment/MLPSM/p_ind.py` — extracts GCA from cognitive sub-scores (logical, numerical, verbal mean), applies a reliability flag if `n_tests = 0` (`GCA_MISSING`), tracks data quality penalty of −0.35 for absent cognitive data.
 
 #### B. Team Friction — $F_{\text{team}}$
 
@@ -340,19 +348,23 @@ The 3D leadership space spans: `autonomy_preference`, `feedback_preference`, `st
 
 **Decision question:** *Who should share a cabin? Which two crew members placed on the same watch will create friction vs. synergy?*
 
-$$D_{ij} = w_A \cdot \underbrace{\left(1 - \frac{|A_i - A_j|}{100}\right)}_{\text{Agreeableness bond}} + w_C \cdot \underbrace{\left(1 - \frac{|C_i - C_j|}{100}\right)}_{\text{Work-ethic alignment}} + w_{ES} \cdot \underbrace{\frac{\mu(ES_i, ES_j)}{100}}_{\text{Emotional resilience bond}}$$
+$$D_{ij} = \alpha \cdot \underbrace{\left(1 - \frac{|C_i - C_j|}{100}\right)}_{\text{Work-ethic similarity}} + \beta \cdot \underbrace{\frac{A_i + A_j}{200}}_{\text{Social energy (additive)}} + \gamma \cdot \underbrace{\frac{ES_i + ES_j}{200}}_{\text{Resilience buffer (mean)}}$$
 
-$$w_A = 0.40,\quad w_C = 0.35,\quad w_{ES} = 0.25$$
+$$\alpha = 0.55,\quad \beta = 0.25,\quad \gamma = 0.20 \qquad (\alpha + \beta + \gamma = 1.0)$$
+
+**Design notes (SKILL.md V1, P2):**
+
+- **C is dominant (α > β):** Shared work ethics (Conscientiousness similarity) is the strongest predictor of dyad stability in confined professional environments. Divergent standards create chronic friction.
+- **A is additive complementarity, not similarity:** $f(A_i+A_j) = (A_i+A_j)/200$ rewards both members having high social energy — the collaborative pair compounds well-being. The old similarity term `1-|ΔA|/100` penalised a pairing of (high, low) which is psychologically inaccurate: one very agreeable member positively influences the other.
+- **ES is the mean, not the product:** The product $\frac{ES_a}{100} \times \frac{ES_b}{100}$ is too harsh — one emotionally fragile member would destroy any pair score. The mean models the team's collective resilience buffer more faithfully (George, 1990).
 
 **Theoretical basis:**
 
-- **Homophily principle** (Social Relations Model, Kenny, 1994; McPherson et al., 2001): on work-ethic and values dimensions (Conscientiousness), people who are too dissimilar generate chronic friction — the meticulous officer sharing a cabin with the disorganised deckhand. The absolute distance $|C_i - C_j|$ penalises those pairings.
-- **Sociometry** (Moreno, 1934): relationship quality in confined groups is not symmetric and not random. Structured pairwise measurement of compatibility predicts sub-group formation, latent conflict, and spontaneous leadership emergence before they manifest behaviourally.
-- **Collective Affective Tone** (George, 1990): the mean Emotional Stability of a dyad sets its stress tolerance. Two high-ES crew members form an emotionally stable pair regardless of personality differences elsewhere.
+- **Homophily principle** (McPherson et al., 2001): on values and work-ethic dimensions, high dissimilarity in Conscientiousness generates chronic friction — operationalised as $1-|C_i-C_j|/100$.
+- **Sociometry** (Moreno, 1934): structured pairwise compatibility measurement predicts sub-group formation and latent conflict before they manifest behaviourally.
+- **Collective Affective Tone** (George, 1990): mean Emotional Stability sets the dyad's stress absorption capacity.
 
-**Note on Extraversion:** The theoretical model includes a complementarity function $f(E_i + E_j)$ penalising two high-dominance individuals on the same watch. This is implemented as a future edge-weight modifier in the sociogram visualisation layer; the current formula uses A+C+ES as the three load-bearing dimensions.
-
-**Implementation:** `engine/benchmarking/matrice.py` — `compute_sociogram()` returns `SociogramNode` and `SociogramEdge` objects for 3D visualisation. Edge colours encode relationship quality: green (synergy, $D > 0.70$), blue (neutral), red (friction, $D < 0.30$). `compute_candidate_preview()` shows real-time delta on the existing sociogram when a candidate is dragged in.
+**Implementation:** `engine/benchmarking/matrice.py` — `compute_sociogram()` returns `SociogramNode` and `SociogramEdge` objects for 3D visualisation. Edge colours: green (synergy, $D > 0.70$), blue (neutral), red (friction, $D < 0.30$). `compute_candidate_preview()` shows real-time delta on the existing sociogram when a candidate is dragged in.
 
 ---
 
@@ -372,18 +384,18 @@ Candidate psychometric snapshot
         ▼
 ┌───────────────────────────────────────┐
 │  Stage 2 — MLPSM                      │
-│  ├── P_ind  (GCA × C)     ────────────┤→ β₁ = 0.25
+│  ├── P_ind  (ω₁·GCA + ω₂·C + ω₃·GCA×C/100) ─┤→ β₁ = 0.25
 │  ├── F_team (min-A, σ-C, μ-ES) ───────┤→ β₂ = 0.35
 │  ├── F_env  (JD-R ratio × resilience)─┤→ β₃ = 0.20
 │  └── F_lmx  (‖L_capt – V_crew‖) ─────┤→ β₄ = 0.20
 │                                        │
-│  Ŷ = Σ βᵢ·Fᵢ  ∈ [0, 100]             │
+│  Ŷ = σ(Σ βᵢ·Fᵢ) via sigmoid ∈ [0,100]│
 └───────────────────────────────────────┘
         │
         ▼
 ┌───────────────────────────────────────┐
 │  Sociogram — Dyad Compatibility       │
-│  D_{ij} = f(A, C, ES)  ∈ [0, 1]      │→ cabin / watch assignment
+│  D_{ij} = α·sim_C + β·f(A+A) + γ·f(ES+ES) │→ cabin / watch assignment
 └───────────────────────────────────────┘
         │
         ▼
@@ -526,7 +538,7 @@ Health check: `GET /health`
 ```bash
 cd backend
 
-# Full suite (442 tests)
+# Full suite (481 tests)
 pytest tests/ -v
 
 # Engine layer only — no DB, no mocks required
@@ -600,7 +612,7 @@ tests/
 | Service | Mock repos via `AsyncMock`; real service logic | pytest-mock, `make_async_db()` |
 | Router | HTTP round-trip via `httpx.AsyncClient + ASGITransport`; mock service | dependency_overrides, `mocker.patch` |
 
-**Current status: 442 tests, 0 failures.**
+**Current status: 481 tests, 0 failures.**
 
 ---
 
@@ -644,16 +656,17 @@ Full schema available at `/docs` when the server is running.
 
 ### High priority
 
+- [ ] Alembic migration for `job_weight_configs` table (`JobWeightConfig` model added, migration not yet generated)
 - [ ] Replace `print()` calls with `logging.getLogger(__name__)` throughout
 - [ ] Background task error handling — currently swallows exceptions silently; needs `try/except` + structured logging
 - [ ] File upload size limit — no max size validation on document upload endpoint
 - [ ] Add composite index on `daily_pulses(crew_profile_id, yacht_id, created_at)` — required for TVI queries at scale
-- [x] Unit test coverage for engine and module layers — 442 tests across engine, service and router layers
+- [x] Unit test coverage for engine and module layers — 481 tests across engine, service and router layers
 
 ### Application bugs (surfaced by test suite)
 
 - [ ] **`SurveyTriggerIn` missing `yacht_id`** — `modules/survey/router.py` line 37 accesses `payload.yacht_id` but the schema declares no such field. Any authenticated `POST /surveys/trigger` call raises `AttributeError 500`. Fix: add `yacht_id: int` to `SurveyTriggerIn`.
-- [ ] **Vessel router / service interface mismatch** — `modules/vessel/router.py` calls `service.get_all_for_owner(owner_id=...)` and `service.create(owner_id=...)` but `VesselService` defines `get_all_for_employer(employer=...)` and `create(employer=...)`. The `GET /vessels/` and `POST /vessels/` endpoints will raise `AttributeError` at runtime. Fix: align router call signatures with service method signatures.
+- [x] **Vessel router / service interface mismatch** — fixed. Tests now mock `service.get_all_for_employer` (matching the actual service method name).
 
 ### Medium priority
 

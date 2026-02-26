@@ -2,8 +2,8 @@ import { useEffect } from "react";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { restoreSession } from "@/lib/auth";
-import { useAuthStore } from "@/store/auth.store";
+import { restoreSession } from "@/features/auth/lib";
+import { useAuthStore } from "@/features/auth/store";
 
 const queryClient = new QueryClient({
   defaultOptions: {

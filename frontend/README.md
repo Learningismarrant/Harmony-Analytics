@@ -214,7 +214,7 @@ npx expo start
 ```bash
 cd frontend/apps/web
 npm test
-# → 126 tests, 13 suites, 0 failures
+# → 126 tests, 13 suites, 0 failures (backend : 481 tests, 0 failures)
 ```
 
 ### Build complet
@@ -297,10 +297,10 @@ Ces endpoints sont appelés par le frontend mais n'existent pas encore dans le b
 
 ### 🔴 Bloquant (bugs backend existants)
 
-| Bug | Fichier | Fix |
+| Bug | Fichier | État |
 |---|---|---|
-| `SurveyTriggerIn` sans champ `yacht_id` | `app/modules/survey/schemas.py` | Ajouter `yacht_id: int` |
-| Mismatch méthode VesselService | `app/modules/vessel/router.py` | `get_all_for_owner` → `get_all_for_employer`, `create(owner_id)` → `create(employer)` |
+| `SurveyTriggerIn` sans champ `yacht_id` | `app/modules/survey/schemas.py` | ⏳ Non corrigé — `POST /surveys/trigger` lèvera `AttributeError 500` |
+| Mismatch méthode VesselService | `app/modules/vessel/router.py` | ✅ Corrigé — mock tests alignés sur `get_all_for_employer` |
 
 ### 🟠 Priorité haute (pages manquantes — web)
 

@@ -111,6 +111,7 @@ class RecruitmentService:
 
         betas          = await repo.get_active_model_betas(db)
         status_map     = await repo.get_applications_status_map(db, campaign_id)
+        weight_config  = await repo.get_active_job_weight_config(db)
 
         # Format attendu par pipeline.run_batch()
         candidates_for_engine = [
@@ -130,6 +131,8 @@ class RecruitmentService:
             vessel_params=vessel_params,
             captain_vector=captain_vector,
             betas=betas,
+            sme_weights_override=weight_config.get("sme_weights") if weight_config else None,
+            p_ind_omegas=weight_config.get("p_ind_omegas") if weight_config else None,
         )
 
         # ── Fusion avec statuts candidature ───────────────────────────────────
@@ -185,7 +188,8 @@ class RecruitmentService:
         vessel_params, captain_vector, crew_snapshots = await self._get_yacht_context(
             db, campaign.yacht_id
         )
-        betas = await repo.get_active_model_betas(db)
+        betas         = await repo.get_active_model_betas(db)
+        weight_config = await repo.get_active_job_weight_config(db)
 
         # Trouver les métadonnées du candidat
         cand_meta = next((c for c in all_candidates if str(c["crew_profile_id"]) == str(crew_profile_id)), {})
@@ -197,9 +201,11 @@ class RecruitmentService:
             captain_vector=captain_vector,
             betas=betas,
             pool_context=pool_context,
+            sme_weights_override=weight_config.get("sme_weights") if weight_config else None,
             position_key=str(cand_meta.get("position_targeted", "")),
             experience_years=cand_meta.get("experience_years", 0),
             crew_profile_id=crew_profile_id,
+            p_ind_omegas=weight_config.get("p_ind_omegas") if weight_config else None,
         )
 
         return result.to_impact_report()
@@ -298,7 +304,8 @@ class RecruitmentService:
         vessel_params, captain_vector, crew_snaps = await self._get_yacht_context(
             db, campaign.yacht_id
         )
-        betas = await repo.get_active_model_betas(db)
+        betas         = await repo.get_active_model_betas(db)
+        weight_config = await repo.get_active_job_weight_config(db)
 
         result = pipeline.run_single(
             candidate_snapshot=snapshot,
@@ -306,7 +313,9 @@ class RecruitmentService:
             vessel_params=vessel_params,
             captain_vector=captain_vector,
             betas=betas,
+            sme_weights_override=weight_config.get("sme_weights") if weight_config else None,
             crew_profile_id=crew_profile_id,
+            p_ind_omegas=weight_config.get("p_ind_omegas") if weight_config else None,
         )
 
         snap = result.to_event_snapshot()

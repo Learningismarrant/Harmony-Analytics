@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { setAccessToken, clearAccessToken } from "@harmony/api";
-import { saveRefreshToken, clearRefreshToken } from "../lib/auth";
+import { saveRefreshToken, clearRefreshToken } from "./lib";
 import type { UserRole } from "@harmony/types";
 
 interface AuthState {

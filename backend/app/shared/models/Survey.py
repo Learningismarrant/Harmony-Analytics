@@ -129,3 +129,44 @@ class ModelVersion(Base):
 
     def __repr__(self):
         return f"<ModelVersion {self.version} active={self.is_active} R²={self.r_squared}>"
+
+
+class JobWeightConfig(Base):
+    """
+    Versioning des poids SME (DNRE) et omegas P_ind (MLPSM).
+
+    Analogue à ModelVersion pour les betas MLPSM — permet à un script ML
+    de mettre à jour les poids la nuit sans toucher au code Python.
+
+    SKILL.md DIRECTIVE V1 : les poids w_t ne doivent jamais être hardcodés
+    dans les fonctions. Ce modèle les stocke en DB pour injection dynamique.
+
+    Colonnes :
+        sme_weights       : JSON {competency_key: {trait_key: weight}}
+                            None = utiliser DEFAULT_SME_WEIGHTS de sme_score.py
+        omega_gca/c/inter : omegas P_ind (SKILL.md V1 : ω₁=0.55, ω₂=0.35, ω₃=0.10)
+                            Permettront ajustements par poste en Temps 2.
+    """
+    __tablename__ = "job_weight_configs"
+
+    id        = Column(Integer, primary_key=True, index=True)
+    version   = Column(String, unique=True, nullable=False)
+    is_active = Column(Boolean, default=False)
+
+    # Poids SME par compétence : {competency_key: {trait_key: weight}}
+    # None = utiliser DEFAULT_SME_WEIGHTS du module sme_score.py
+    sme_weights = Column(JSON, nullable=True)
+
+    # Omegas P_ind (SKILL.md V1 — calibrables par régression Temps 2)
+    omega_gca               = Column(Float, default=0.55)
+    omega_conscientiousness = Column(Float, default=0.35)
+    omega_interaction       = Column(Float, default=0.10)
+
+    n_samples  = Column(Integer, nullable=True)
+    trained_at = Column(DateTime(timezone=True), nullable=True)
+    notes      = Column(String, nullable=True)
+
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    def __repr__(self):
+        return f"<JobWeightConfig {self.version} active={self.is_active}>"

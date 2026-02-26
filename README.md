@@ -111,15 +111,17 @@ Harmony est construit sur trois moteurs d'analyse orthogonaux. Chaque composant 
 
 $$\hat{Y} = \beta_1 P_{\text{ind}} + \beta_2 F_{\text{team}} + \beta_3 F_{\text{env}} + \beta_4 F_{\text{lmx}}$$
 
-Quatre composantes indépendantes modélisent les causes distinctes d'échec : performance individuelle (GCA × Consciencieux), dynamiques d'équipe (filtre "jerk", faultline, buffer ES), charge environnementale (JD-R ratio), et alignement capitaine-marin (distance vectorielle LMX).
+Quatre composantes indépendantes modélisent les causes distinctes d'échec : performance individuelle ($\omega_1 \cdot GCA + \omega_2 \cdot C + \omega_3 \cdot GCA \times C / 100$, avec terme d'interaction activé), dynamiques d'équipe (filtre "jerk", faultline, buffer ES), charge environnementale (JD-R ratio), et alignement capitaine-marin (distance vectorielle LMX). Le score brut passe par une **sigmoïde** centrée à 50 avant présentation.
 
-Les β sont appris par OLS à partir des données réelles (`y_actual` post-hire via surveys) dès que 150 événements de recrutement sont disponibles.
+Les β sont appris par OLS à partir des données réelles (`y_actual` post-hire via surveys) dès que 150 événements de recrutement sont disponibles. Les omegas de P_ind sont injectables depuis la table `JobWeightConfig` sans modification du code.
 
 ### Sociogramme
 
 *Who should share a cabin? Which pair will create synergy vs. friction?*
 
-$$D_{ij} = 0.40 \cdot (1 - |A_i - A_j|/100) + 0.35 \cdot (1 - |C_i - C_j|/100) + 0.25 \cdot \mu(ES_i, ES_j)/100$$
+$$D_{ij} = 0.55 \cdot (1 - |C_i - C_j|/100) + 0.25 \cdot (A_i + A_j)/200 + 0.20 \cdot (ES_i + ES_j)/200$$
+
+Conscientiousness similarity (α=0.55) is the dominant axis — divergent work ethics generate the most friction. Agreeableness is an additive complementarity term (cumulative social energy, not penalising asymmetry). Emotional Stability uses a mean (not product) to model collective resilience.
 
 Visualisé comme une molécule 3D interactive — nœuds = marins, arêtes = compatibilité dyadique. Permet la simulation d'impact en temps réel : "que se passe-t-il si j'ajoute ce candidat à cet équipage ?"
 
@@ -188,7 +190,7 @@ npx expo start
 
 ## Tests
 
-### Backend — 442 tests, 0 failures
+### Backend — 481 tests, 0 failures
 
 ```bash
 cd backend
@@ -227,9 +229,10 @@ Les tests mobile (Jest + RNTL) sont listés dans le backlog.
 | Composant | État |
 |---|---|
 | Modules HTTP (auth, identity, crew, vessel, recruitment, assessment, survey) | ✅ Implémenté |
-| Engine DNRE + MLPSM + Sociogramme + Benchmarking | ✅ Implémenté |
+| Engine DNRE + MLPSM (sigmoid, P_ind interaction) + Sociogramme (P2 dyad) | ✅ Implémenté |
 | ORM models + Alembic migrations | ✅ Implémenté |
-| Suite de tests (442 tests) | ✅ 0 failure |
+| `JobWeightConfig` — weights DB-injectable (P3) | ✅ Implémenté |
+| Suite de tests (481 tests) | ✅ 0 failure |
 | Endpoints sociogramme (`/crew/{id}/sociogram`) | ⏳ Manquant |
 | Email (invitations survey, notifications embauche) | ⏳ Non implémenté |
 | Rate limiting | ⏳ Configuré mais inactif |
@@ -263,6 +266,7 @@ Points de vigilance avant tout déploiement en production :
 - [ ] **Refresh token web** — HttpOnly cookie, `Secure`, `SameSite=Strict`
 - [ ] **Refresh token mobile** — `expo-secure-store` avec `WHEN_UNLOCKED`
 - [ ] **CSP** — headers configurés dans `next.config.js`
+- [ ] **Migration Alembic** — générer la migration pour la table `job_weight_configs` avant déploiement
 
 ---
 

@@ -4,7 +4,8 @@
       "Bash(npm install:*)",
       "Bash(npx jest --no-coverage --testPathPatterns=\"vessel-cockpit\")",
       "Bash(npm test)",
-      "Bash(npx jest --testPathPatterns=\"CampaignPanel\")"
+      "Bash(npx jest --testPathPatterns=\"CampaignPanel\")",
+      "Bash(npx jest src/features/assessment/components/TestCard.test.tsx --verbose)"
     ]
   }
 }

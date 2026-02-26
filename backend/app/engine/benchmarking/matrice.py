@@ -109,10 +109,13 @@ EDGE_COLOR_SYNERGY  = "#4CAF50"    # weight > 0.7
 EDGE_COLOR_NEUTRAL  = "#90CAF9"    # weight 0.3-0.7
 EDGE_COLOR_FRICTION = "#EF9A9A"    # weight < 0.3
 
-# Poids des dimensions dans la compatibilité pairwise
-W_COMPAT_AGREEABLENESS     = 0.40
-W_COMPAT_CONSCIENTIOUSNESS = 0.35
-W_COMPAT_ES                = 0.25
+# Poids des dimensions dans la compatibilité pairwise (SKILL.md V1 : α > β)
+# α — Similitude des valeurs (Conscientiousness) : dimension dominante
+# β — Complémentarité sociale (Agréabilité additive)
+# γ — Résilience collective (Stabilité émotionnelle additive)
+W_COMPAT_CONSCIENTIOUSNESS = 0.55   # α : valeurs & standards partagés (dominant)
+W_COMPAT_AGREEABLENESS     = 0.25   # β : f(A_i + A_j) — énergie sociale cumulative
+W_COMPAT_ES                = 0.20   # γ : f(ES_i + ES_j) — buffer résilience collectif
 
 
 # ── Dataclasses ───────────────────────────────────────────────────────────────
@@ -259,42 +262,51 @@ def _get(snapshot: Dict, trait: str) -> Optional[float]:
 
 def _pairwise_compatibility(snap_a: Dict, snap_b: Dict) -> tuple[float, str]:
     """
-    Calcule la compatibilité [0-1] entre deux membres.
-    Retourne (score, dominant_factor).
+    Calcule la compatibilité [0-1] entre deux membres selon la formule SKILL.md V1 :
+        D_ij = α·sim(C) + β·f(A_i+A_j) + γ·f(ES_i+ES_j)
 
     Logique :
-        - Agréabilité : similarité (proches = moins de friction sociale)
-        - Conscienciosité : similarité (divergence = faultline risk)
-        - ES : bonus mutuel (deux profils stables se renforcent)
+        - Conscienciosité (α) : similarité — divergence des standards = faultline risk.
+          Terme dominant (α=0.55) : les valeurs communes comptent le plus.
+        - Agréabilité (β) : complémentarité additive f(A_i+A_j) — deux membres
+          à haute agréabilité cumulent leur énergie sociale (pas de pénalité si
+          l'un est bas et l'autre haut, contrairement à la similarité).
+        - Stabilité émotionnelle (γ) : buffer collectif f(ES_i+ES_j) — la moyenne
+          est plus réaliste que le produit (un profil fragile ne détruit plus la paire).
 
-    La distance est normalisée par le max théorique (100 pour A et C, 100 pour ES).
+    Scores normalisés sur [0, 1] par construction.
     """
-    a_a = _get(snap_a, "agreeableness")  or 50.0
-    c_a = _get(snap_a, "conscientiousness") or 50.0
+    a_a  = _get(snap_a, "agreeableness")       or 50.0
+    c_a  = _get(snap_a, "conscientiousness")   or 50.0
     es_a = _get(snap_a, "emotional_stability") or 50.0
 
-    a_b = _get(snap_b, "agreeableness")  or 50.0
-    c_b = _get(snap_b, "conscientiousness") or 50.0
+    a_b  = _get(snap_b, "agreeableness")       or 50.0
+    c_b  = _get(snap_b, "conscientiousness")   or 50.0
     es_b = _get(snap_b, "emotional_stability") or 50.0
 
-    # Similarité : 1 - distance normalisée
-    sim_a  = 1.0 - abs(a_a - a_b)  / 100.0
-    sim_c  = 1.0 - abs(c_a - c_b)  / 100.0
+    # α — Similarité des valeurs : 1 - distance normalisée
+    sim_c = 1.0 - abs(c_a - c_b) / 100.0
 
-    # ES : bonus mutuel (produit normalisé) — deux personnes stables = bonne dyade
-    es_bond = (es_a / 100.0) * (es_b / 100.0)
+    # β — Complémentarité additive agréabilité : f(A_i + A_j) = moyenne normalisée
+    #     Deux membres très agréables se renforcent mutuellement (énergie sociale cumulative).
+    comp_a = (a_a + a_b) / 200.0
+
+    # γ — Buffer résilience collective : f(ES_i + ES_j) = moyenne normalisée
+    #     La moyenne est préférée au produit pour éviter de trop pénaliser une paire
+    #     dont un seul membre est fragile.
+    es_bond = (es_a + es_b) / 200.0
 
     score = (
-        sim_a   * W_COMPAT_AGREEABLENESS +
         sim_c   * W_COMPAT_CONSCIENTIOUSNESS +
+        comp_a  * W_COMPAT_AGREEABLENESS +
         es_bond * W_COMPAT_ES
     )
     score = round(max(0.0, min(1.0, score)), 3)
 
-    # Facteur dominant (le plus pénalisant)
+    # Facteur dominant — dimension contribuant le plus à la pénalité
     penalties = {
-        "agreeableness":      1.0 - sim_a,
-        "conscientiousness":  1.0 - sim_c,
+        "agreeableness":       1.0 - comp_a,
+        "conscientiousness":   1.0 - sim_c,
         "emotional_stability": 1.0 - es_bond,
     }
     dominant = max(penalties, key=penalties.get)
@@ -310,8 +322,8 @@ def _edge_color(weight: float) -> str:
 
 def _edge_label(weight: float, dominant_factor: str) -> str:
     factor_labels = {
-        "agreeableness":      "friction personnalités",
-        "conscientiousness":  "divergence standards",
+        "agreeableness":       "énergie sociale faible",
+        "conscientiousness":   "divergence standards",
         "emotional_stability": "fragilité émotionnelle",
     }
     factor_label = factor_labels.get(dominant_factor, "compatibilité")

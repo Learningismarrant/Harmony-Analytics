@@ -7,7 +7,7 @@ import {
 } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { identityApi, queryKeys } from "@harmony/api";
-import { useAuthStore } from "@/store/auth.store";
+import { useAuthStore } from "@/features/auth/store";
 
 function StatCard({ label, value, color = "#0EA5E9" }: {
   label: string;

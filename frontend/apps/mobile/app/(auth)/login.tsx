@@ -11,8 +11,8 @@ import {
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { authApi } from "@harmony/api";
-import { useAuthStore } from "@/store/auth.store";
-import { saveRefreshToken } from "@/lib/auth";
+import { useAuthStore } from "@/features/auth/store";
+import { saveRefreshToken } from "@/features/auth/lib";
 import type { UserRole } from "@harmony/types";
 
 export default function LoginScreen() {

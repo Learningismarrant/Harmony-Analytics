@@ -115,6 +115,7 @@ class TestGetMatching:
         mocker.patch("app.modules.recruitment.service.repo.get_campaign_secure", AsyncMock(return_value=campaign))
         mocker.patch("app.modules.recruitment.service.repo.get_candidates_with_snapshots", AsyncMock(return_value=candidates))
         mocker.patch("app.modules.recruitment.service.repo.get_active_model_betas", AsyncMock(return_value={}))
+        mocker.patch("app.modules.recruitment.service.repo.get_active_job_weight_config", AsyncMock(return_value=None))
         mocker.patch("app.modules.recruitment.service.repo.get_applications_status_map", AsyncMock(return_value={}))
         mock_pipeline = mocker.patch(
             "app.modules.recruitment.service.pipeline.run_batch",

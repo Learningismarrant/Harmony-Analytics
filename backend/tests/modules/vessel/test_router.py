@@ -73,9 +73,8 @@ async def test_create_yacht_sans_auth_401(client):
 @pytest.mark.asyncio
 async def test_list_yachts_200(employer_client, mocker):
     mocker.patch(
-        "app.modules.vessel.router.service.get_all_for_owner",
+        "app.modules.vessel.router.service.get_all_for_employer",
         AsyncMock(return_value=[make_yacht()]),
-        create=True,
     )
     resp = await employer_client.get("/vessels/")
     assert resp.status_code == 200

@@ -48,6 +48,9 @@ from app.engine.benchmarking.matrice import (
     NODE_COLOR_ES_HIGH,
     NODE_COLOR_ES_MEDIUM,
     NODE_COLOR_ES_LOW,
+    W_COMPAT_CONSCIENTIOUSNESS,
+    W_COMPAT_AGREEABLENESS,
+    W_COMPAT_ES,
 )
 
 pytestmark = pytest.mark.engine
@@ -250,9 +253,10 @@ class TestPairwiseCompatibility:
         assert score > 0.7
 
     def test_snapshots_opposes_score_bas(self):
-        """Agréabilité max vs min → friction élevée."""
-        snap_high = _snap(agreeableness=100, conscientiousness=100)
-        snap_low  = _snap(agreeableness=0,   conscientiousness=0)
+        """C très divergent → friction élevée même si A/ES sont favorables.
+        Valeurs non nulles pour éviter le fallback `or 50` sur les traits à 0."""
+        snap_high = _snap(agreeableness=70, conscientiousness=95, neuroticism=20)  # ES=80
+        snap_low  = _snap(agreeableness=70, conscientiousness=5,  neuroticism=20)  # ES=80
         score, _ = _pairwise_compatibility(snap_high, snap_low)
         assert score < 0.5
 
@@ -264,6 +268,81 @@ class TestPairwiseCompatibility:
     def test_dominant_factor_valide(self):
         _, dominant = _pairwise_compatibility(_snap(), _snap())
         assert dominant in ("agreeableness", "conscientiousness", "emotional_stability")
+
+    # ── Tests spécifiques SKILL.md P2 ─────────────────────────────────────────
+
+    def test_poids_C_superieur_A(self):
+        """SKILL.md : α (C-similarité) > β (A-complémentarité)."""
+        assert W_COMPAT_CONSCIENTIOUSNESS > W_COMPAT_AGREEABLENESS
+
+    def test_poids_somme_egal_un(self):
+        total = W_COMPAT_CONSCIENTIOUSNESS + W_COMPAT_AGREEABLENESS + W_COMPAT_ES
+        assert abs(total - 1.0) < 1e-9
+
+    def test_complementarite_A_additive_deux_hauts(self):
+        """
+        Deux membres à haute agréabilité → meilleur score que similarité.
+        Avec f(A_i+A_j) = (A_i+A_j)/200 : deux hauts A se renforcent.
+        """
+        snap_h = _snap(agreeableness=90, conscientiousness=70, neuroticism=35)
+        score, _ = _pairwise_compatibility(snap_h, snap_h)
+        # comp_a = (90+90)/200 = 0.90 → contribution β haute
+        assert score > 0.75
+
+    def test_complementarite_A_additif_pas_similarite(self):
+        """
+        Paire (A=100, A=0) : avec l'ancienne similarité → sim=0 → mauvaise.
+        Avec f(A_i+A_j) = 0.50 → contribution neutre, pas nulle.
+        La pénalité vient plutôt de C si C est différent.
+        Ici C identiques → pénalité uniquement sur A moyenne et ES.
+        """
+        snap_high_a = _snap(agreeableness=100, conscientiousness=70, neuroticism=35)
+        snap_low_a  = _snap(agreeableness=0,   conscientiousness=70, neuroticism=35)
+        score, dominant = _pairwise_compatibility(snap_high_a, snap_low_a)
+        # sim_c = 1.0, comp_a = 0.50, es_bond ≈ 0.65 → score > 0.50
+        assert score > 0.50
+        # C n'est pas le dominant (sim_c = 1.0) → A ou ES est dominant
+        assert dominant in ("agreeableness", "emotional_stability")
+
+    def test_es_bond_mean_pas_produit(self):
+        """
+        ES bond : moyenne (pas produit). Paire (ES=80, ES=20) :
+        - ancien produit = 0.80*0.20 = 0.16 (très pénalisé)
+        - nouveau mean   = (80+20)/200 = 0.50 (neutre)
+        """
+        snap_high_es = _snap(agreeableness=70, conscientiousness=70, neuroticism=20)   # ES=80
+        snap_low_es  = _snap(agreeableness=70, conscientiousness=70, neuroticism=80)   # ES=20
+        score, _ = _pairwise_compatibility(snap_high_es, snap_low_es)
+        # sim_c=1.0, comp_a=(70+70)/200=0.70, es_bond=(80+20)/200=0.50
+        # score = 1.0*0.55 + 0.70*0.25 + 0.50*0.20 = 0.55+0.175+0.10 = 0.825
+        assert score > 0.60   # bien supérieur à ce que le produit aurait donné
+
+    def test_conscientiousness_dominant_quand_diverge(self):
+        """Quand C diverge fortement, c'est lui le facteur dominant."""
+        snap_hc = _snap(conscientiousness=100, agreeableness=70, neuroticism=35)
+        snap_lc = _snap(conscientiousness=0,   agreeableness=70, neuroticism=35)
+        _, dominant = _pairwise_compatibility(snap_hc, snap_lc)
+        assert dominant == "conscientiousness"
+
+    def test_formule_skill_md_valeurs_manuelles(self):
+        """
+        Vérification algébrique de la formule SKILL.md V1 :
+            D_ij = α·sim_C + β·f(A_i+A_j) + γ·f(ES_i+ES_j)
+        """
+        snap_a = _snap(agreeableness=80, conscientiousness=60, neuroticism=30)   # ES=70
+        snap_b = _snap(agreeableness=60, conscientiousness=80, neuroticism=40)   # ES=60
+        score, _ = _pairwise_compatibility(snap_a, snap_b)
+
+        sim_c   = 1.0 - abs(60 - 80) / 100.0    # = 0.80
+        comp_a  = (80 + 60) / 200.0              # = 0.70
+        es_bond = (70 + 60) / 200.0              # = 0.65
+        expected = round(
+            sim_c   * W_COMPAT_CONSCIENTIOUSNESS +
+            comp_a  * W_COMPAT_AGREEABLENESS +
+            es_bond * W_COMPAT_ES,
+            3,
+        )
+        assert score == expected
 
 
 # ── Encodage visuel ───────────────────────────────────────────────────────────
