@@ -57,11 +57,12 @@ backend/app/
 │
 ├── engine/                # Pure computation — zero DB access, fully testable
 │   ├── psychometrics/
-│   │   ├── scoring.py     # Likert + cognitive scoring, reliability detection
-│   │   ├── snapshot.py    # Rebuilds CrewProfile.psychometric_snapshot from TestResult set
-│   │   ├── normalizer.py  # Score normalization against population norms
-│   │   ├── formatter.py   # Report formatting per viewer context
-│   │   └── reliability.py # Response bias, speedrun detection
+│   │   ├── scoring.py       # Likert + cognitive scoring, reliability detection
+│   │   ├── tirt_scoring.py  # T-IRT engine (CUTTY SARK) — MAP estimation, probit model, reversed items
+│   │   ├── snapshot.py      # Rebuilds CrewProfile.psychometric_snapshot from TestResult set
+│   │   ├── normalizer.py    # Score normalization against population norms
+│   │   ├── formatter.py     # Report formatting per viewer context
+│   │   └── reliability.py   # Response bias, speedrun detection
 │   │
 │   ├── recruitment/
 │   │   ├── DNRE/          # Stage 1: normative-relative fit (g_fit, centile, safety_level)
@@ -146,7 +147,8 @@ Campaign (a hiring position on a Yacht)
   └── CampaignCandidate      application (PENDING / HIRED / REJECTED / JOINED)
 
 TestCatalogue → Question → TestResult
-  └── Feeds into psychometric_snapshot rebuild
+  ├── Feeds into psychometric_snapshot rebuild
+  └── test_type = "tirt" → routes to TirtScoringEngine (CUTTY SARK, 60 forced-choice pairs)
 
 Survey → SurveyResponse
   └── intent_to_stay (0–100) feeds y_actual in RecruitmentEvent
@@ -368,6 +370,79 @@ $$\alpha = 0.55,\quad \beta = 0.25,\quad \gamma = 0.20 \qquad (\alpha + \beta + 
 
 ---
 
+### 4. T-IRT — Thurstonian Item Response Theory (CUTTY SARK)
+
+**Decision question:** *What are the candidate's true Big Five latent traits, corrected for social desirability and ipsativity bias?*
+
+The CUTTY SARK is a 60-item forced-choice assessment using the IPIP-120 item pool, adapted for maritime superyacht contexts. Unlike Likert scales, each item forces a binary trade-off between two desirable (or two undesirable) statements from different Big Five domains — eliminating acquiescence bias and making faking harder.
+
+#### Probit Model (pair-level)
+
+For each pair $l$ opposing item $i$ (left) and item $j$ (right):
+
+$$P(y_l = 1 \mid \theta) = \Phi\!\left(\frac{(\mu_i - \mu_j) + (\lambda^\text{eff}_i \cdot \theta_{d_i} - \lambda^\text{eff}_j \cdot \theta_{d_j})}{\sqrt{\psi_i^2 + \psi_j^2}}\right)$$
+
+Where:
+- $\Phi$ = standard normal CDF (probit link)
+- $\mu_i$ = item intercept (social desirability)
+- $\lambda^\text{eff}_i = \lambda_i \times \text{score\_weight}_i$ — **reversed items** (`score_weight = -1`) contribute negatively to their domain trait
+- $\psi_i = \sqrt{1 - \lambda_i^2}$ = residual standard deviation (unique variance)
+- $\theta_{d_i}$ = latent trait score for domain $d_i \in \{O, C, E, A, N\}$
+
+**Handling of reversed items:** Keying an item negatively (`score_weight = -1`) flips the sign of its loading. For example, choosing `N1_1` ("I stay serene when conditions worsen", `score_weight = -1`) contributes evidence for *low* $\theta_N$, not high. This is the key correction specified by Brown & Maydeu-Olivares (2011) and correctly implemented in `_build_pair_data()`.
+
+#### MAP Estimation
+
+$$\theta^* = \arg\max_\theta \left[\sum_{l=1}^{60} \ln P(y_l \mid \theta) - \frac{1}{2}\sum_{k=1}^{5} \theta_k^2\right]$$
+
+The $N(0, I)$ prior regularises the estimates toward zero and makes $\theta^*$ directly interpretable as Z-scores. Optimised via **BFGS** with analytical gradients (scipy.optimize).
+
+$$z_k = \theta_k^* \qquad \text{centile}_k = \Phi(\theta_k^*) \times 100$$
+
+#### Reliability Index
+
+The inverse-Hessian from BFGS provides the Laplace approximation of posterior variance:
+
+$$\rho = 1 - \overline{\text{SEM}^2} = 1 - \overline{\text{diag}(H^{-1})}$$
+
+Additional quality checks: response speed < 2s/pair → `is_reliable = False`; acquiescence bias (>85% same side) → `is_reliable = False`.
+
+#### Item Calibration
+
+76 unique IPIP-120 maritime items. Parameters inspired by Maples et al. (2014):
+- $\lambda \in [0.70, 0.90]$ — item-trait loadings
+- $\mu \in [-0.80, +0.85]$ — social desirability intercepts
+- Positively-worded statements: $\mu > 0$; negatively-worded: $\mu < 0$
+
+#### Output
+
+```json
+{
+  "traits": { "conscientiousness": {"score": 88.0, "niveau": "Élevé"} },
+  "global_score": 74.3,
+  "reliability": {"is_reliable": true, "reasons": []},
+  "meta": {"total_time_seconds": 285, "avg_seconds_per_question": 4.75},
+  "tirt_detail": {
+    "O": {"z_score": 0.45, "percentile": 67.3},
+    "C": {"z_score": 1.18, "percentile": 88.1},
+    "E": {"z_score": -0.31, "percentile": 37.8},
+    "A": {"z_score": 0.84, "percentile": 79.9},
+    "N": {"z_score": -1.12, "percentile": 13.2},
+    "reliability_index": 0.87
+  }
+}
+```
+
+The `traits` section uses the same key names as the Likert Big Five test → `build_snapshot()` integrates CUTTY SARK scores transparently into `CrewProfile.psychometric_snapshot`, feeding the DNRE and MLPSM engines.
+
+**Theoretical basis:**
+- Brown, A., & Maydeu-Olivares, A. (2011). Item response modeling of forced-choice questionnaires. *Educational and Psychological Measurement*, 71(3), 460–502.
+- Maples, J. L., et al. (2014). A comparison of fifteen structural models for personality measurement. *Psychological Assessment*, 26(4), 1116–1138.
+
+**Implementation:** `engine/psychometrics/tirt_scoring.py`
+
+---
+
 ### Summary: Decision Architecture
 
 ```
@@ -406,6 +481,18 @@ Candidate psychometric snapshot
    OLS retrain when n ≥ 150            → updated β weights
 ```
 
+**Assessment routing (service layer):**
+
+```
+POST /assessments/{test_id}/submit
+  ├── test_type = "likert"    → calculate_scores()     (engine/psychometrics/scoring.py)
+  ├── test_type = "cognitive" → calculate_scores()     (engine/psychometrics/scoring.py)
+  └── test_type = "tirt"      → calculate_tirt_scores() (engine/psychometrics/tirt_scoring.py)
+                                  → MAP estimation → Z-scores → percentiles
+                                  → stored in TestResult.scores
+                                  → triggers psychometric_snapshot rebuild
+```
+
 **References**
 
 - Bakker, A. B., & Demerouti, E. (2007). The Job Demands-Resources model. *Journal of Managerial Psychology*, 22(3), 309–328.
@@ -422,6 +509,8 @@ Candidate psychometric snapshot
 - McPherson, M., Smith-Lovin, L., & Cook, J. M. (2001). Birds of a feather: Homophily in social networks. *Annual Review of Sociology*, 27, 415–444.
 - Moreno, J. L. (1934). *Who Shall Survive?* Beacon House.
 - Schmidt, F. L., & Hunter, J. E. (1998). The validity and utility of selection methods in personnel psychology. *Psychological Bulletin*, 124(2), 262–274.
+- Brown, A., & Maydeu-Olivares, A. (2011). Item response modeling of forced-choice questionnaires. *Educational and Psychological Measurement*, 71(3), 460–502.
+- Maples, J. L., et al. (2014). A comparison of fifteen structural models for personality measurement. *Psychological Assessment*, 26(4), 1116–1138.
 
 ---
 
@@ -538,7 +627,7 @@ Health check: `GET /health`
 ```bash
 cd backend
 
-# Full suite (481 tests)
+# Full suite (530 tests)
 pytest tests/ -v
 
 # Engine layer only — no DB, no mocks required
@@ -564,8 +653,9 @@ tests/
 │   ├── psychometrics/
 │   │   ├── test_scoring.py       # Likert/cognitive scoring, reliability detection
 │   │   ├── test_snapshot.py      # Snapshot rebuild from TestResult set
+│   │   ├── test_tirt_scoring.py  # T-IRT engine — MAP, probit, reversed items (49 tests)
 │   │   ├── test_normalizer.py    # Score normalization against population norms
-│   │   └── test_reliability.py  # Response bias and speedrun detection
+│   │   └── test_reliability.py   # Response bias and speedrun detection
 │   ├── recruitment/
 │   │   ├── DNRE/
 │   │   │   └── test_dnre.py      # Stage 1: global_fit, centile, safety_level
@@ -612,7 +702,7 @@ tests/
 | Service | Mock repos via `AsyncMock`; real service logic | pytest-mock, `make_async_db()` |
 | Router | HTTP round-trip via `httpx.AsyncClient + ASGITransport`; mock service | dependency_overrides, `mocker.patch` |
 
-**Current status: 481 tests, 0 failures.**
+**Current status: 530 tests, 0 failures.**
 
 ---
 
@@ -661,7 +751,8 @@ Full schema available at `/docs` when the server is running.
 - [ ] Background task error handling — currently swallows exceptions silently; needs `try/except` + structured logging
 - [ ] File upload size limit — no max size validation on document upload endpoint
 - [ ] Add composite index on `daily_pulses(crew_profile_id, yacht_id, created_at)` — required for TVI queries at scale
-- [x] Unit test coverage for engine and module layers — 481 tests across engine, service and router layers
+- [x] Unit test coverage for engine and module layers — 530 tests across engine, service and router layers
+- [x] T-IRT engine for CUTTY SARK (Brown & Maydeu-Olivares, 2011) — MAP estimation, probit, reversed items, 49 tests
 
 ### Application bugs (surfaced by test suite)
 
@@ -682,3 +773,20 @@ Full schema available at `/docs` when the server is running.
 - [ ] Prometheus metrics endpoint
 - [ ] WebSocket endpoint for live dashboard updates
 - [ ] Population norm tables for maritime-specific percentile computation
+
+### CUTTY SARK — pending
+
+- [ ] Seed CUTTY SARK into DB (`seed_tests_surveys.py`) — create `TestCatalogue(test_type="tirt")` + 60 `Question` objects with `options` JSON
+- [ ] Service-layer test for `submit_and_score()` with `test_type = "tirt"` (mock `calculate_tirt_scores`)
+- [ ] Router-layer test for `POST /assessments/{test_id}/submit` with forced-choice responses
+- [ ] Validate social desirability balance across pairs — current item parameters ($\lambda$, $\mu$) are based on literature priors; empirical verification that $\mu_{\text{left}} \approx \mu_{\text{right}}$ for each pair is required before production use (**prototype status**)
+- [ ] Calibrate item parameters $(\lambda, \mu)$ with field data once n > 200 administrations — planned as a nightly ML script analogous to the MLPSM β-retrain loop
+
+### Étalonnage & validation des tests (futur — mobile)
+
+Roadmap psychométrique post-prototype :
+
+- [ ] **Module mobile de validation des questions** — interface permettant à des évaluateurs internes (psychologues, SME maritime) de noter chaque item sur deux axes : pertinence contextuelle (1–5) et désirabilité sociale perçue (1–5). Alimente une table `ItemValidation(item_ipip_id, rater_id, relevance, desirability, comment)`.
+- [ ] **Vérification d'équilibre des paires** — après collecte de ≥ 30 évaluations par item, vérifier automatiquement que $|\mu_{\text{left}} - \mu_{\text{right}}|$ < 0.3 pour chaque paire (seuil T-IRT). Paires déséquilibrées → flaggées `CALIBRATION_REQUIRED`.
+- [ ] **Recalibration des paramètres** ($\lambda$, $\mu$) à partir des réponses candidates réelles — via un modèle IRT multivarié une fois n > 200 passages complets. Versionné dans une table `ItemParamVersion` (pattern analogue à `ModelVersion` pour MLPSM).
+- [ ] **Score de consistance interne** — coefficient omega de McDonald (ω) par domaine Big Five, calculé sur les n premiers passages ; déclenche une alerte si ω < 0.70 pour un domaine.

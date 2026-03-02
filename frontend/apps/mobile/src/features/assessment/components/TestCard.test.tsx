@@ -69,6 +69,33 @@ describe("TestCard — not completed state", () => {
   });
 });
 
+describe("TestCard — tirt type", () => {
+  it("shows tirt icon ⬡", () => {
+    const tirtTest: TestInfoOut = { ...TEST, test_type: "tirt" };
+    const { getByText } = render(
+      <TestCard test={tirtTest} isCompleted={false} onPress={jest.fn()} />,
+    );
+    expect(getByText("⬡")).toBeTruthy();
+  });
+
+  it("shows '~25 min' duration for tirt type", () => {
+    const tirtTest: TestInfoOut = { ...TEST, test_type: "tirt" };
+    const { getByText } = render(
+      <TestCard test={tirtTest} isCompleted={false} onPress={jest.fn()} />,
+    );
+    expect(getByText(/~25 min/)).toBeTruthy();
+  });
+
+  it("shows 'Big Five · Forced choice' instead of pts/question for tirt", () => {
+    const tirtTest: TestInfoOut = { ...TEST, test_type: "tirt" };
+    const { getByText, queryByText } = render(
+      <TestCard test={tirtTest} isCompleted={false} onPress={jest.fn()} />,
+    );
+    expect(getByText("Big Five · Forced choice")).toBeTruthy();
+    expect(queryByText(/pts\/question/)).toBeNull();
+  });
+});
+
 describe("TestCard — unknown type fallback", () => {
   it("renders fallback icon for unknown test_type", () => {
     const unknown = { ...TEST, test_type: "unknown" as TestInfoOut["test_type"] };

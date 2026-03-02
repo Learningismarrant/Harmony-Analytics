@@ -36,24 +36,30 @@ def _result_item():
 # ── GET /assessments/catalogue ────────────────────────────────────────────────
 
 @pytest.mark.asyncio
-async def test_catalogue_200(client, mocker):
+async def test_catalogue_200(crew_client, mocker):
     mocker.patch(
         "app.modules.assessment.router.service.get_catalogue",
         AsyncMock(return_value=[_catalogue_item()]),
     )
-    resp = await client.get("/assessments/catalogue")
+    resp = await crew_client.get("/assessments/catalogue")
     assert resp.status_code == 200
     assert isinstance(resp.json(), list)
 
 
 @pytest.mark.asyncio
-async def test_catalogue_vide_404(client, mocker):
+async def test_catalogue_vide_404(crew_client, mocker):
     mocker.patch(
         "app.modules.assessment.router.service.get_catalogue",
         AsyncMock(return_value=[]),
     )
-    resp = await client.get("/assessments/catalogue")
+    resp = await crew_client.get("/assessments/catalogue")
     assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_catalogue_sans_auth_401(client):
+    resp = await client.get("/assessments/catalogue")
+    assert resp.status_code in (401, 403)
 
 
 # ── GET /assessments/{test_id}/questions ─────────────────────────────────────
@@ -108,6 +114,39 @@ async def test_submit_test_inconnu_400(crew_client, mocker):
     resp = await crew_client.post("/assessments/submit", json={
         "test_id": 999,
         "responses": [{"question_id": 1, "valeur_choisie": "3", "seconds_spent": 5.0}],
+    })
+    assert resp.status_code == 400
+
+
+# ── POST /assessments/submit — forced_choice (T-IRT) ─────────────────────────
+
+@pytest.mark.asyncio
+async def test_submit_tirt_forced_choice_201(crew_client, mocker):
+    """Soumission d'un test T-IRT avec réponses forced_choice → 201."""
+    tirt_result = make_test_result(
+        id=5, test_id=3, global_score=74.0, test_name="CUTTY SARK T-IRT",
+    )
+    mocker.patch(
+        "app.modules.assessment.router.service.submit_and_score",
+        AsyncMock(return_value=tirt_result),
+    )
+    resp = await crew_client.post("/assessments/submit", json={
+        "test_id": 3,
+        "responses": [{"question_id": 1, "valeur_choisie": "left", "seconds_spent": 4.5}],
+    })
+    assert resp.status_code == 201
+
+
+@pytest.mark.asyncio
+async def test_submit_tirt_invalid_valeur_400(crew_client, mocker):
+    """Soumission T-IRT avec valeur_choisie invalide → service lève ValueError → 400."""
+    mocker.patch(
+        "app.modules.assessment.router.service.submit_and_score",
+        AsyncMock(side_effect=ValueError("Réponse invalide pour paire forcée.")),
+    )
+    resp = await crew_client.post("/assessments/submit", json={
+        "test_id": 3,
+        "responses": [{"question_id": 1, "valeur_choisie": "invalid_choice", "seconds_spent": 1.0}],
     })
     assert resp.status_code == 400
 

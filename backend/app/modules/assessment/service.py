@@ -7,12 +7,16 @@ Changements v2 :
 - psychometric_snapshot lu/écrit sur CrewProfile
 - propagation background utilise crew_profile_id
 """
+import logging
 from fastapi import BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
 
+logger = logging.getLogger(__name__)
+
 from app.engine.psychometrics.scoring import calculate_scores
 from app.engine.psychometrics.snapshot import build_snapshot
+from app.engine.psychometrics.tirt_scoring import calculate_tirt_scores
 from app.modules.assessment.repository import AssessmentRepository
 from app.shared.models import CrewProfile
 
@@ -59,12 +63,22 @@ class AssessmentService:
         questions_map = {q.id: q for q in questions}
 
         # ── Calcul pur (engine) ───────────────────────────────
-        result = calculate_scores(
-            responses=responses,
-            questions_map=questions_map,
-            test_type=test_info.test_type,
-            max_score_per_question=test_info.max_score_per_question,
-        )
+        if test_info.test_type == "tirt":
+            total_secs = sum(
+                (r.seconds_spent or 0.0) for r in responses
+            )
+            result = calculate_tirt_scores(
+                responses=responses,
+                questions_map=questions_map,
+                total_seconds=float(total_secs),
+            )
+        else:
+            result = calculate_scores(
+                responses=responses,
+                questions_map=questions_map,
+                test_type=test_info.test_type,
+                max_score_per_question=test_info.max_score_per_question,
+            )
 
         # ── Sauvegarde via crew_profile_id ────────────────────
         saved = await repo.save_result(
@@ -144,5 +158,9 @@ class AssessmentService:
                 for employer_id in employer_ids:
                     await vessel_service.refresh_fleet_snapshot_if_stale(db, employer_id)
 
-            except Exception as e:
-                print(f"[BACKGROUND] Propagation snapshot crew {crew_profile_id}: {e}")
+            except Exception:
+                logger.error(
+                    "[BACKGROUND] Échec propagation snapshot crew_profile_id=%s",
+                    crew_profile_id,
+                    exc_info=False,
+                )

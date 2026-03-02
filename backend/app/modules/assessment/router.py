@@ -7,10 +7,11 @@ Changements v2 :
 - Accès client via employer (EmployerProfile)
 - service.submit_and_score reçoit crew (CrewProfile)
 """
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 from typing import List
 
 from app.shared.deps import DbDep, CrewDep, EmployerDep, UserDep
+from app.shared.limiter import limiter
 from app.modules.assessment.service import AssessmentService
 from app.modules.assessment.schemas import (
     TestInfoOut,
@@ -26,11 +27,14 @@ service = AssessmentService()
 # ── Catalogue ──────────────────────────────────────────────
 
 @router.get("/catalogue", response_model=List[TestInfoOut])
-async def list_catalogue(db: DbDep):
-    """Tests actifs — public pour tout utilisateur authentifié."""
+async def list_catalogue(db: DbDep, current_user: UserDep):
+    """Tests actifs — tout utilisateur authentifié."""
     tests = await service.get_catalogue(db)
     if not tests:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Aucun test disponible.")
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            detail={"error": True, "message": "Aucun test disponible.", "code": "NOT_FOUND"},
+        )
     return tests
 
 
@@ -49,29 +53,38 @@ async def get_questions(
 
 
 @router.post("/submit", response_model=TestResultOut, status_code=201)
+@limiter.limit("30/minute")
 async def submit_test(
+    request: Request,               # requis par slowapi
     payload: SubmitTestIn,
     background_tasks: BackgroundTasks,
     db: DbDep,
-    current_crew: CrewDep,      # v2 : le marin qui soumet
+    current_crew: CrewDep,          # v2 : le marin qui soumet
 ):
     """
     Traite les réponses, calcule les scores.
     Synchrone  : scoring + sauvegarde + refresh psychometric_snapshot
     Background : refresh vessel_snapshot + fleet_snapshot
+    Rate-limit : 30 req/minute par IP.
     """
     try:
         return await service.submit_and_score(
             db=db,
-            crew=current_crew,          # v2 : CrewProfile complet
+            crew=current_crew,
             test_id=payload.test_id,
             responses=payload.responses,
             background_tasks=background_tasks,
         )
     except ValueError as e:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, str(e))
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            detail={"error": True, "message": str(e), "code": "VALIDATION_ERROR"},
+        )
     except PermissionError as e:
-        raise HTTPException(status.HTTP_403_FORBIDDEN, str(e))
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            detail={"error": True, "message": str(e), "code": "FORBIDDEN"},
+        )
 
 
 # ── Résultats (lecture) ────────────────────────────────────

@@ -1,9 +1,13 @@
+import "../global.css";
 import { useEffect } from "react";
-import { Stack, useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { restoreSession } from "@/features/auth/lib";
 import { useAuthStore } from "@/features/auth/store";
+
+// Note: expo-router gère SplashScreen.preventAutoHideAsync() / hideAsync()
+// automatiquement — ne pas l'appeler manuellement ici pour éviter les conflits.
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -18,30 +22,33 @@ const queryClient = new QueryClient({
   },
 });
 
-function AuthGuard() {
-  const router = useRouter();
-  const { isAuthenticated, isRestoringSession, setRestoringSession, setAuthenticated } =
-    useAuthStore();
+export default function RootLayout() {
+  const { setAuthenticated, setRestoringSession } = useAuthStore();
 
   useEffect(() => {
-    restoreSession().then((ok) => {
-      setAuthenticated(ok);
+    // Timeout de sécurité : si SecureStore ou le réseau hang,
+    // on force la navigation vers login après 4s
+    const fallback = setTimeout(() => {
+      setAuthenticated(false);
       setRestoringSession(false);
-      if (!ok) {
-        router.replace("/(auth)/login");
-      }
-    });
+    }, 4000);
+
+    restoreSession()
+      .then((ok) => {
+        setAuthenticated(ok);
+        setRestoringSession(false);
+      })
+      .catch(() => {
+        setAuthenticated(false);
+        setRestoringSession(false);
+      })
+      .finally(() => clearTimeout(fallback));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return null;
-}
-
-export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <StatusBar style="light" backgroundColor="#07090F" />
-      <AuthGuard />
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: "#07090F" },
@@ -51,6 +58,7 @@ export default function RootLayout() {
           animation: "slide_from_right",
         }}
       >
+        <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(candidate)" options={{ headerShown: false }} />
       </Stack>

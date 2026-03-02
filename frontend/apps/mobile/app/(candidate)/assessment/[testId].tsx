@@ -8,6 +8,7 @@ import {
 import { useLocalSearchParams, Stack } from "expo-router";
 import { useTakeTest } from "@/features/assessment/hooks/useTakeTest";
 import { LikertQuestion } from "@/features/assessment/components/LikertQuestion";
+import { ForcedChoiceQuestion } from "@/features/assessment/components/ForcedChoiceQuestion";
 
 export default function TakeTestScreen() {
   const { testId } = useLocalSearchParams<{ testId: string }>();
@@ -28,7 +29,7 @@ export default function TakeTestScreen() {
   if (isLoading || !questions) {
     return (
       <View className="flex-1 bg-bg-primary items-center justify-center">
-        <ActivityIndicator color="#0EA5E9" size="large" />
+        <ActivityIndicator color="#4A90B8" size="large" />
         <Text className="text-muted mt-3">Loading questions…</Text>
       </View>
     );
@@ -53,7 +54,7 @@ export default function TakeTestScreen() {
         {/* Progress bar */}
         <View className="h-1 bg-bg-border">
           <View
-            style={{ width: `${progress * 100}%`, backgroundColor: "#0EA5E9" }}
+            style={{ width: `${progress * 100}%`, backgroundColor: "#4A90B8" }}
             className="h-full"
           />
         </View>
@@ -67,14 +68,24 @@ export default function TakeTestScreen() {
           </Text>
 
           <Text className="text-text-primary text-xl font-medium leading-relaxed mb-8">
-            {question?.text}
+            {question?.question_type === "forced_choice"
+              ? "Which of these statements best describes you?"
+              : question?.text}
           </Text>
 
-          <LikertQuestion
-            question={question}
-            selectedValue={responses[question?.id ?? 0]}
-            onSelect={selectAnswer}
-          />
+          {question?.question_type === "forced_choice" ? (
+            <ForcedChoiceQuestion
+              question={question}
+              selectedValue={responses[question?.id ?? 0]}
+              onSelect={selectAnswer}
+            />
+          ) : (
+            <LikertQuestion
+              question={question}
+              selectedValue={responses[question?.id ?? 0]}
+              onSelect={selectAnswer}
+            />
+          )}
         </ScrollView>
 
         {/* Bottom nav */}

@@ -46,7 +46,11 @@ Login → Dashboard flotte (liste yachts)
 ### Candidat (mobile)
 ```
 Login → Profil (Big Five, expériences)
-      → Assessment (catalogue tests → passation → résultats)
+      → Assessment
+            ├── Catalogue (TestCard — Likert / T-IRT)
+            ├── Passation Likert  ([testId] → LikertQuestion → ResultRing)
+            ├── Passation T-IRT   ([testId] → ForcedChoiceQuestion → TirtResultDetail)
+            └── Résultats         (result.tsx — conditionnel selon test_type)
       → Applications (candidatures en cours)
 ```
 
@@ -83,7 +87,16 @@ Login → Profil (Big Five, expériences)
 - **Sociogramme 3D** : nœuds et arêtes doivent être lisibles sur fond sombre. Labels non superposés. Mode simulation visuellement distinct (candidat en violet, arêtes virtuelles en pointillés).
 - **Scores psychométriques** : visualisation des scores DNRE/MLPSM → utiliser les couleurs du sociogramme (vert/orange/rouge). Pas de barres de progression standard.
 - **Contexte professionnel** : pas d'emojis, pas d'animations gadgets. Animations uniquement si elles ont un sens informationnel (ex: pulsation des nœuds ∝ score).
-- **Mobile assessment** : questions Likert → radio buttons bien espacés (44px). Timer visible mais non anxiogène.
+- **Mobile assessment Likert** : radio buttons bien espacés (44px). Timer visible mais non anxiogène.
+- **Mobile assessment T-IRT (forced choice)** :
+  - **Jamais de label de domaine** pendant la passation (ex : "C · Conscientiousness") — biais de désirabilité sociale confirmé. Les cartes affichent uniquement le texte de l'item.
+  - Deux cartes verticales (left / right) — `minHeight: 72px` (WCAG touch target). État sélectionné : bordure et fond `brand-primary/10`.
+  - Le texte de la question est toujours générique : *"Which of these statements best describes you?"* — jamais l'identifiant de paire technique (ex : "P01").
+- **Résultats T-IRT (profil Big Five)** :
+  - Afficher le titre "Your Big Five profile" à la place du `ResultRing` (qui montrerait un score 0 rouge trompeur).
+  - Barres OCEAN : couleurs issues de `colors.sociogram.*` (`@harmony/ui`) — excellent/good/moderate/weak selon le percentile. Hauteur `h-3` (12px).
+  - Percentile affiché arrondi à l'entier (`P72`). Z-score affiché avec signe (`+0.6`, `-1.2`).
+  - Badge de fiabilité : vert (`colors.sociogram.excellent`) si `se ≤ 0.3`, ambre (`colors.warning`) si `se > 0.3`. Toujours visible.
 
 ---
 

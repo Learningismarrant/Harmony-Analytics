@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { assessmentApi, queryKeys } from "@harmony/api";
 import type { ResponseIn } from "@harmony/types";
+import { useLastResultStore } from "@/features/assessment/store/useLastResultStore";
 
 export function useTakeTest(testId: number) {
   const router = useRouter();
@@ -35,6 +36,7 @@ export function useTakeTest(testId: number) {
       return assessmentApi.submit({ test_id: testId, responses: responseList });
     },
     onSuccess: (result) => {
+      useLastResultStore.getState().setLastResult(result);
       queryClient.invalidateQueries({ queryKey: queryKeys.assessment.myResults() });
       queryClient.invalidateQueries({ queryKey: queryKeys.identity.fullProfile(0) });
       router.replace(`/(candidate)/assessment/result?score=${Math.round(result.global_score)}`);

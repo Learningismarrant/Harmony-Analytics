@@ -5,12 +5,14 @@ const TEST_ICONS: Record<string, string> = {
   likert: "◈",
   cognitive: "⊞",
   free: "✎",
+  tirt: "⬡",
 };
 
 const TEST_DURATION: Record<string, string> = {
   likert: "~15 min",
   cognitive: "~20 min",
   free: "~10 min",
+  tirt: "~25 min",
 };
 
 interface TestCardProps {
@@ -53,11 +55,15 @@ export function TestCard({ test, isCompleted, onPress }: TestCardProps) {
 
           <View className="flex-row items-center gap-3">
             <Text className="text-xs text-muted">
-              ⏱ {TEST_DURATION[test.test_type] ?? "~15 min"}
+              {TEST_DURATION[test.test_type] ?? "~15 min"}
             </Text>
-            <Text className="text-xs text-muted">
-              {test.max_score_per_question} pts/question
-            </Text>
+            {test.test_type === "tirt" ? (
+              <Text className="text-xs text-muted">Big Five · Forced choice</Text>
+            ) : (
+              <Text className="text-xs text-muted">
+                {test.max_score_per_question} pts/question
+              </Text>
+            )}
           </View>
         </View>
       </View>

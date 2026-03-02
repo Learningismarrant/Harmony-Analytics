@@ -42,7 +42,7 @@ export type DepartureReason =
   | "external"
   | "unknown";
 
-export type TestType = "likert" | "cognitive" | "free";
+export type TestType = "likert" | "cognitive" | "free" | "tirt";
 
 export type NiveauScore = "Faible" | "Moyen" | "Élevé";
 
@@ -183,12 +183,22 @@ export interface TestInfoOut {
   test_type: TestType;
 }
 
+/** Option d'une question forced_choice (T-IRT). */
+export interface ForcedChoiceOption {
+  side: "left" | "right";
+  ipip_id: string;
+  domain: "O" | "C" | "E" | "A" | "N";
+  facet: string;
+  score_weight: 1 | -1;
+  text: { fr: string; en: string };
+}
+
 export interface QuestionOut {
   id: number;
   test_id: number;
   text: string;
   question_type: TestType;
-  options: string[] | null;
+  options: (string | ForcedChoiceOption)[] | null;
   trait: string | null;
 }
 
@@ -215,6 +225,22 @@ export interface ReliabilityOut {
   social_desirability_flag: boolean;
 }
 
+/** Détail d'un domaine Big Five dans un résultat T-IRT (z-score + percentile). */
+export interface TirtTraitDetail {
+  z_score: number;
+  percentile: number;
+}
+
+/** Section `tirt_detail` présente dans `TestResultOut.scores` pour les tests de type "tirt". */
+export interface TirtDetail {
+  O?: TirtTraitDetail;
+  C?: TirtTraitDetail;
+  E?: TirtTraitDetail;
+  A?: TirtTraitDetail;
+  N?: TirtTraitDetail;
+  reliability_index: number;
+}
+
 export interface TestResultOut {
   id: number;
   test_id: number;
@@ -229,6 +255,7 @@ export interface TestResultOut {
       total_time_seconds: number;
       avg_seconds_per_question: number;
     };
+    tirt_detail?: TirtDetail;
   };
   created_at: string;
 }

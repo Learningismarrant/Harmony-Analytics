@@ -8,6 +8,13 @@ import { useTakeTest } from "./useTakeTest";
 const mockGetQuestions = jest.fn();
 const mockSubmit = jest.fn();
 const mockRouterReplace = jest.fn();
+const mockSetLastResult = jest.fn();
+
+jest.mock("@/features/assessment/store/useLastResultStore", () => ({
+  useLastResultStore: {
+    getState: () => ({ setLastResult: mockSetLastResult }),
+  },
+}));
 
 jest.mock("@harmony/api", () => ({
   assessmentApi: {

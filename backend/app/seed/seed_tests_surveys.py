@@ -416,6 +416,10 @@ def _gca_scores(profile_key: str, questions: list) -> dict:
 async def seed(db: AsyncSession) -> None:
     print("🧪 Seed tests & surveys démarré...")
 
+    # ── CUTTY SARK T-IRT (idempotent, commit interne) ─────────────────────────
+    from app.seed.CUTTY_SARK import seed_cutty_sark
+    await seed_cutty_sark(db)
+
     # ── Récupérer les crew_profiles depuis la DB ───────────────────────────────
     r = await db.execute(
         select(CrewProfile, User)

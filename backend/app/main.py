@@ -8,7 +8,11 @@ Architecture : modules verticaux quasi-autonomes + engine transversal.
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
 from app.core.config import settings
+from app.shared.limiter import limiter
 
 from app.modules.auth.router        import router as auth_router
 from app.modules.assessment.router  import router as assessment_router
@@ -24,6 +28,8 @@ app = FastAPI(
     version="2.0.0",
     docs_url="/docs" if settings.DEBUG else None,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,

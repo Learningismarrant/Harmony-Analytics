@@ -21,6 +21,7 @@ Couverture :
         - Accès autorisé → retourne liste
 """
 import pytest
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import BackgroundTasks
 
@@ -139,6 +140,81 @@ class TestSubmitAndScore:
         assert bt.add_task.call_count == 1
         call_args = bt.add_task.call_args[0]
         assert call_args[0] == service._propagate_to_vessel_and_fleet
+
+
+class TestSubmitAndScoreTirt:
+    """Tests du chemin T-IRT (test_type='tirt') dans submit_and_score."""
+
+    @pytest.mark.asyncio
+    async def test_tirt_succes_appelle_calculate_tirt_scores(self, mocker):
+        db = AsyncMock()
+        crew = make_crew_profile(id=5)
+        bt = MagicMock(spec=BackgroundTasks)
+
+        test_info = make_test_catalogue(id=3, test_type="tirt", max_score_per_question=1)
+        # Question forced_choice avec options JSON
+        q = make_question(
+            id=1, test_id=3, question_type="forced_choice",
+            options=[
+                {"side": "left",  "ipip_id": "C1_5",  "domain": "C", "facet": "C1", "score_weight": 1,
+                 "text": {"fr": "Je mène mes missions."}},
+                {"side": "right", "ipip_id": "A3_76", "domain": "A", "facet": "A3", "score_weight": 1,
+                 "text": {"fr": "J'anticipe les besoins."}},
+            ],
+            trait="C_vs_A",
+        )
+        saved = make_test_result(id=20, crew_profile_id=5, global_score=74.0)
+
+        mock_tirt_scores = {
+            "traits": {
+                "conscientiousness": {"score": 88.0, "niveau": "Élevé"},
+                "agreeableness":     {"score": 72.0, "niveau": "Élevé"},
+                "neuroticism":       {"score": 28.0, "niveau": "Faible"},
+                "openness":          {"score": 65.0, "niveau": "Moyen"},
+                "extraversion":      {"score": 60.0, "niveau": "Moyen"},
+            },
+            "global_score": 74.0,
+            "reliability": {"is_reliable": True, "reasons": []},
+            "meta": {"total_time_seconds": 285, "avg_seconds_per_question": 4.75},
+            "tirt_detail": {"C": {"z_score": 1.18, "percentile": 88.1}, "reliability_index": 0.87},
+        }
+
+        mocker.patch("app.modules.assessment.service.repo.get_test_info",      AsyncMock(return_value=test_info))
+        mocker.patch("app.modules.assessment.service.repo.get_questions_by_test", AsyncMock(return_value=[q]))
+        mocker.patch("app.modules.assessment.service.repo.save_result",        AsyncMock(return_value=saved))
+        mocker.patch("app.modules.assessment.service.repo.get_results_by_crew", AsyncMock(return_value=[saved]))
+        mocker.patch("app.modules.assessment.service.repo.update_crew_snapshot", AsyncMock())
+        mock_tirt = mocker.patch(
+            "app.modules.assessment.service.calculate_tirt_scores",
+            return_value=mock_tirt_scores,
+        )
+
+        responses = [SimpleNamespace(question_id=1, valeur_choisie="left", seconds_spent=4.75)]
+        result = await service.submit_and_score(db, crew, test_id=3, responses=responses, background_tasks=bt)
+
+        assert result == saved
+        mock_tirt.assert_called_once()
+
+    @pytest.mark.asyncio
+    async def test_tirt_value_error_propage(self, mocker):
+        db = AsyncMock()
+        crew = make_crew_profile(id=5)
+        bt = MagicMock(spec=BackgroundTasks)
+
+        test_info = make_test_catalogue(id=3, test_type="tirt")
+        mocker.patch("app.modules.assessment.service.repo.get_test_info",         AsyncMock(return_value=test_info))
+        mocker.patch("app.modules.assessment.service.repo.get_questions_by_test", AsyncMock(return_value=[]))
+        mocker.patch(
+            "app.modules.assessment.service.calculate_tirt_scores",
+            side_effect=ValueError("Paramètres IPIP introuvables"),
+        )
+
+        with pytest.raises(ValueError, match="Paramètres IPIP introuvables"):
+            await service.submit_and_score(
+                db, crew, test_id=3,
+                responses=[SimpleNamespace(question_id=1, valeur_choisie="left", seconds_spent=4.0)],
+                background_tasks=bt,
+            )
 
 
 class TestGetResultsForCrew:
