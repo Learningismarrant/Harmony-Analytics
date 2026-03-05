@@ -8,21 +8,29 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Maritime dark theme — desaturated, refined
+        // Harmony maritime theme — navy + teak + silver
         bg: {
-          primary:   "#07090F",
-          secondary: "#0B1018",
-          elevated:  "#101720",
-          border:    "#1A2634",
+          primary:   "#0D1B2A",   // ocean base — below navy
+          secondary: "#1A2C42",   // navy — panels, sidebars
+          elevated:  "#243347",   // cards, modals — lighter navy
+          border:    "#1E3050",   // barely-there borders
         },
         brand: {
-          primary:   "#4A90B8",   // maritime steel blue
-          secondary: "#50528A",   // muted slate-indigo
-          glow:      "#6AAFCC",   // lighter steel for hover
-          gold:      "#A8864A",   // champagne bronze
+          primary:   "#A67C52",   // teak — prestige CTAs
+          secondary: "#94A3B8",   // silver — secondary actions
+          glow:      "#C4945C",   // teak light — hover / active
+          gold:      "#A67C52",   // alias: teak = new gold
         },
-        muted:         "#5A7890",
-        "text-primary": "#C8D8E4",
+        muted:          "#94A3B8",  // silver
+        "text-primary": "#F1F4F8",  // ice
+        navy:    "#1A2C42",
+        teak:    "#A67C52",
+        silver:  "#94A3B8",
+        ice:     "#F1F4F8",
+        slate:   "#718096",
+        success: "#5A8279",
+        error:   "#9C6B6B",
+        warning: "#A68D6A",
       },
       fontFamily: {
         sans: ["Inter", "system-ui", "sans-serif"],
@@ -44,17 +52,17 @@ const config: Config = {
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
         pulseGlow: {
-          "0%, 100%": { boxShadow: "0 0 8px rgba(74, 144, 184, 0.2)" },
-          "50%":      { boxShadow: "0 0 20px rgba(74, 144, 184, 0.4)" },
+          "0%, 100%": { boxShadow: "0 0 8px rgba(166, 124, 82, 0.2)" },
+          "50%":      { boxShadow: "0 0 20px rgba(166, 124, 82, 0.4)" },
         },
       },
       backgroundImage: {
-        "ocean-gradient": "radial-gradient(ellipse at top, #0D1B2A 0%, #07090F 70%)",
-        "card-gradient":  "linear-gradient(135deg, #0B1018 0%, #101720 100%)",
+        "ocean-gradient": "radial-gradient(ellipse at top, #1A2C42 0%, #0D1B2A 70%)",
+        "card-gradient":  "linear-gradient(135deg, #1A2C42 0%, #243347 100%)",
       },
       boxShadow: {
-        "brand-glow": "0 0 16px rgba(74, 144, 184, 0.15)",
-        "card":       "0 1px 3px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(26, 38, 52, 0.9)",
+        "brand-glow": "0 0 16px rgba(166, 124, 82, 0.18)",
+        "card":       "0 1px 3px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(30, 48, 80, 0.9)",
       },
     },
   },

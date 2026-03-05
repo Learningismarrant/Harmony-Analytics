@@ -64,6 +64,17 @@ export function useTakeTest(testId: number) {
     }
   }
 
+  /** Sélectionne une réponse et avance automatiquement à la paire suivante.
+   *  Conçu pour l'UX swipe T-IRT — appeler depuis onChoose de SwipePairCard.
+   *  Sur la dernière question, ne soumet pas automatiquement (l'utilisateur
+   *  confirme via handleSubmit pour éviter les soumissions accidentelles). */
+  function selectAndAdvance(questionId: number, value: string) {
+    selectAnswer(questionId, value);
+    if (questions && currentIndex < questions.length - 1) {
+      setCurrentIndex((i) => i + 1);
+    }
+  }
+
   function handleSubmit() {
     const unanswered = questions?.filter((q) => !responses[q.id]).length ?? 0;
     if (unanswered > 0) {
@@ -87,6 +98,7 @@ export function useTakeTest(testId: number) {
     responses,
     submitMutation,
     selectAnswer,
+    selectAndAdvance,
     goNext,
     goPrev,
     handleSubmit,

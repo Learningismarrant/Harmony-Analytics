@@ -44,6 +44,9 @@ export type DepartureReason =
 
 export type TestType = "likert" | "cognitive" | "free" | "tirt";
 
+/** Type d'une question individuelle (distinct du type de catalogue). */
+export type QuestionType = "likert" | "forced_choice" | "qcm" | "multiple_choice" | string;
+
 export type NiveauScore = "Faible" | "Moyen" | "Élevé";
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
@@ -197,7 +200,7 @@ export interface QuestionOut {
   id: number;
   test_id: number;
   text: string;
-  question_type: TestType;
+  question_type: QuestionType;
   options: (string | ForcedChoiceOption)[] | null;
   trait: string | null;
 }

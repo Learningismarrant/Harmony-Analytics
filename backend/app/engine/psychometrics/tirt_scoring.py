@@ -1,6 +1,6 @@
 # app/engine/psychometrics/tirt_scoring.py
 """
-T-IRT Scoring Engine pour l'assessment CUTTY SARK.
+T-IRT Scoring Engine pour l'assessment HEXACO
 
 Implémente la Théorie de Réponse aux Items Thurstonienne (T-IRT)
 selon Brown & Maydeu-Olivares (2011) avec estimation MAP.

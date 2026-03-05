@@ -1,4 +1,4 @@
-/// <reference types="nativewind/types" />
+/// <reference types="react-native-css-interop/types" />
 
 // NativeWind v4 augments React Native component types to accept className.
 // react-native-css-interop/types.d.ts lives in the monorepo root node_modules

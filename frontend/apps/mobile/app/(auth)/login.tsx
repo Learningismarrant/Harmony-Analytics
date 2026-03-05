@@ -7,12 +7,15 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { authApi } from "@harmony/api";
 import { useAuthStore } from "@/features/auth/store";
 import { saveRefreshToken } from "@/features/auth/lib";
+import { AuthFooter } from "@/features/auth/AuthFooter";
+import { AuthHeader } from "@/features/auth/AuthHeader";
 import type { UserRole } from "@harmony/types";
 
 export default function LoginScreen() {
@@ -61,17 +64,16 @@ export default function LoginScreen() {
       <View className="flex-1 justify-center px-6">
         {/* Logo */}
         <View className="items-center mb-10">
-          <View className="w-14 h-14 rounded-full bg-brand-primary/20 border border-brand-primary/40 items-center justify-center mb-3">
-            <Text className="text-brand-primary font-bold text-2xl">H</Text>
-          </View>
-          <Text className="text-text-primary text-2xl font-bold">Harmony</Text>
-          <Text className="text-muted text-sm mt-1">Candidate portal</Text>
+          
+          <AuthHeader title="HARMONY" subtitle="Yachting Assessment Center" />
         </View>
 
         {/* Form */}
         <View className="space-y-4">
           <View>
-            <Text className="text-muted text-sm mb-1.5">Email</Text>
+            <Text className="text-muted text-xs mb-1.5 tracking-widest uppercase">
+              Email
+            </Text>
             <TextInput
               className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-3
                          text-text-primary text-base"
@@ -86,7 +88,9 @@ export default function LoginScreen() {
           </View>
 
           <View>
-            <Text className="text-muted text-sm mb-1.5">Password</Text>
+            <Text className="text-muted text-xs mb-1.5 tracking-widest uppercase">
+              Password
+            </Text>
             <TextInput
               className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-3
                          text-text-primary text-base"
@@ -105,9 +109,11 @@ export default function LoginScreen() {
             style={{ opacity: loading ? 0.6 : 1 }}
           >
             {loading ? (
-              <ActivityIndicator color="#07090F" />
+              <ActivityIndicator color="#0D1B2A" />
             ) : (
-              <Text className="text-bg-primary font-semibold text-base">Sign in</Text>
+              <Text className="text-bg-primary font-semibold text-base tracking-widest uppercase">
+                Sign in
+              </Text>
             )}
           </TouchableOpacity>
 
@@ -115,11 +121,15 @@ export default function LoginScreen() {
           <View className="flex-row justify-center mt-2">
             <Text className="text-muted text-sm">No account yet? </Text>
             <TouchableOpacity onPress={() => router.replace("/(auth)/register")}>
-              <Text className="text-brand-primary text-sm font-medium">Create one</Text>
+              <Text className="text-brand-secondary text-sm font-medium">
+                Create one
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
       </View>
+
+      <AuthFooter />
     </KeyboardAvoidingView>
   );
 }

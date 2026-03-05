@@ -38,20 +38,29 @@ Usage :
     (après seed_environment)
 """
 import asyncio
+import sys
 import random
 from datetime import datetime, timezone, timedelta
+
+# Force UTF-8 output on Windows (cp1252 can't encode emoji)
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8")
 from typing import Dict, List
 
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy import select
 
 from app.core.config import settings
+from app.core.database import Base
 from app.shared.models import DailyPulse, Yacht, CrewAssignment,CrewProfile, User, Survey, SurveyResponse, TestCatalogue, Question, TestResult
+from app.seed.seed_environment import seed as seed_environment
 
 engine = create_async_engine(settings.DATABASE_URL, echo=False)
 AsyncSessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 
 random.seed(42)   # Reproductible
+
+
 
 
 # ── Helpers temporels ──────────────────────────────────────────────────────────
@@ -809,6 +818,17 @@ async def seed(db: AsyncSession) -> None:
 
 
 async def main():
+    print("[seed] Nettoyage de la base de donnees...")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+    print("[seed] Creation des nouvelles tables...")
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    async with AsyncSessionLocal() as db:
+        await seed_environment(db)
+
     async with AsyncSessionLocal() as db:
         await seed(db)
 

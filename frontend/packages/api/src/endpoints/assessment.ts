@@ -12,7 +12,7 @@ export const assessmentApi = {
 
   /** Get questions for a specific test */
   getQuestions: (testId: number) =>
-    get<QuestionOut[]>(`/assessments/tests/${testId}/questions`),
+    get<QuestionOut[]>(`/assessments/${testId}/questions`),
 
   /** Submit a completed test */
   submit: (body: SubmitTestIn) =>

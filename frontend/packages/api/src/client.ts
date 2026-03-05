@@ -46,7 +46,10 @@ export function clearAccessToken(): void {
 
 // ── Axios instance ────────────────────────────────────────────────────────────
 
-const BASE_URL = process.env["NEXT_PUBLIC_API_URL"] ?? "http://localhost:8000";
+const BASE_URL =
+  process.env.EXPO_PUBLIC_API_URL ??
+  process.env.NEXT_PUBLIC_API_URL ??
+  "http://localhost:8000";
 
 export const apiClient = axios.create({
   baseURL: BASE_URL,

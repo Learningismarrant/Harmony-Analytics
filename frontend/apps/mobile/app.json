@@ -1,14 +1,14 @@
 {
   "expo": {
     "name": "Harmony",
-    "slug": "harmony-candidate",
+    "slug": "harmony-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "harmony",
     "userInterfaceStyle": "dark",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#07090F"
     },
@@ -22,7 +22,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundColor": "#07090F"
       },
       "package": "com.harmony.candidate",
@@ -42,9 +42,6 @@
     "extra": {
       "router": {
         "origin": false
-      },
-      "eas": {
-        "projectId": "YOUR_EAS_PROJECT_ID"
       }
     }
   }

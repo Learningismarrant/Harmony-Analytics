@@ -6,8 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { restoreSession } from "@/features/auth/lib";
 import { useAuthStore } from "@/features/auth/store";
 
-// Note: expo-router gère SplashScreen.preventAutoHideAsync() / hideAsync()
-// automatiquement — ne pas l'appeler manuellement ici pour éviter les conflits.
+
 
 const queryClient = new QueryClient({
   defaultOptions: {

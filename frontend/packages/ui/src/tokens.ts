@@ -1,41 +1,45 @@
 /**
- * Design tokens — Harmony dark maritime theme
+ * Design tokens — Harmony maritime theme
  *
- * Palette philosophy: deep desaturated navy, weathered brass as prestige accent.
- * Color is reserved for data meaning — never decorative.
+ * Palette philosophy: deep navy as the ocean floor, teak as a prestige anchor,
+ * silver as a cool titanium accent. Color is reserved for data meaning — never decorative.
  * Contrast is calibrated to feel refined, not harsh.
+ *
+ * Primary:   Navy  #1A2C42  +  White / Ice #F1F4F8
+ * Secondary: Silver #94A3B8
+ * Third:     Teak  #A67C52
  */
 
 export const colors = {
-  // ── Background ──────────────────────────────────────────
+  // ── Background — navy depths ─────────────────────────────
   bg: {
-    primary:   "#07090F",    // ocean depth — near-black
-    secondary: "#0B1018",    // panel backgrounds
-    elevated:  "#101720",    // cards, modals, sidebars
-    border:    "#1A2634",    // barely-there borders
+    primary:   "#0D1B2A",    // ocean base — below navy
+    secondary: "#1A2C42",    // navy — panels, sidebars
+    elevated:  "#243347",    // cards, modals — lighter navy
+    border:    "#1E3050",    // barely-there borders
   },
 
-  // ── Brand ───────────────────────────────────────────────
+  // ── Brand ────────────────────────────────────────────────
   brand: {
-    primary:   "#4A90B8",    // maritime steel blue (desaturated from #0EA5E9)
-    secondary: "#50528A",    // muted slate-indigo
-    glow:      "#6AAFCC",    // lighter steel for hover/active
-    gold:      "#A8864A",    // champagne bronze — prestige accent
+    primary:   "#A67C52",    // teak wood — prestige CTAs
+    secondary: "#94A3B8",    // silver titanium — secondary actions
+    glow:      "#C4945C",    // teak light — hover / active glow
+    gold:      "#A67C52",    // alias: teak = new gold
   },
 
-  // ── Text ────────────────────────────────────────────────
+  // ── Text ─────────────────────────────────────────────────
   text: {
-    primary:   "#C8D8E4",    // soft cool white (less stark than near-white)
-    secondary: "#5A7890",    // recessed label text
-    disabled:  "#2D4358",    // disabled state
-    inverse:   "#07090F",    // on bright backgrounds
+    primary:   "#F1F4F8",    // ice — main readable text
+    secondary: "#CBD5E1",    // silverLight — recessed labels
+    disabled:  "#4A6070",    // disabled state
+    inverse:   "#0D1B2A",    // on bright backgrounds (ice / white)
   },
 
-  // ── Semantic — fully desaturated, convey meaning without screaming ────────
-  success: "#2E7A52",        // deep muted emerald
-  warning: "#9A7230",        // weathered brass
-  danger:  "#884040",        // deep muted crimson
-  info:    "#287890",        // deep muted teal
+  // ── Semantic — desaturated, convey meaning precisely ─────
+  success: "#5A8279",        // eucalyptus green
+  warning: "#A68D6A",        // warm ocre
+  danger:  "#9C6B6B",        // muted terracotta
+  info:    "#4A789A",        // muted maritime blue
 
   // ── Sociogram node/edge colors ───────────────────────────
   sociogram: {
@@ -43,13 +47,13 @@ export const colors = {
     good:       "#5A8A30",   // muted sage      (dyad 65–80)
     moderate:   "#9A7030",   // weathered brass (dyad 45–65)
     weak:       "#883838",   // muted crimson   (dyad < 45)
-    node:       "#1A3A60",   // deep navy node fill
-    nodeGlow:   "#4A90B8",   // matches brand primary
-    edge:       "#1A2634",   // low-compatibility edge (same as border)
+    node:       "#1A2C42",   // navy node fill
+    nodeGlow:   "#A67C52",   // teak glow — nodes stand out on navy bg
+    edge:       "#1E3050",   // low-compatibility edge (border)
     candidate:  "#7850A8",   // muted amethyst for simulated candidate
   },
 
-  // ── Score level colors (slightly lighter for readability in UI) ──────────
+  // ── Score level colors ───────────────────────────────────
   score: {
     high:   "#3D9A6A",       // readable muted emerald
     medium: "#A88540",       // readable brass
@@ -100,16 +104,16 @@ export const typography = {
 
 /** Three.js hex integers — use with THREE.Color */
 export const threeColors = {
-  nodeFill:      0x1a3a60,   // deep navy
-  nodeGlow:      0x4a90b8,   // maritime steel blue
+  nodeFill:      0x1a2c42,   // navy node fill
+  nodeGlow:      0xa67c52,   // teak glow — warm prestige on navy
   edgeExcellent: 0x2e8a5c,   // muted emerald
   edgeGood:      0x5a8a30,   // muted sage
   edgeModerate:  0x9a7030,   // weathered brass
   edgeWeak:      0x883838,   // muted crimson
   candidateNode: 0x7850a8,   // muted amethyst
-  background:    0x07090f,
-  fog:           0x0b1018,
-  ambient:       0x1a2634,
+  background:    0x0d1b2a,   // ocean base
+  fog:           0x1a2c42,   // navy fog
+  ambient:       0x1e3050,   // subtle ambient
 } as const;
 
 /** Dyad score → hex color for edge rendering */

@@ -8,12 +8,15 @@ import {
   Alert,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
 import { authApi } from "@harmony/api";
 import { useAuthStore } from "@/features/auth/store";
 import { saveRefreshToken } from "@/features/auth/lib";
+import { AuthFooter } from "@/features/auth/AuthFooter";
+import { AuthHeader } from "@/features/auth/AuthHeader";
 import type { UserRole, YachtPosition } from "@harmony/types";
 
 const POSITIONS: YachtPosition[] = [
@@ -105,11 +108,7 @@ export default function RegisterScreen() {
       >
         {/* Logo */}
         <View className="items-center mb-8 mt-8">
-          <View className="w-14 h-14 rounded-full bg-brand-primary/20 border border-brand-primary/40 items-center justify-center mb-3">
-            <Text className="text-brand-primary font-bold text-2xl">H</Text>
-          </View>
-          <Text className="text-text-primary text-2xl font-bold">Create account</Text>
-          <Text className="text-muted text-sm mt-1">Join Harmony as a crew member</Text>
+          <AuthHeader title="HARMONY" subtitle="Create your account" />
         </View>
 
         {/* Form */}
@@ -233,11 +232,12 @@ export default function RegisterScreen() {
           <View className="flex-row justify-center mt-2">
             <Text className="text-muted text-sm">Already have an account? </Text>
             <TouchableOpacity onPress={() => router.replace("/(auth)/login")}>
-              <Text className="text-brand-primary text-sm font-medium">Sign in</Text>
+              <Text className="text-brand-secondary text-sm font-medium">Sign in</Text>
             </TouchableOpacity>
           </View>
         </View>
       </ScrollView>
+      <AuthFooter />
     </KeyboardAvoidingView>
   );
 }
