@@ -239,25 +239,196 @@ SME_PROFILES: dict[str, dict] = {
         },
         "cognitive": {"logical": 80, "verbal": 70, "numerical": 75},
     },
+
+    # ── Nouveaux postes (phase alpha) ─────────────────────────────────────────
+
+    "Second Officer": {
+        "personality": {
+            "conscientiousness": 88, "neuroticism": 22, "extraversion": 65,
+            "agreeableness": 72, "openness": 70,
+        },
+        "motivation": {
+            "intrinsic": 82, "identified": 80, "extrinsic_material": 65,
+            "amotivation": 0,
+        },
+        "cognitive": {"logical": 80, "verbal": 78, "numerical": 80},
+    },
+    "3rd Engineer": {
+        "personality": {
+            "conscientiousness": 85, "neuroticism": 20, "extraversion": 42,
+            "agreeableness": 68, "openness": 65,
+        },
+        "motivation": {
+            "intrinsic": 85, "identified": 80, "extrinsic_material": 65,
+            "amotivation": 0,
+        },
+        "cognitive": {"logical": 85, "numerical": 85, "verbal": 62},
+    },
+    "ETO": {
+        "personality": {
+            "conscientiousness": 95, "neuroticism": 15, "extraversion": 38,
+            "agreeableness": 65, "openness": 75,
+        },
+        "motivation": {
+            "intrinsic": 90, "identified": 80, "extrinsic_material": 65,
+            "amotivation": 0,
+        },
+        "cognitive": {"logical": 90, "numerical": 95, "verbal": 65},
+    },
+    "Butler": {
+        "personality": {
+            "conscientiousness": 97, "neuroticism": 18, "extraversion": 78,
+            "agreeableness": 92, "openness": 82,
+        },
+        "motivation": {
+            "intrinsic": 88, "identified": 92, "extrinsic_social": 90,
+            "amotivation": 0,
+        },
+        "cognitive": {"verbal": 92, "logical": 78, "numerical": 68},
+    },
+    "Sous Chef": {
+        "personality": {
+            "conscientiousness": 85, "neuroticism": 38, "extraversion": 48,
+            "agreeableness": 65, "openness": 90,
+        },
+        "motivation": {
+            "intrinsic": 92, "identified": 72, "extrinsic_material": 62,
+            "amotivation": 0,
+        },
+        "cognitive": {"logical": 75, "verbal": 65, "numerical": 70},
+    },
+    "Dive Instructor": {
+        "personality": {
+            "conscientiousness": 88, "neuroticism": 20, "extraversion": 80,
+            "agreeableness": 85, "openness": 88,
+        },
+        "motivation": {
+            "intrinsic": 95, "identified": 80, "extrinsic_social": 82,
+            "amotivation": 0,
+        },
+        "cognitive": {"logical": 78, "verbal": 80, "numerical": 65},
+    },
+    "Medic": {
+        "personality": {
+            "conscientiousness": 95, "neuroticism": 15, "extraversion": 60,
+            "agreeableness": 88, "openness": 72,
+        },
+        "motivation": {
+            "intrinsic": 90, "identified": 88, "extrinsic_social": 75,
+            "amotivation": 0,
+        },
+        "cognitive": {"logical": 88, "verbal": 85, "numerical": 82},
+    },
 }
 
 # Version normalisée (minuscules) pour faciliter la recherche
 JOB_PROFILES_NORM: dict[str, dict] = {k.lower(): v for k, v in SME_PROFILES.items()}
 
 
+# ── Lookup matriciel (position × yacht_type) — Phase alpha ────────────────────
+#
+# Patches appliqués sur le profil générique par type de yacht.
+# Seuls les traits significativement différents sont listés (diff minimal).
+# Clés : (position_lower, yacht_type_lower)  — YachtTypeAlpha.value en minuscules.
+#
+# Calibration SME Phase 0 — à recalibrer en Phase 1 sur données terrain.
+
+SME_MATRIX_PATCHES: dict[tuple[str, str], dict] = {
+
+    # ── Captain ────────────────────────────────────────────────────────────────
+    # Voilier de course : forte précision technique, moins d'interface client
+    ("captain", "sailing_racing"): {
+        "personality": {"conscientiousness": 98, "extraversion": 55, "openness": 85},
+        "motivation":  {"intrinsic": 98, "extrinsic_material": 50},
+        "cognitive":   {"logical": 95},
+    },
+    # Expédition : résilience extrême, autonomie opérationnelle
+    ("captain", "expedition"): {
+        "personality": {"openness": 92, "neuroticism": 12},
+        "motivation":  {"intrinsic": 95, "identified": 92},
+    },
+    # Mégayacht : interaction UHNWI, hiérarchie formelle complexe
+    ("captain", "megayacht"): {
+        "personality": {"extraversion": 82, "conscientiousness": 97},
+        "motivation":  {"extrinsic_material": 70},
+        "cognitive":   {"verbal": 92},
+    },
+
+    # ── Chef ───────────────────────────────────────────────────────────────────
+    # Charter : rotation constante de guests, menus courts préavis
+    ("chef", "charter"): {
+        "personality": {"neuroticism": 45, "extraversion": 62},
+        "motivation":  {"intrinsic": 92, "extrinsic_material": 72},
+    },
+    # Mégayacht : gastronomie formelle, cuisine de prestige
+    ("chef", "megayacht"): {
+        "personality": {"conscientiousness": 95, "openness": 98},
+    },
+
+    # ── Chief Stewardess ───────────────────────────────────────────────────────
+    # Charter : forte rotation guests, adaptabilité sociale maximale
+    ("chief stewardess", "charter"): {
+        "personality": {"extraversion": 90, "neuroticism": 28},
+    },
+    # Mégayacht : protocoles formels stricts, coordination d'équipe étendue
+    ("chief stewardess", "megayacht"): {
+        "personality": {"conscientiousness": 98},
+        "motivation":  {"extrinsic_social": 95},
+    },
+
+    # ── Chief Engineer ─────────────────────────────────────────────────────────
+    # Expédition : fiabilité critique, autosuffisance technique totale
+    ("chief engineer", "expedition"): {
+        "personality": {"conscientiousness": 99},
+        "cognitive":   {"numerical": 98},
+    },
+}
+
+# Lookup normalisé (clés déjà en minuscules)
+_MATRIX_NORM: dict[tuple[str, str], dict] = {
+    (pos, yt): patch for (pos, yt), patch in SME_MATRIX_PATCHES.items()
+}
+
+
+def _deep_merge(base: dict, patch: dict) -> dict:
+    """Retourne une copie de base avec les valeurs de patch appliquées (1 niveau de profondeur)."""
+    merged: dict = {}
+    for category in set(base) | set(patch):
+        base_cat = base.get(category, {})
+        patch_cat = patch.get(category, {})
+        merged[category] = {**base_cat, **patch_cat}
+    return merged
+
+
 # ── Accesseur public ──────────────────────────────────────────────────────────
 
-def get_ideal_profile(position: str) -> Optional[dict]:
+def get_ideal_profile(position: str, yacht_type: Optional[str] = None) -> Optional[dict]:
     """
     Retourne le profil idéal SME pour une position donnée.
 
-    La recherche est case-insensitive.
+    Lookup en 2 étapes :
+    1. Cherche un profil spécifique dans SME_MATRIX_PATCHES pour (position, yacht_type).
+       Si trouvé, applique le patch sur le profil générique.
+    2. Fallback sur le profil générique SME_PROFILES[position].
+
+    La recherche est case-insensitive pour position et yacht_type.
 
     Args:
-        position : YachtPosition.value ou libellé libre (ex: "captain", "Captain")
+        position   : YachtPosition.value ou libellé libre (ex: "captain", "Captain")
+        yacht_type : YachtTypeAlpha.value (ex: "megayacht", "sailing_racing") — optionnel.
+                     Si None ou absent de la matrice, retourne le profil générique.
 
     Returns:
         dict avec les clés "personality", "motivation", "cognitive",
         ou None si le poste n'est pas référencé dans SME_PROFILES.
     """
-    return JOB_PROFILES_NORM.get(position.lower())
+    base = JOB_PROFILES_NORM.get(position.lower())
+    if base is None:
+        return None
+
+    if yacht_type is not None:
+        patch = _MATRIX_NORM.get((position.lower(), yacht_type.lower()))
+        if patch:
+            return _deep_merge(base, patch)
+
+    return base

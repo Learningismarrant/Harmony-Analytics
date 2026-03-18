@@ -1,17 +1,19 @@
-# Harmony Analytics
+# Radiant Analytics — by Fondation Technologies
 
-Plateforme d'analyse psychométrique pour le recrutement et la gestion d'équipage dans l'industrie des superyachts.
+Plateforme psychométrique pour le recrutement et la gestion d'équipage dans l'industrie du yachting de luxe.
+
+> *Nom inspiré du Prime Radiant d'Isaac Asimov — l'instrument qui intègre les équations de la Psychohistoire pour prédire les comportements des civilisations. Nous appliquons la même ambition à l'échelle d'un équipage.*
 
 ---
 
 ## Concept
 
-Harmony résout un problème structurel du secteur : les décisions de recrutement maritime reposent sur le CV et l'intuition, alors que 70 % des conflits et départs anticipés à bord trouvent leur origine dans des incompatibilités psychologiques identifiables.
+Les décisions de recrutement maritime reposent encore sur le CV et l'intuition, alors que 70 % des conflits et départs anticipés à bord trouvent leur origine dans des incompatibilités psychologiques identifiables.
 
-La plateforme fournit :
+Radiant Analytics fournit :
 
-- **Pour le recruteur :** un pipeline de matching en deux étapes (normativité individuelle → fit équipe/environnement) qui classe les candidats par probabilité de succès prédit, visualisé comme une molécule 3D interactive.
-- **Pour le candidat :** un parcours de passation de tests psychométriques sur mobile qui construit son profil et augmente sa visibilité auprès des employeurs.
+- **Pour le recruteur :** un pipeline P-E Fit en 7 dimensions (adéquation personne-poste, personne-équipe, personne-environnement, personne-capitaine…) qui classe les candidats par probabilité de succès prédit, visualisé comme une molécule 3D interactive.
+- **Pour le candidat :** un parcours de passation de tests psychométriques sur mobile (Big Five T-IRT, cognition, valeurs, mobilité, tolérance maritime) qui construit son profil et augmente sa visibilité.
 - **Pour l'armateur :** des métriques d'équipage en continu (F_team, TVI, diagnostic Performance × Cohésion) et un système d'alerte précoce sur les risques de départ ou de conflit.
 
 ---
@@ -22,7 +24,7 @@ La plateforme fournit :
 Harmony/
 ├── backend/        # API FastAPI — logique métier + moteurs psychométriques
 ├── frontend/       # Monorepo Turborepo — dashboard web + app mobile
-└── README.md       # Ce fichier
+└── README.md
 ```
 
 ---
@@ -56,8 +58,6 @@ Harmony/
 | État UI | Zustand v5 |
 | Styles web | Tailwind CSS 3 |
 | Styles mobile | NativeWind 4 |
-| Déploiement web | Vercel |
-| Déploiement mobile | EAS Build (iOS + Android) |
 
 ---
 
@@ -66,11 +66,10 @@ Harmony/
 ```
 ┌─────────────────────┐      ┌─────────────────────┐
 │   apps/web          │      │   apps/mobile        │
-│   Next.js 15        │      │   Expo SDK 52        │
+│   Next.js 15        │      │   Expo SDK 55        │
 │   Employeur         │      │   Candidat           │
 │   (Vercel)          │      │   (EAS Build)        │
 └────────┬────────────┘      └──────────┬───────────┘
-         │                              │
          │  HTTPS + Bearer token        │
          │  Refresh : HttpOnly cookie   │  Refresh : SecureStore
          ▼                              ▼
@@ -79,14 +78,13 @@ Harmony/
 │                                                      │
 │  ┌──────────────────┐   ┌──────────────────────┐    │
 │  │ Modules HTTP     │   │ Engine (calcul pur)  │    │
-│  │ auth · identity  │   │ DNRE · MLPSM         │    │
+│  │ auth · identity  │   │ pe_fit (7 familles)  │    │
 │  │ crew · vessel    │   │ Psychometrics        │    │
 │  │ recruitment      │   │ Benchmarking         │    │
-│  │ assessment       │   │ ML / OLS retrain     │    │
+│  │ assessment       │   │ use_cases            │    │
 │  │ survey           │   └──────────────────────┘    │
 │  └──────────────────┘                               │
 └─────────────────────┬───────────────────────────────┘
-                      │
                       ▼
              PostgreSQL 14+
          (snapshots JSON dénormalisés
@@ -95,37 +93,71 @@ Harmony/
 
 ---
 
-## Moteurs scientifiques
+## Moteur scientifique — P-E Fit
 
-Harmony est construit sur trois moteurs d'analyse orthogonaux. Chaque composant s'appuie sur la littérature de psychologie organisationnelle et de sélection du personnel.
+Radiant Analytics est construit sur le cadre **Person-Environment Fit** (Kristof-Brown et al., 2005) — méta-analyse de 172 études sur 30 ans. L'adéquation est mesurée sur 7 dimensions orthogonales, chacune avec un poids calibré sur la littérature I/O :
 
-### Stage 1 — DNRE
+| Famille | Poids | Question |
+|---|---|---|
+| DA — Demands-Abilities | 0.28 | Le candidat a-t-il les capacités pour les exigences du poste ? |
+| NS — Needs-Supplies | 0.25 | L'environnement répond-il aux besoins du candidat (JD-R) ? |
+| PO — Person-Organisation | 0.18 | Les valeurs du candidat s'alignent-elles avec celles du bord ? |
+| PG — Person-Group | 0.16 | Le candidat est-il compatible avec l'équipe en place ? |
+| PS — Person-Supervisor | 0.13 | Le style de commandement du capitaine correspond-il aux préférences du candidat ? |
+| Physical Fit | 0.05 | Le candidat tolère-t-il les contraintes physiques du milieu maritime ? |
+| Mobility Fit | 0.05 | Le candidat est-il flexible face aux exigences de mobilité ? |
 
-*Is this candidate a valid profile for this position type?*
+**Score global :** `Σ(w_i × PSI_i) / Σ(w_i disponibles)` — renormalisé automatiquement sur les dimensions disponibles. Somme des poids = 1.10 (intentionnel — permet la renormalisation).
 
-Évalue la conformité normative d'un candidat par rapport aux benchmarks du poste (score SME pondéré) et sa position dans le pool courant (percentile dynamique, formule de Tukey). Un filtre de sécurité non-compensatoire bloque les profils à risque sévère avant l'étape 2.
+**PSI (Profile Similarity Index) :** `Score_dim = 1 − |P_norm − E|` — distance absolue entre le profil candidat normalisé et le niveau requis par l'environnement.
 
-### Stage 2 — MLPSM
+### Pipeline de décision
 
-*Will this candidate succeed on this specific yacht with this team?*
+```
+snapshot psychométrique candidat
+        │
+        ▼
+┌─────────────────────────────────────────────────────┐
+│  pe_fit.compute(snapshot, vessel_params,             │
+│                 crew_snapshots, captain_vector)       │
+│                                                      │
+│  ├── DA-Fit  (GCA + C SME-score + safety barrier)   │→ 0.28
+│  ├── NS-Fit  (JD-R Resources/Demands × Resilience)  │→ 0.25
+│  ├── PO-Fit  (CES values PSI — honesty/achiev/…)    │→ 0.18
+│  ├── PG-Fit  (Bell 2007 team formula)               │→ 0.16
+│  ├── PS-Fit  (LMX Euclidean distance)               │→ 0.13
+│  ├── Physical Fit (METS tolerance PSI)              │→ 0.05
+│  └── Mobility Fit (MMFS flexibility PSI)            │→ 0.05
+│                                                      │
+│  global_score = Σ(wᵢ·PSIᵢ) / Σ(wᵢ)                 │
+└─────────────────────────────────────────────────────┘
+        │
+        ▼
+use_cases/
+  ├── recruitment.py  → HIRE / CONDITIONAL / DISQUALIFY
+  ├── management.py   → TEAM_HEALTH + alertes
+  ├── training.py     → GAP_ANALYSIS + plan de développement
+  ├── talent.py       → READINESS par niveau de carrière
+  └── rps.py          → RISK_LEVEL psychosocial
+```
 
-$$\hat{Y} = \beta_1 P_{\text{ind}} + \beta_2 F_{\text{team}} + \beta_3 F_{\text{env}} + \beta_4 F_{\text{lmx}}$$
+### Instruments de mesure
 
-Quatre composantes indépendantes modélisent les causes distinctes d'échec : performance individuelle ($\omega_1 \cdot GCA + \omega_2 \cdot C + \omega_3 \cdot GCA \times C / 100$, avec terme d'interaction activé), dynamiques d'équipe (filtre "jerk", faultline, buffer ES), charge environnementale (JD-R ratio), et alignement capitaine-marin (distance vectorielle LMX). Le score brut passe par une **sigmoïde** centrée à 50 avant présentation.
-
-Les β sont appris par OLS à partir des données réelles (`y_actual` post-hire via surveys) dès que 150 événements de recrutement sont disponibles. Les omegas de P_ind sont injectables depuis la table `JobWeightConfig` sans modification du code.
+| Instrument | Items | Familles alimentées |
+|---|---|---|
+| CUTTY SARK T-IRT (IPIP-120) | 60 paires forced-choice | DA, PG, PS |
+| RMAWS (résilience) | — | DA (safety barrier) |
+| COGIQ (cognition) | — | DA |
+| HMR-24 (motivation) | 24 Likert | NS, DA |
+| CES Values (Ravlin & Meglino 1987) | 16 Likert | PO |
+| METS (tolérance maritime) | 15 Likert | Physical Fit |
+| MMFS (mobilité) | 12 Likert | Mobility Fit |
 
 ### Sociogramme
 
-*Who should share a cabin? Which pair will create synergy vs. friction?*
-
 $$D_{ij} = 0.55 \cdot (1 - |C_i - C_j|/100) + 0.25 \cdot (A_i + A_j)/200 + 0.20 \cdot (ES_i + ES_j)/200$$
 
-Conscientiousness similarity (α=0.55) is the dominant axis — divergent work ethics generate the most friction. Agreeableness is an additive complementarity term (cumulative social energy, not penalising asymmetry). Emotional Stability uses a mean (not product) to model collective resilience.
-
-Visualisé comme une molécule 3D interactive — nœuds = marins, arêtes = compatibilité dyadique. Permet la simulation d'impact en temps réel : "que se passe-t-il si j'ajoute ce candidat à cet équipage ?"
-
-> **Documentation complète :** [`backend/README.md#scientific-foundations`](backend/README.md#scientific-foundations)
+Visualisé comme une molécule 3D interactive — nœuds = marins, arêtes = compatibilité dyadique. Mode simulation en temps réel : "que se passe-t-il si j'ajoute ce candidat à cet équipage ?"
 
 ---
 
@@ -152,13 +184,12 @@ cp .env.example .env
 
 # Base de données
 alembic upgrade head
-python -m app.seed.seed_environment
-python -m app.seed.seed_tests_surveys
+python -m app.seed.seed              # Full seed (employers + candidates + yachts + tests + surveys)
 
 # Démarrer
 uvicorn app.main:app --reload --port 8000
-# → API disponible sur http://localhost:8000
-# → Swagger UI : http://localhost:8000/docs
+# → API sur http://localhost:8000
+# → Swagger : http://localhost:8000/docs
 ```
 
 ### 2. Frontend — web
@@ -166,10 +197,8 @@ uvicorn app.main:app --reload --port 8000
 ```bash
 cd frontend
 npm install
-
-# Variables d'environnement
 cp apps/web/.env.example apps/web/.env.local
-# Éditer : NEXT_PUBLIC_API_URL=http://localhost:8000
+# NEXT_PUBLIC_API_URL=http://localhost:8000
 
 npx turbo dev --filter=@harmony/web
 # → http://localhost:3000
@@ -179,37 +208,39 @@ npx turbo dev --filter=@harmony/web
 
 ```bash
 cp apps/mobile/.env.example apps/mobile/.env
-# Éditer : EXPO_PUBLIC_API_URL=http://localhost:8000
+# EXPO_PUBLIC_API_URL=http://<votre-IP>:8000
 
 cd frontend/apps/mobile
 npx expo start
-# Scanner le QR code avec Expo Go
 ```
 
 ---
 
 ## Tests
 
-### Backend — 535 tests, 0 failures
+### Backend — 1104 tests, 0 failures
 
 ```bash
 cd backend
 pytest tests/ -v
 
 # Par couche
-pytest tests/engine/ -v -m engine     # Fonctions pures
-pytest tests/ -v -m service           # Services (mock DB)
-pytest tests/ -v -m router            # HTTP (httpx AsyncClient)
+pytest tests/engine/ -v -m engine     # Fonctions pures — aucun mock
+pytest tests/ -v -m service           # Services — AsyncMock repos
+pytest tests/ -v -m router            # HTTP — httpx AsyncClient
 ```
 
 ### Frontend web — 126 tests, 0 failures
 
 ```bash
-cd frontend/apps/web
-npm test
+cd frontend/apps/web && npm test
 ```
 
-Les tests mobile (Jest + RNTL) sont listés dans le backlog.
+### Frontend mobile — 121 tests, 0 failures
+
+```bash
+cd frontend/apps/mobile && npm test
+```
 
 ---
 
@@ -217,7 +248,7 @@ Les tests mobile (Jest + RNTL) sont listés dans le backlog.
 
 | Partie | Fichier |
 |---|---|
-| Architecture backend, modèle de domaine, moteurs, API, migrations, backlog | [`backend/README.md`](backend/README.md) |
+| Architecture backend, domaine, moteurs, API, migrations, backlog | [`backend/README.md`](backend/README.md) |
 | Architecture frontend, packages, auth, sociogramme 3D, travail restant | [`frontend/README.md`](frontend/README.md) |
 
 ---
@@ -229,14 +260,16 @@ Les tests mobile (Jest + RNTL) sont listés dans le backlog.
 | Composant | État |
 |---|---|
 | Modules HTTP (auth, identity, crew, vessel, recruitment, assessment, survey) | ✅ Implémenté |
-| Engine DNRE + MLPSM (sigmoid, P_ind interaction) + Sociogramme (P2 dyad) | ✅ Implémenté |
+| Engine P-E Fit (7 familles : DA, NS, PO, PG, PS, Physical, Mobility) | ✅ Implémenté |
+| Sociogramme (P2 dyad) | ✅ Implémenté |
+| use_cases (recruitment, management, training, talent, rps) | ✅ Implémenté |
 | ORM models + Alembic migrations | ✅ Implémenté |
-| `JobWeightConfig` — weights DB-injectable (P3) | ✅ Implémenté |
-| Suite de tests (535 tests) | ✅ 0 failure |
+| 7 catalogues psychométriques seedés (IPIP-120, RMAWS, COGIQ, HMR-24, CES, METS, MMFS) | ✅ Implémenté |
+| Profils SME 16 postes + lookup matriciel (position × yacht_type) | ✅ Implémenté |
+| Suite de tests (1104 tests) | ✅ 0 failure |
 | Endpoints sociogramme (`/crew/{id}/sociogram`) | ⏳ Manquant |
 | Email (invitations survey, notifications embauche) | ⏳ Non implémenté |
-| Rate limiting | ⏳ Configuré mais inactif |
-| S3 storage | ⏳ Config présente, non branché |
+| Module Training (backend) | ⏳ À construire |
 
 ### Frontend
 
@@ -245,39 +278,26 @@ Les tests mobile (Jest + RNTL) sont listés dans le backlog.
 | Monorepo + packages partagés (types, api, ui) | ✅ Complet |
 | Web — auth + layout + dashboard flotte | ✅ Complet |
 | Web — sociogramme 3D + mode simulation | ✅ Complet |
-| Web — matching DNRE/MLPSM | ✅ Complet |
-| Mobile — auth + profil candidat (4 tabs : identité, soft skills, expériences, documents) | ✅ Complet |
-| Mobile — passation tests psychométriques (Likert + T-IRT CUTTY SARK) | ✅ Complet |
-| Mobile — training (4 axes, parcours personnalisé, 4 types de contenu) | ✅ Frontend · ⏳ Backend |
+| Web — matching P-E Fit | ✅ Complet |
+| Mobile — auth + profil candidat | ✅ Complet |
+| Mobile — passation tests (Likert + T-IRT CUTTY SARK) | ✅ Complet |
+| Mobile — training (4 axes, parcours personnalisé) | ✅ Frontend · ⏳ Backend |
 | Web — register / campagnes / vessel detail | ⏳ À construire |
 | Mobile — survey / pulse / invitations | ⏳ À construire |
-
-> **Détail complet du backlog frontend :** [`frontend/README.md#travail-restant`](frontend/README.md#travail-restant)
 
 ---
 
 ## Sécurité
 
-Points de vigilance avant tout déploiement en production :
-
-- [ ] **`SECRET_KEY`** — générer avec `openssl rand -hex 32` et ne jamais committer
-- [ ] **CORS** — remplacer `allow_origins=["*"]` par le domaine Vercel exact
-- [ ] **`DEBUG=False`** — vérifier dans `.env`
-- [ ] **Access token** — stocké uniquement en mémoire Zustand (jamais `localStorage`)
-- [ ] **Refresh token web** — HttpOnly cookie, `Secure`, `SameSite=Strict`
-- [ ] **Refresh token mobile** — `expo-secure-store` avec `WHEN_UNLOCKED`
-- [ ] **CSP** — headers configurés dans `next.config.js`
-- [ ] **Migration Alembic** — générer la migration pour la table `job_weight_configs` avant déploiement
+- [ ] `SECRET_KEY` — générer avec `openssl rand -hex 32`, ne jamais committer
+- [ ] CORS — remplacer `allow_origins=["*"]` par le domaine Vercel exact
+- [ ] `DEBUG=False` en production
+- [ ] Access token — mémoire Zustand uniquement (jamais `localStorage`)
+- [ ] Refresh token web — HttpOnly cookie, `Secure`, `SameSite=Strict`
+- [ ] Refresh token mobile — `expo-secure-store` avec `WHEN_UNLOCKED`
 
 ---
 
 ## Contribuer
 
-```
-Harmony/
-├── backend/      # Python — lire backend/README.md pour le setup
-└── frontend/     # TypeScript — lire frontend/README.md pour le setup
-```
-
-Les branches sont nommées `feature/<sujet>`, `fix/<sujet>`, `chore/<sujet>`.
-Les PRs passent par `main` — pas de `develop`.
+Branches : `feature/<sujet>`, `fix/<sujet>`, `chore/<sujet>`. PRs vers `main` uniquement.

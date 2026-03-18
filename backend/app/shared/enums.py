@@ -15,15 +15,41 @@ class UserRole(str, Enum):
 
 
 class YachtPosition(str, Enum):
+    # ── Deck ─────────────────────────────────────────────────────────────────
     CAPTAIN          = "Captain"
-    FIRST_MATE       = "First Mate"
+    FIRST_MATE       = "First Mate"   # conservé pour compat DB
+    SECOND_OFFICER   = "Second Officer"
     BOSUN            = "Bosun"
     DECKHAND         = "Deckhand"
+    # ── Engine ───────────────────────────────────────────────────────────────
     CHIEF_ENGINEER   = "Chief Engineer"
     SECOND_ENGINEER  = "2nd Engineer"
+    THIRD_ENGINEER   = "3rd Engineer"
+    ETO              = "ETO"           # Electro-Technical Officer
+    # ── Interior ─────────────────────────────────────────────────────────────
     CHIEF_STEWARDESS = "Chief Stewardess"
     STEWARDESS       = "Stewardess"
+    BUTLER           = "Butler"
+    # ── Galley ───────────────────────────────────────────────────────────────
     CHEF             = "Chef"
+    SOUS_CHEF        = "Sous Chef"
+    # ── Wellness & Safety ────────────────────────────────────────────────────
+    DIVE_INSTRUCTOR  = "Dive Instructor"
+    MEDIC            = "Medic"
+
+
+class YachtTypeAlpha(str, Enum):
+    """
+    Types de yachts pour la phase alpha (7 profils structurels).
+    Utilisé dans YachtStructuralProfile pour le lookup SME matriciel.
+    """
+    SAILING_CRUISER  = "sailing_cruiser"    # Voilier croisière (< 30m)
+    SAILING_RACING   = "sailing_racing"     # Voilier régate
+    MOTOR_CRUISER    = "motor_cruiser"      # Yacht moteur < 30m
+    SUPERYACHT       = "superyacht"         # 30-60m
+    MEGAYACHT        = "megayacht"          # 60m+
+    EXPEDITION       = "expedition"         # Expedition / explorer
+    CHARTER          = "charter"            # Charter intensif (haute rotation)
 
 
 class AvailabilityStatus(str, Enum):

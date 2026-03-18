@@ -11,15 +11,36 @@
 export type UserRole = "candidate" | "client" | "admin";
 
 export type YachtPosition =
+  // Deck
   | "Captain"
   | "First Mate"
+  | "Second Officer"
   | "Bosun"
   | "Deckhand"
+  // Engine
   | "Chief Engineer"
   | "2nd Engineer"
+  | "3rd Engineer"
+  | "ETO"
+  // Interior
   | "Chief Stewardess"
   | "Stewardess"
-  | "Chef";
+  | "Butler"
+  // Galley
+  | "Chef"
+  | "Sous Chef"
+  // Wellness & Safety
+  | "Dive Instructor"
+  | "Medic";
+
+export type YachtTypeAlpha =
+  | "sailing_cruiser"
+  | "sailing_racing"
+  | "motor_cruiser"
+  | "superyacht"
+  | "megayacht"
+  | "expedition"
+  | "charter";
 
 export type AvailabilityStatus = "available" | "on_board" | "unavailable" | "soon";
 
@@ -473,6 +494,121 @@ export interface SurveyAggregatedOut {
   avg_leadership_fit: number | null;
   avg_intent_to_stay: number | null;
   predicted_vs_observed: Record<string, unknown> | null;
+}
+
+// ── PE Fit Engine Results ─────────────────────────────────────────────────────
+
+export interface POValuesDimScore {
+  dimension: string;
+  candidate_raw: number | null;
+  environment_level: number | null;
+  score: number; // PSI ∈ [0, 1]
+  weight: number;
+  flags: string[];
+}
+
+export interface POValuesResult {
+  score: number; // ∈ [0, 100]
+  dimensions: POValuesDimScore[];
+  data_quality: number;
+  flags: string[];
+}
+
+export interface FPhysicalDimScore {
+  dimension: string;
+  candidate_raw: number | null;
+  environment_level: number | null;
+  score: number; // PSI ∈ [0, 1]
+  weight: number;
+  flags: string[];
+}
+
+export interface FPhysicalResult {
+  score: number; // ∈ [0, 100]
+  dimensions: FPhysicalDimScore[];
+  data_quality: number;
+  flags: string[];
+}
+
+export interface FMobilityDimScore {
+  dimension: string;
+  candidate_raw: number | null;
+  environment_level: number | null;
+  score: number; // PSI ∈ [0, 1]
+  weight: number;
+  flags: string[];
+}
+
+export interface FMobilityResult {
+  score: number; // ∈ [0, 100]
+  dimensions: FMobilityDimScore[];
+  data_quality: number;
+  flags: string[];
+}
+
+/** Résultat complet PE Fit pour un candidat (endpoint /impact). */
+export interface PEFitResult {
+  global_score: number;
+  safety_level: "CLEAR" | "ADVISORY" | "HIGH_RISK" | "DISQUALIFIED";
+  is_disqualified: boolean;
+  confidence: "HIGH" | "MEDIUM" | "LOW";
+  data_quality: number;
+  dimension_weights: Record<string, number>;
+  pj_fit: {
+    score: number;
+    p_ind_score: number;
+    fit_label: string;
+    overall_centile: number;
+    ns_fit_score: number | null;
+    motivation_score: number | null;
+    safety: { level: string; flags: string[] };
+    flags: string[];
+  };
+  po_fit: {
+    score: number;
+    jdr_ratio: number;
+    jdr_status: string;
+    resilience: number;
+    note: string;
+    flags: string[];
+  } | null;
+  po_values_fit: {
+    score: number;
+    dimensions: POValuesDimScore[];
+    data_quality: number;
+    flags: string[];
+  } | null;
+  pt_fit: {
+    score: number;
+    min_agreeableness: number;
+    mean_es: number;
+    sigma_c: number;
+    crew_size: number;
+    flags: string[];
+  } | null;
+  ps_fit: {
+    score: number;
+    compatibility_label: string;
+    normalized_distance: number;
+    dimension_gaps: Array<{
+      dimension: string;
+      gap: number;
+      direction: string;
+      label: string;
+    }>;
+    flags: string[];
+  } | null;
+  physical_fit: {
+    score: number;
+    dimensions: FPhysicalDimScore[];
+    flags: string[];
+  } | null;
+  mobility_fit: {
+    score: number;
+    dimensions: FMobilityDimScore[];
+    flags: string[];
+  } | null;
+  all_flags: string[];
 }
 
 // ── API response wrappers ─────────────────────────────────────────────────────

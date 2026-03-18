@@ -173,22 +173,28 @@ class TestPEFitCompute:
         assert result.ps_fit is not None
         assert 0.0 <= result.ps_fit.score <= 100.0
 
-    def test_global_score_average_all_dimensions(self):
-        """global_score = moyenne des dimensions disponibles."""
+    def test_global_score_pondere_dimensions_disponibles(self):
+        """
+        global_score = Σ(w_i × score_i) / Σw_i pour dimensions disponibles.
+        po_fit legacy (F_env) est exclu du global_score (hors pondérations).
+        N-S fit (pj_fit.ns_fit_score) est inclus si vessel_params présent.
+        """
+        from app.engine.pe_fit.master import DIMENSION_WEIGHTS, _weighted_global_score
         result = compute(
             CANDIDATE,
             vessel_params=VESSEL,
             current_crew_snapshots=CREW_TEAM,
             captain_vector=CAPTAIN,
         )
-        # Toutes les dimensions disponibles
-        scores = [
-            result.pj_fit.score,
-            result.pt_fit.score,
-            result.po_fit.score,
-            result.ps_fit.score,
-        ]
-        expected = round(sum(scores) / len(scores), 1)
+        dim_scores = {
+            "da_fit": result.pj_fit.score,
+            "ns_fit": result.pj_fit.ns_fit_score,
+            "pg_fit": result.pt_fit.score if result.pt_fit else None,
+            "ps_fit": result.ps_fit.score if result.ps_fit else None,
+            "physical_fit": result.physical_fit.score if result.physical_fit else None,
+            "mobility_fit": result.mobility_fit.score if result.mobility_fit else None,
+        }
+        expected = _weighted_global_score(dim_scores, DIMENSION_WEIGHTS)
         assert abs(result.global_score - expected) < 0.2
 
     def test_sans_equipe_pt_fit_none(self):

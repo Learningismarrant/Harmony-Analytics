@@ -1,4 +1,4 @@
-# Harmony Analytics — Backend
+# Radiant Analytics — Backend
 
 Psychometric analytics platform for crew recruitment and team management in superyacht operations.
 
@@ -10,7 +10,7 @@ Psychometric analytics platform for crew recruitment and team management in supe
 
 1. [Architecture](#architecture)
 2. [Domain Model](#domain-model)
-3. [Recruitment Engine](#recruitment-engine)
+3. [P-E Fit Engine](#p-e-fit-engine)
 4. [Scientific Foundations](#scientific-foundations)
 5. [Setup](#setup)
 6. [Environment Variables](#environment-variables)
@@ -35,8 +35,8 @@ backend/app/
 │
 ├── shared/
 │   ├── deps.py            # FastAPI dependencies (UserDep, CrewDep, EmployerDep, AdminDep)
-│   ├── enums.py           # UserRole, YachtPosition, CampaignStatus, ApplicationStatus, …
-│   ├── limiter.py         # slowapi rate limiter (defined — not yet attached to app)
+│   ├── enums.py           # UserRole, YachtPosition (16), YachtTypeAlpha (7), CampaignStatus…
+│   ├── limiter.py         # slowapi rate limiter
 │   └── models/            # SQLAlchemy ORM models (shared across modules)
 │       ├── User.py        # User, CrewProfile, EmployerProfile, UserDocument
 │       ├── Yacht.py       # Yacht, CrewAssignment
@@ -58,54 +58,68 @@ backend/app/
 ├── engine/                # Pure computation — zero DB access, fully testable
 │   ├── psychometrics/
 │   │   ├── scoring.py       # Likert + cognitive scoring, reliability detection
-│   │   ├── tirt_scoring.py  # T-IRT engine (CUTTY SARK) — MAP estimation, probit model, reversed items
+│   │   ├── tirt_scoring.py  # T-IRT engine (CUTTY SARK) — MAP estimation, probit model
 │   │   ├── snapshot.py      # Rebuilds CrewProfile.psychometric_snapshot from TestResult set
 │   │   ├── normalizer.py    # Score normalization against population norms
 │   │   ├── formatter.py     # Report formatting per viewer context
 │   │   └── reliability.py   # Response bias, speedrun detection
 │   │
-│   ├── recruitment/
-│   │   ├── DNRE/          # Stage 1: normative-relative fit (g_fit, centile, safety_level)
-│   │   │   ├── master.py
-│   │   │   ├── global_fit.py
-│   │   │   ├── centile_rank.py
+│   ├── pe_fit/            # P-E Fit framework (Kristof-Brown 2005) — 7 families
+│   │   ├── pj_fit/        # Person-Job Fit (DA + NS + motivation)
+│   │   │   ├── demands_abilities/  # scorer.py — GCA+C SME score, DA-fit PSI
+│   │   │   ├── needs_supplies/     # jdr.py — JD-R buffer effect, NS-fit PSI
+│   │   │   ├── motivation_fit/     # scorer.py — SDT cosine distance
 │   │   │   ├── safety_barrier.py
-│   │   │   └── sme_score.py
-│   │   ├── MLPSM/         # Stage 2: team-fit prediction (Ŷ = β₁P_ind + β₂F_team + β₃F_env + β₄F_lmx)
-│   │   │   ├── master.py
-│   │   │   ├── p_ind.py
-│   │   │   ├── f_team.py
-│   │   │   ├── f_env.py
-│   │   │   ├── f_lmx.py
-│   │   │   └── simulator.py
-│   │   └── pipeline.py    # Orchestrates DNRE → MLPSM for all candidates in a campaign
+│   │   │   ├── profiles.py         # SME profiles (16 positions) + matrix (position × yacht_type)
+│   │   │   └── weights.py
+│   │   ├── po_fit/        # Person-Organisation Fit (CES values PSI — Ravlin & Meglino 1987)
+│   │   │   ├── f_values.py
+│   │   │   └── values_weights.py
+│   │   ├── pt_fit/        # Person-Team Fit (Bell 2007 formula)
+│   │   │   └── f_team.py
+│   │   ├── ps_fit/        # Person-Supervisor Fit (LMX Euclidean distance)
+│   │   │   └── f_lmx.py
+│   │   ├── vessel_profile.py   # YachtStructuralProfile — generates vessel_params per yacht type
+│   │   ├── master.py           # PEFitResult dataclass + compute()
+│   │   ├── pipeline.py         # Orchestrates pe_fit for all candidates in a campaign
+│   │   └── trait_extractor.py
+│   │
+│   ├── use_cases/         # Business orchestration — combines pe_fit results into decisions
+│   │   ├── recruitment.py # HIRE / CONDITIONAL / DISQUALIFY
+│   │   ├── management.py  # TEAM_HEALTH + alerts
+│   │   ├── training.py    # GAP_ANALYSIS + development plan
+│   │   ├── talent.py      # READINESS by career level
+│   │   └── rps.py         # RISK_LEVEL psychosocial
 │   │
 │   ├── benchmarking/
-│   │   ├── diagnosis.py   # Performance × Cohesion matrix, TVI, HCD, short-term prediction
-│   │   └── matrice.py     # Sociogram data for dashboard visualization
+│   │   ├── diagnosis.py   # Performance × Cohesion matrix, TVI, HCD
+│   │   └── matrice.py     # Sociogram data (D_ij dyad compatibility)
 │   │
-│   ├── ml/
-│   │   ├── regression.py  # OLS β-fitting when n_samples > 150
-│   │   ├── anova.py       # Cross-yacht toxicity detection
-│   │   └── model_store.py # ModelVersion persistence
-│   │
-│   └── verif/
-│       ├── ocr.py         # pytesseract extraction from uploaded documents
-│       └── promete.py     # Promete API integration for official maritime cert verification
+│   └── ml/
+│       ├── regression.py  # OLS β-fitting when n_samples > 150
+│       └── model_store.py # ModelVersion persistence
 │
 ├── infra/
-│   ├── storage.py         # File upload (local simulation; S3 config present, not wired)
+│   ├── storage.py         # File upload (local sim; S3 config present, not wired)
 │   ├── email.py           # SMTP/SendGrid — not implemented
 │   └── notifications.py
 │
-├── content/               # Static business data (job norms, feedback templates, advice)
-│   ├── sme_profiles.py
-│   ├── feedback.py
-│   └── advice.py
-│
 └── seed/
-    ├── seed_environment.py
-    └── seed_tests_surveys.py
+    ├── seed.py                       # Orchestrateur principal (CLI)
+    ├── environment/                  # employers, candidates, yachts, campaigns
+    ├── tests/
+    │   ├── tests.py                  # Orchestre les 7 catalogues
+    │   └── questions/
+    │       ├── etalons/ipip120.py    # CUTTY SARK — 60 paires T-IRT
+    │       ├── etalons/rmaws.py      # Résilience
+    │       ├── cogiq.py              # Cognition
+    │       ├── hmr24.py              # Motivation (SDT)
+    │       ├── ces_values.py         # Valeurs (CES — Ravlin & Meglino 1987)
+    │       ├── maritime_tolerance.py # METS — 15 items, 5 dimensions
+    │       └── mobility_profile.py   # MMFS — 12 items, 4 dimensions
+    └── surveys/
+        ├── surveys.py
+        └── pulses.py
 ```
 
 ### Request Flow
@@ -121,13 +135,11 @@ HTTP Request
 
 ### Caching Pattern (Snapshots)
 
-Rather than recomputing psychometric aggregates on every dashboard load, the application maintains two denormalized JSON caches:
+Rather than recomputing psychometric aggregates on every dashboard load, the application maintains denormalized JSON caches:
 
-- `CrewProfile.psychometric_snapshot` — rebuilt **synchronously** after each test submission. Contains Big Five, cognitive, motivation, resilience, leadership preferences.
-- `Yacht.vessel_snapshot` — rebuilt **in a background task** after crew changes or snapshot updates. Contains harmony metrics, baseline F_team score, crew count.
-- `EmployerProfile.fleet_snapshot` — rebuilt periodically across all managed yachts.
-
-This trades write-time complexity for O(1) dashboard reads.
+- `CrewProfile.psychometric_snapshot` — rebuilt **synchronously** after each test submission. Contains Big Five, cognitive, motivation, resilience, values_profile, maritime_tolerance, mobility_profile.
+- `Yacht.vessel_snapshot` — rebuilt **in a background task** after crew changes.
+- `EmployerProfile.fleet_snapshot` — rebuilt periodically across managed yachts.
 
 ---
 
@@ -146,371 +158,151 @@ Yacht
 Campaign (a hiring position on a Yacht)
   └── CampaignCandidate      application (PENDING / HIRED / REJECTED / JOINED)
 
-TestCatalogue → Question → TestResult
-  ├── Feeds into psychometric_snapshot rebuild
-  └── test_type = "tirt" → routes to TirtScoringEngine (CUTTY SARK, 60 forced-choice pairs)
+TestCatalogue (7 catalogues) → Question → TestResult
+  └── test_type = "tirt" → routes to TirtScoringEngine (CUTTY SARK)
 
 Survey → SurveyResponse
   └── intent_to_stay (0–100) feeds y_actual in RecruitmentEvent
 
 RecruitmentEvent             one record per hiring decision
-  ├── y_success_predicted    Ŷ from MLPSM at decision time
-  ├── beta_weights_snapshot  β₁–β₄ at prediction time (immutable, for audit)
+  ├── y_success_predicted    global_score from pe_fit at decision time
   └── y_actual               filled post-hire from SurveyResponse.intent_to_stay
-
-ModelVersion                 OLS-fitted β weights, versioned
-  └── is_active              single active version at a time
-
-JobWeightConfig              DB-injectable weight configuration (P3)
-  ├── sme_weights (JSON)     SME trait weights per competency — overrides DNRE defaults
-  ├── omega_gca/C/interaction P_ind omegas — overrides p_ind.py module constants
-  └── is_active              single active config at a time (ML scripts update nightly)
 ```
 
 ---
 
-## Recruitment Engine
+## P-E Fit Engine
 
-The matching pipeline runs in two independent stages. Both scores are surfaced separately to the recruiter — they are not collapsed into a single opaque number.
-
-### Stage 1 — DNRE (Dynamic Normative-Relative Engine)
-
-Answers: *Is this candidate a valid profile for this position type?*
-
-- **Normative dimension:** candidate traits vs. position benchmark norms (`sme_profiles.py`)
-- **Relative dimension:** percentile rank within the current applicant pool
-- **Safety barrier:** DISQUALIFIED candidates are hard-filtered before Stage 2
-
-Output: `g_fit` (0–100), `centile`, `SafetyLevel` (CLEAR / ADVISORY / HIGH_RISK / DISQUALIFIED)
-
-### Stage 2 — MLPSM (Multi Level Predictive Stability Model)
-
-Answers: *Will this candidate succeed on this specific yacht with this specific team?*
+The P-E Fit framework (Kristof-Brown et al., 2005) evaluates fit across 7 orthogonal families. Each returns a **PSI score** (Profile Similarity Index) in [0, 1]:
 
 ```
-Ŷ_success = β₁·P_ind + β₂·F_team + β₃·F_env + β₄·F_lmx
+PSI_dim = 1 − |P_norm − E_level|
 ```
 
-| Component | Description | Default β |
-|-----------|-------------|-----------|
-| P_ind | Individual performance (conscientiousness, GCA, autonomy drive) | 0.25 |
-| F_team | Team compatibility (jerk filter, faultline index, emotional buffer) | 0.35 |
-| F_env | Environmental fit — JD-R job demands vs. candidate resources | 0.20 |
-| F_lmx | Leader-member exchange — captain style vs. candidate preferences | 0.20 |
+where `P_norm = P/100` (candidate score normalised) and `E_level` is the environment requirement.
 
-**F_team components:**
-- Jerk Filter: `min(Agreeableness)` across crew — one highly disagreeable member degrades the whole team score
-- Faultline Index: `σ(Conscientiousness)` — high variance predicts conflict
-- Emotional Buffer: `μ(EmotionalStability)` — team-level stress resilience
+**Global score:**
+```
+global_score = Σ(w_i × PSI_i) / Σ(w_i disponibles)   × 100
+```
 
-**Model versioning (learning loop):**
-- v1.0: seeded with literature priors (Schmidt & Hunter 1998, Bakker & Demerouti JD-R 2007)
-- v2+: OLS retrain triggered when `n_samples > 150` RecruitmentEvents with `y_actual` populated
-- β weights snapshot is stored immutably at each hiring decision for reproducibility
+Weights renormalise automatically when a dimension is unavailable.
+
+### Dimension Weights
+
+| Dimension | Weight | Engine file |
+|---|---|---|
+| `da_fit` — Demands-Abilities | 0.28 | `pj_fit/demands_abilities/scorer.py` |
+| `ns_fit` — Needs-Supplies (JD-R) | 0.25 | `pj_fit/needs_supplies/jdr.py` |
+| `po_values_fit` — Person-Organisation | 0.18 | `po_fit/f_values.py` |
+| `pg_fit` — Person-Group (Bell 2007) | 0.16 | `pt_fit/f_team.py` |
+| `ps_fit` — Person-Supervisor (LMX) | 0.13 | `ps_fit/f_lmx.py` |
+| `physical_fit` — Maritime tolerance | 0.05 | *(pending)* |
+| `mobility_fit` — Mobility flexibility | 0.05 | *(pending)* |
+| **Sum** | **1.10** | intentional — enables renormalisation |
+
+### PG-Fit — F_team (Bell 2007)
+
+```
+F_team = 0.30·min(A) + 0.30·μ(C) + 0.28·μ(ES) − 0.12·σ(C)
+```
+
+- `min(A)` — Bad Apple Effect (Felps et al., 2006): one toxic member degrades the whole team
+- `μ(C)` — mean Conscientiousness: shared work ethics
+- `μ(ES)` — Collective Affective Tone (George, 1990): team stress resilience
+- `σ(C)` — Faultline Index (Lau & Murnighan, 1998): variance predicts latent conflict
+
+### PS-Fit — F_lmx (LMX)
+
+```
+F_lmx = (1 − ‖L_capt − V_crew‖₂ / d_max) × 100
+```
+
+3D leadership space: `autonomy_preference`, `feedback_preference`, `structure_imposed`.
+
+### PO-Fit — CES Values (Ravlin & Meglino 1987)
+
+4 value dimensions, equiweighted PSI: `honesty`, `achievement`, `fairness`, `solidarity`.
+
+### DA-Fit — Demands-Abilities
+
+```
+SME score (C1) = ω₁·GCA + ω₂·C + ω₃·GCA×C/100
+ω₁ = 0.60, ω₂ = 0.40
+```
+
+Non-compensatory safety barrier: ES < 15 or Agreeableness < 15 → `DISQUALIFIED`.
+
+### SME Profiles — Position × Yacht Type Matrix
+
+`pj_fit/profiles.py` contains:
+- 16 generic profiles by `YachtPosition` (Captain, First Mate, Bosun, Deckhand, Chief Engineer, 2nd Engineer, Chief Stewardess, Stewardess, Chef, Second Officer, 3rd Engineer, ETO, Butler, Sous Chef, Dive Instructor, Medic)
+- A `SME_MATRIX_PATCHES` lookup for specific `(position, yacht_type)` combinations with context-specific trait adjustments (e.g. Captain × sailing_racing, Chef × megayacht)
+- Accessor: `get_ideal_profile(position, yacht_type=None)` — fallback to generic when no override
+
+### Use Cases (business orchestration)
+
+```python
+# engine/use_cases/recruitment.py
+decision = compute_recruitment_decision(snapshot, vessel_params, crew_snapshots, captain_vector)
+# → RecruitmentDecision(verdict=HIRE/CONDITIONAL/DISQUALIFY, global_score, alerts)
+
+# engine/use_cases/management.py
+health = compute_team_health(crew_snapshots, vessel_params)
+# → TeamHealthReport(status=HEALTHY/AT_RISK/CRITICAL, alerts)
+```
 
 ---
 
 ## Scientific Foundations
 
-This section documents the psychometric and organizational psychology literature underlying each engine component, and maps each theoretical construct to its concrete implementation.
-
----
-
-### 1. DNRE — Dynamic Normative-Relative Engine
-
-**Decision question:** *Is this candidate a technically valid profile for this position type, and how rare is that profile on the current market?*
-
-The DNRE is a two-pass filter. Pass 1 evaluates absolute competency fit against expert-defined job norms. Pass 2 establishes market position via dynamic percentile ranking. A non-compensatory safety barrier runs in parallel and can veto any candidate regardless of aggregate score.
-
-#### A. SME-Weighted Competency Score
-
-$$S_{i,c} = \frac{\sum_{t=1}^{n} w_t \cdot x_{i,t}}{\sum_{t=1}^{n} w_t}$$
-
-Each competency $c$ (Individual Performance, Team Fit, Environmental Fit, Leadership Fit) is scored as a weighted average of the relevant psychometric traits $x_{i,t}$, with weights $w_t$ set by Subject Matter Expert elicitation.
-
-**Theoretical basis:** Content-oriented validation (Manea, 2020). Traits are not interchangeable — a Chief Engineer's Conscientiousness carries a different weight than a Stewardess's Social Agreeableness. The weight vector encodes domain expertise as a first-class model parameter rather than treating all traits as equally predictive.
-
-**Implementation:** `engine/recruitment/DNRE/sme_score.py` — four competencies (C1–C4) with `DEFAULT_SME_WEIGHTS` derived from maritime-domain priors. Data quality is tracked per trait; missing traits fall back to population medians and flag `PARTIAL_DATA`.
-
-#### B. Dynamic Percentile Rank
-
-$$\Pi_{i,c} = \left( \frac{cf_i + 0.5 \cdot f_i}{N} \right) \times 100$$
-
-$cf_i$ = cumulative frequency below candidate $i$'s score; $f_i$ = frequency at that score; $N$ = pool size. This is Tukey's mid-rank formula, which handles ties symmetrically.
-
-**Theoretical basis:** Social Comparison Theory (Festinger, 1954) applied to labour market dynamics (Kristof-Brown et al., 2005). An absolute score of 80/100 is meaningless without knowing that the current applicant pool averages 90. The percentile corrects for cohort inflation and gives recruiters the true market scarcity of a profile.
-
-**Implementation:** `engine/recruitment/DNRE/centile_rank.py` — computes individual and batch percentiles, labels reliability by pool size (LOW < 2, MEDIUM < 5, HIGH ≥ 5), and annotates with human-readable labels ("Top 10%", etc.).
-
-#### C. Adjusted Global Fit with Non-Compensatory Barrier
-
-$$G_{\text{fit}} = \frac{1}{K} \sum_{c=1}^{K} S_{i,c} \qquad \text{subject to } \prod_{t \in \mathcal{T}_{\text{critical}}} \mathbb{1}\!\left(x_{i,t} \geq S_{\min,t}\right) = 1$$
-
-The global fit is the unweighted mean of the $K$ competency scores. The product of indicator functions enforces a hard floor: if any safety-critical trait falls below its minimum threshold $S_{\min,t}$, the candidate is vetoed regardless of their aggregate score.
-
-**Theoretical basis:** Non-compensatory selection models (Barrick & Mount, 1991). In high-consequence maritime environments, Emotional Stability below a critical threshold cannot be compensated by exceptional GCA. The indicator function formalises this as a safety barrier rather than a soft penalty — a design choice grounded in aviation and maritime risk psychology.
-
-**Implementation:** `engine/recruitment/DNRE/safety_barrier.py` — three veto levels:
-
-| Level | Threshold | Effect |
-|-------|-----------|--------|
-| HARD | ES < 15 or Agreeableness < 15 | `DISQUALIFIED` — blocked from Stage 2 |
-| SOFT | ES 15–30 or Agreeableness 15–30 or Conscientiousness < 25 | `HIGH_RISK` — surfaced to recruiter |
-| ADVISORY | Resilience < 35 | `ADVISORY` — annotation only |
-
----
-
-### 2. MLPSM — Multi-Level Predictive Stability Model
-
-**Decision question:** *Will this specific candidate stay, perform, and integrate on this specific yacht with this specific team?*
-
-The MLPSM moves from the individual to the system. Each sub-component isolates a distinct causal mechanism of attrition and team failure.
-
-#### Master Equation (v1 — Linear)
-
-$$\hat{Y}_{\text{success}} = \beta_1 P_{\text{ind}} + \beta_2 F_{\text{team}} + \beta_3 F_{\text{env}} + \beta_4 F_{\text{lmx}}$$
-
-$$\hat{Y} \in [0, 100], \quad \text{clamped via } \max(0, \min(100, \hat{Y}))$$
-
-Default β weights (literature priors, v1.0):
-
-| Term | β | Rationale |
-|------|---|-----------|
-| $\beta_1$ P_ind | 0.25 | Individual competency ceiling |
-| $\beta_2$ F_team | 0.35 | Team dynamics dominate retention in confined-space crews |
-| $\beta_3$ F_env | 0.20 | Structural burnout risk |
-| $\beta_4$ F_lmx | 0.20 | Management relationship quality |
-
-**v1 active (SKILL.md P1):** The raw score is passed through a **sigmoid** $P(\text{success}) = 1 / (1 + e^{-k(\hat{Y} - 50)})$ centred at 50 to model the psychological tipping point at which a crew member decides to leave (Schelling, 1978). This transforms the unbounded linear sum into a probability-like output in [0, 100] before clamping. Planned for v2: interaction term $\beta_5 (F_{\text{env}} \times \text{TypeYacht})$ for Heavy Charter non-linearity.
-
-**Implementation:** `engine/recruitment/MLPSM/master.py` — `compute()`, `compute_with_delta()`, `compute_batch()`. β weights are passed explicitly at call time; `MLPSMResult.to_event_snapshot()` serialises them immutably for audit.
-
-#### A. Individual Performance Potential — $P_{\text{ind}}$
-
-$$P_{\text{ind}} = \omega_1 \cdot GCA + \omega_2 \cdot C + \omega_3 \cdot \frac{GCA \times C}{100}$$
-$$\omega_1 = 0.55,\quad \omega_2 = 0.35,\quad \omega_3 = 0.10 \qquad (\Sigma\,\omega = 1.0 \text{ at } GCA=C=100)$$
-
-The interaction term $\omega_3 \cdot (GCA \times C / 100)$ captures the synergistic effect: cognitive capacity is only mobilised when the motivation to apply effort (Conscientiousness) is present. A candidate with GCA=90 and C=20 is penalised relative to GCA=70 and C=75 — capability without engagement is not enough.
-
-**Theoretical basis:** Schmidt & Hunter (1998) — the combination of GCA and Conscientiousness is the strongest predictor of job performance. GCA sets the learning ceiling; Conscientiousness determines whether that ceiling is reached through sustained effort.
-
-**Injectable weights (P3):** omegas are resolved at runtime from `JobWeightConfig` if an active config exists in the DB — ML scripts can update nightly without touching Python code. Module constants (`OMEGA_GCA`, `OMEGA_CONSCIENTIOUSNESS`, `OMEGA_INTERACTION`) are the fallback.
-
-**Implementation:** `engine/recruitment/MLPSM/p_ind.py` — extracts GCA from cognitive sub-scores (logical, numerical, verbal mean), applies a reliability flag if `n_tests = 0` (`GCA_MISSING`), tracks data quality penalty of −0.35 for absent cognitive data.
-
-#### B. Team Friction — $F_{\text{team}}$
-
-$$F_{\text{team}} = w_a \cdot \min(A_i) - w_c \cdot \sigma(C_i) + w_e \cdot \mu(ES_i)$$
-$$w_a = 0.40,\quad w_c = 0.30,\quad w_e = 0.30$$
-
-Three orthogonal mechanisms, each with an independent literature source:
-
-| Term | Construct | Theory |
-|------|-----------|--------|
-| $\min(A_i)$ | Jerk Filter | Bad Apple Effect (Felps et al., 2006; Bell, 2007) — one toxic member degrades collective output disproportionately. The minimum, not the mean, is the load-bearing statistic. |
-| $\sigma(C_i)$ | Faultline Index | Faultline Theory (Lau & Murnighan, 1998) — high variance in conscientiousness creates a structural rift between the "rigorous" and "relaxed" sub-groups, predictive of latent conflict. Standard deviation operationalises faultline strength. |
-| $\mu(ES_i)$ | Emotional Buffer | Collective Affective Tone (George, 1990) — mean emotional stability sets the team's stress absorption capacity. Low mean = brittle team under charter pressure. |
-
-**Danger thresholds** (implementation):
-- `JERK_FILTER_DANGER = 35` → triggers `JERK_RISK` flag
-- `FAULTLINE_DANGER = 20` (σ) → triggers `FAULTLINE_RISK` flag
-- `ES_MINIMUM_THRESHOLD = 45` (μ) → triggers `EMOTIONAL_FRAGILITY` flag
-
-**Implementation:** `engine/recruitment/MLPSM/f_team.py` — `compute_delta()` isolates the marginal impact of adding a specific candidate to the existing crew (`FTeamDelta.net_impact ∈ {POSITIVE, NEUTRAL, NEGATIVE}`).
-
-#### C. Environmental Load — $F_{\text{env}}$
-
-$$F_{\text{env}} = \frac{R_{\text{yacht}}}{D_{\text{yacht}}} \times \text{Resilience}_{\text{ind}}$$
-
-Where:
-- $D_{\text{yacht}} = 0.60 \cdot \text{charter\_intensity} + 0.40 \cdot \text{management\_pressure}$ (demands)
-- $R_{\text{yacht}} = 0.40 \cdot \text{salary\_index} + 0.35 \cdot \text{rest\_days\_ratio} + 0.25 \cdot \text{private\_cabin\_ratio}$ (resources)
-
-**Theoretical basis:** Job Demands-Resources model (Bakker & Demerouti, 2007). Burnout is not caused by high demands alone — it occurs when demands structurally exceed resources. The ratio $R/D$ captures the systemic imbalance; individual resilience modulates how much of that imbalance a specific candidate can absorb. A highly resilient candidate on a demanding yacht may score identically to a fragile candidate on a relaxed one — same environmental output, different individual input.
-
-**Burnout risk thresholds** (implementation): ratio < 0.40 = critical, 0.40–0.70 = at risk, 0.70–1.10 = balanced, > 1.50 = comfortable.
-
-**Implementation:** `engine/recruitment/MLPSM/f_env.py` — resilience extracted from dedicated score, falls back to Emotional Stability if absent.
-
-#### D. Leadership Alignment — $F_{\text{lmx}}$
-
-$$F_{\text{lmx}} = \left(1 - \frac{\|L_{\text{capt}} - V_{\text{crew}}\|_2}{d_{\max}}\right) \times 100$$
-
-The 3D leadership space spans: `autonomy_preference`, `feedback_preference`, `structure_imposed`. Euclidean distance between the captain's leadership vector and the crew member's preference vector is normalised by the maximum possible distance $d_{\max} = \sqrt{3}$.
-
-**Theoretical basis:** Leader-Member Exchange theory (Graen & Uhl-Bien, 1995). High-quality LMX relationships (small distance) are empirically associated with lower turnover intent, higher job satisfaction, and greater organisational citizenship behaviour — all critical in the closed social system of a superyacht. The vector distance operationalises misalignment without requiring a direct personality match: what matters is whether the captain's *style* meets the crew member's *needs*.
-
-**Compatibility labels** (implementation): EXCELLENT < 0.25, GOOD 0.25–0.50, TENSION 0.50–0.70, CRITICAL > 0.70.
-
-**Implementation:** `engine/recruitment/MLPSM/f_lmx.py` — extracts captain vector from `Yacht.captain_leadership_vector`; infers crew preferences from `leadership_preferences` snapshot or Big Five proxies.
-
----
-
-### 3. Sociogram — Pairwise Dyad Compatibility
-
-**Decision question:** *Who should share a cabin? Which two crew members placed on the same watch will create friction vs. synergy?*
-
-$$D_{ij} = \alpha \cdot \underbrace{\left(1 - \frac{|C_i - C_j|}{100}\right)}_{\text{Work-ethic similarity}} + \beta \cdot \underbrace{\frac{A_i + A_j}{200}}_{\text{Social energy (additive)}} + \gamma \cdot \underbrace{\frac{ES_i + ES_j}{200}}_{\text{Resilience buffer (mean)}}$$
-
-$$\alpha = 0.55,\quad \beta = 0.25,\quad \gamma = 0.20 \qquad (\alpha + \beta + \gamma = 1.0)$$
-
-**Design notes (SKILL.md V1, P2):**
-
-- **C is dominant (α > β):** Shared work ethics (Conscientiousness similarity) is the strongest predictor of dyad stability in confined professional environments. Divergent standards create chronic friction.
-- **A is additive complementarity, not similarity:** $f(A_i+A_j) = (A_i+A_j)/200$ rewards both members having high social energy — the collaborative pair compounds well-being. The old similarity term `1-|ΔA|/100` penalised a pairing of (high, low) which is psychologically inaccurate: one very agreeable member positively influences the other.
-- **ES is the mean, not the product:** The product $\frac{ES_a}{100} \times \frac{ES_b}{100}$ is too harsh — one emotionally fragile member would destroy any pair score. The mean models the team's collective resilience buffer more faithfully (George, 1990).
-
-**Theoretical basis:**
-
-- **Homophily principle** (McPherson et al., 2001): on values and work-ethic dimensions, high dissimilarity in Conscientiousness generates chronic friction — operationalised as $1-|C_i-C_j|/100$.
-- **Sociometry** (Moreno, 1934): structured pairwise compatibility measurement predicts sub-group formation and latent conflict before they manifest behaviourally.
-- **Collective Affective Tone** (George, 1990): mean Emotional Stability sets the dyad's stress absorption capacity.
-
-**Implementation:** `engine/benchmarking/matrice.py` — `compute_sociogram()` returns `SociogramNode` and `SociogramEdge` objects for 3D visualisation. Edge colours: green (synergy, $D > 0.70$), blue (neutral), red (friction, $D < 0.30$). `compute_candidate_preview()` shows real-time delta on the existing sociogram when a candidate is dragged in.
-
----
-
-### 4. T-IRT — Thurstonian Item Response Theory (CUTTY SARK)
+### T-IRT — Thurstonian Item Response Theory (CUTTY SARK)
 
 **Decision question:** *What are the candidate's true Big Five latent traits, corrected for social desirability and ipsativity bias?*
 
-The CUTTY SARK is a 60-item forced-choice assessment using the IPIP-120 item pool, adapted for maritime superyacht contexts. Unlike Likert scales, each item forces a binary trade-off between two desirable (or two undesirable) statements from different Big Five domains — eliminating acquiescence bias and making faking harder.
+The CUTTY SARK is a 60-item forced-choice assessment using the IPIP-120 item pool. Each item forces a binary trade-off between statements from different Big Five domains — eliminating acquiescence bias.
 
-#### Probit Model (pair-level)
+#### Probit Model
 
 For each pair $l$ opposing item $i$ (left) and item $j$ (right):
 
 $$P(y_l = 1 \mid \theta) = \Phi\!\left(\frac{(\mu_i - \mu_j) + (\lambda^\text{eff}_i \cdot \theta_{d_i} - \lambda^\text{eff}_j \cdot \theta_{d_j})}{\sqrt{\psi_i^2 + \psi_j^2}}\right)$$
 
-Where:
-- $\Phi$ = standard normal CDF (probit link)
-- $\mu_i$ = item intercept (social desirability)
-- $\lambda^\text{eff}_i = \lambda_i \times \text{score\_weight}_i$ — **reversed items** (`score_weight = -1`) contribute negatively to their domain trait
-- $\psi_i = \sqrt{1 - \lambda_i^2}$ = residual standard deviation (unique variance)
-- $\theta_{d_i}$ = latent trait score for domain $d_i \in \{O, C, E, A, N\}$
-
-**Handling of reversed items:** Keying an item negatively (`score_weight = -1`) flips the sign of its loading. For example, choosing `N1_1` ("I stay serene when conditions worsen", `score_weight = -1`) contributes evidence for *low* $\theta_N$, not high. This is the key correction specified by Brown & Maydeu-Olivares (2011) and correctly implemented in `_build_pair_data()`.
+Where $\lambda^\text{eff}_i = \lambda_i \times \text{score\_weight}_i$ — reversed items (`score_weight = -1`) contribute negatively to their domain trait.
 
 #### MAP Estimation
 
 $$\theta^* = \arg\max_\theta \left[\sum_{l=1}^{60} \ln P(y_l \mid \theta) - \frac{1}{2}\sum_{k=1}^{5} \theta_k^2\right]$$
 
-The $N(0, I)$ prior regularises the estimates toward zero and makes $\theta^*$ directly interpretable as Z-scores. Optimised via **BFGS** with analytical gradients (scipy.optimize).
-
-$$z_k = \theta_k^* \qquad \text{centile}_k = \Phi(\theta_k^*) \times 100$$
-
-#### Reliability Index
-
-The inverse-Hessian from BFGS provides the Laplace approximation of posterior variance:
-
-$$\rho = 1 - \overline{\text{SEM}^2} = 1 - \overline{\text{diag}(H^{-1})}$$
-
-Additional quality checks: response speed < 2s/pair → `is_reliable = False`; acquiescence bias (>85% same side) → `is_reliable = False`.
-
-#### Item Calibration
-
-76 unique IPIP-120 maritime items. Parameters inspired by Maples et al. (2014):
-- $\lambda \in [0.70, 0.90]$ — item-trait loadings
-- $\mu \in [-0.80, +0.85]$ — social desirability intercepts
-- Positively-worded statements: $\mu > 0$; negatively-worded: $\mu < 0$
-
-#### Output
-
-```json
-{
-  "traits": { "conscientiousness": {"score": 88.0, "niveau": "Élevé"} },
-  "global_score": 74.3,
-  "reliability": {"is_reliable": true, "reasons": []},
-  "meta": {"total_time_seconds": 285, "avg_seconds_per_question": 4.75},
-  "tirt_detail": {
-    "O": {"z_score": 0.45, "percentile": 67.3},
-    "C": {"z_score": 1.18, "percentile": 88.1},
-    "E": {"z_score": -0.31, "percentile": 37.8},
-    "A": {"z_score": 0.84, "percentile": 79.9},
-    "N": {"z_score": -1.12, "percentile": 13.2},
-    "reliability_index": 0.87
-  }
-}
-```
-
-The `traits` section uses the same key names as the Likert Big Five test → `build_snapshot()` integrates CUTTY SARK scores transparently into `CrewProfile.psychometric_snapshot`, feeding the DNRE and MLPSM engines.
-
-**Theoretical basis:**
-- Brown, A., & Maydeu-Olivares, A. (2011). Item response modeling of forced-choice questionnaires. *Educational and Psychological Measurement*, 71(3), 460–502.
-- Maples, J. L., et al. (2014). A comparison of fifteen structural models for personality measurement. *Psychological Assessment*, 26(4), 1116–1138.
+$N(0, I)$ prior makes $\theta^*$ directly interpretable as Z-scores. Optimised via BFGS.
 
 **Implementation:** `engine/psychometrics/tirt_scoring.py`
 
----
+**References:**
+- Brown, A., & Maydeu-Olivares, A. (2011). *Educational and Psychological Measurement*, 71(3), 460–502.
+- Maples, J. L., et al. (2014). *Psychological Assessment*, 26(4), 1116–1138.
 
-### Summary: Decision Architecture
+### Sociogram — Dyad Compatibility
 
-```
-Candidate psychometric snapshot
-        │
-        ▼
-┌───────────────────────────────────────┐
-│  Stage 1 — DNRE                       │
-│  ├── SME Score (S_{i,c})  ────────────┤→ G_fit (0–100)
-│  ├── Percentile (Π_{i,c}) ────────────┤→ market rank
-│  └── Safety Barrier ──────────────────┤→ CLEAR / ADVISORY / HIGH_RISK / DISQUALIFIED
-└───────────────────────────────────────┘
-        │ CLEAR or ADVISORY only
-        ▼
-┌───────────────────────────────────────┐
-│  Stage 2 — MLPSM                      │
-│  ├── P_ind  (ω₁·GCA + ω₂·C + ω₃·GCA×C/100) ─┤→ β₁ = 0.25
-│  ├── F_team (min-A, σ-C, μ-ES) ───────┤→ β₂ = 0.35
-│  ├── F_env  (JD-R ratio × resilience)─┤→ β₃ = 0.20
-│  └── F_lmx  (‖L_capt – V_crew‖) ─────┤→ β₄ = 0.20
-│                                        │
-│  Ŷ = σ(Σ βᵢ·Fᵢ) via sigmoid ∈ [0,100]│
-└───────────────────────────────────────┘
-        │
-        ▼
-┌───────────────────────────────────────┐
-│  Sociogram — Dyad Compatibility       │
-│  D_{ij} = α·sim_C + β·f(A+A) + γ·f(ES+ES) │→ cabin / watch assignment
-└───────────────────────────────────────┘
-        │
-        ▼
-   RecruitmentEvent stored
-   (y_predicted, β_snapshot, y_actual ← post-hire surveys)
-        │
-        ▼
-   OLS retrain when n ≥ 150            → updated β weights
-```
+$$D_{ij} = 0.55 \cdot (1 - |C_i - C_j|/100) + 0.25 \cdot (A_i + A_j)/200 + 0.20 \cdot (ES_i + ES_j)/200$$
 
-**Assessment routing (service layer):**
+- **C similarity (α=0.55):** Homophily on work ethics — dominant predictor of dyad stability
+- **A additive (β=0.25):** Complementarity term, not similarity — high A compounds well-being
+- **ES mean (γ=0.20):** Collective resilience buffer (George, 1990)
 
-```
-POST /assessments/{test_id}/submit
-  ├── test_type = "likert"    → calculate_scores()     (engine/psychometrics/scoring.py)
-  ├── test_type = "cognitive" → calculate_scores()     (engine/psychometrics/scoring.py)
-  └── test_type = "tirt"      → calculate_tirt_scores() (engine/psychometrics/tirt_scoring.py)
-                                  → MAP estimation → Z-scores → percentiles
-                                  → stored in TestResult.scores
-                                  → triggers psychometric_snapshot rebuild
-```
+**Implementation:** `engine/benchmarking/matrice.py`
 
-**References**
+### Key References
 
-- Bakker, A. B., & Demerouti, E. (2007). The Job Demands-Resources model. *Journal of Managerial Psychology*, 22(3), 309–328.
-- Barrick, M. R., & Mount, M. K. (1991). The Big Five personality dimensions and job performance. *Personnel Psychology*, 44(1), 1–26.
-- Bell, S. T. (2007). Deep-level composition variables as predictors of team performance. *Journal of Applied Psychology*, 92(3), 595–615.
-- Felps, W., Mitchell, T. R., & Byington, E. (2006). How, when, and why bad apples spoil the barrel. *Research in Organizational Behavior*, 27, 175–222.
-- Festinger, L. (1954). A theory of social comparison processes. *Human Relations*, 7(2), 117–140.
-- George, J. M. (1990). Personality, affect, and behavior in groups. *Journal of Applied Psychology*, 75(2), 107–116.
-- Graen, G. B., & Uhl-Bien, M. (1995). Relationship-based approach to leadership. *The Leadership Quarterly*, 6(2), 219–247.
-- Kenny, D. A. (1994). *Interpersonal Perception: A Social Relations Analysis*. Guilford Press.
-- Kristof-Brown, A. L., Zimmerman, R. D., & Johnson, E. C. (2005). Consequences of individuals' fit at work. *Personnel Psychology*, 58(2), 281–342.
-- Lau, D. C., & Murnighan, J. K. (1998). Demographic diversity and faultlines. *Academy of Management Review*, 23(2), 325–340.
-- Manea, L. (2020). Content validity and its role in test construction. *Romanian Journal of Applied Psychology*, 22(1).
-- McPherson, M., Smith-Lovin, L., & Cook, J. M. (2001). Birds of a feather: Homophily in social networks. *Annual Review of Sociology*, 27, 415–444.
-- Moreno, J. L. (1934). *Who Shall Survive?* Beacon House.
-- Schmidt, F. L., & Hunter, J. E. (1998). The validity and utility of selection methods in personnel psychology. *Psychological Bulletin*, 124(2), 262–274.
-- Brown, A., & Maydeu-Olivares, A. (2011). Item response modeling of forced-choice questionnaires. *Educational and Psychological Measurement*, 71(3), 460–502.
-- Maples, J. L., et al. (2014). A comparison of fifteen structural models for personality measurement. *Psychological Assessment*, 26(4), 1116–1138.
+- Kristof-Brown, A. L., Zimmerman, R. D., & Johnson, E. C. (2005). *Personnel Psychology*, 58(2), 281–342.
+- Bell, S. T. (2007). *Journal of Applied Psychology*, 92(3), 595–615.
+- Schmidt, F. L., & Hunter, J. E. (1998). *Psychological Bulletin*, 124(2), 262–274.
+- Bakker, A. B., & Demerouti, E. (2007). *Journal of Managerial Psychology*, 22(3), 309–328.
+- Ravlin, E. C., & Meglino, B. M. (1987). *Journal of Applied Psychology*, 72, 666–673.
+- Lau, D. C., & Murnighan, J. K. (1998). *Academy of Management Review*, 23(2), 325–340.
+- Felps, W., Mitchell, T. R., & Byington, E. (2006). *Research in Organizational Behavior*, 27, 175–222.
+- George, J. M. (1990). *Journal of Applied Psychology*, 75(2), 107–116.
+- Graen, G. B., & Uhl-Bien, M. (1995). *The Leadership Quarterly*, 6(2), 219–247.
 
 ---
 
@@ -536,7 +328,7 @@ pip install -r requirements.txt
 
 ```bash
 cp .env.example .env
-# Edit .env — see Environment Variables section below
+# Edit .env — see Environment Variables section
 ```
 
 ---
@@ -545,66 +337,52 @@ cp .env.example .env
 
 ```bash
 # Application
-PROJECT_NAME="Harmony Analytics"
-DEBUG=False                     # Never True in production
+PROJECT_NAME="Radiant Analytics"
+DEBUG=False
 BASE_URL="https://api.yourdomain.com"
 
 # Database
 DATABASE_URL="postgresql+asyncpg://user:password@localhost:5432/harmony"
 
 # Auth
-SECRET_KEY=""                   # REQUIRED — generate with: openssl rand -hex 32
+SECRET_KEY=""       # REQUIRED — openssl rand -hex 32
 ALGORITHM="HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES=120
 REFRESH_TOKEN_EXPIRE_DAYS=30
 
-# SMTP (required for survey invitations, hiring notifications)
+# SMTP
 SMTP_SERVER="smtp.gmail.com"
 SMTP_PORT=587
 SMTP_USER=""
 SMTP_PASSWORD=""
 
-# SendGrid (alternative to SMTP)
-SENDGRID_API_KEY=""
-
-# S3-compatible storage (optional, falls back to local uploads/)
+# S3-compatible storage (optional)
 S3_BUCKET=""
 S3_ACCESS_KEY=""
 S3_SECRET_KEY=""
 S3_ENDPOINT_URL=""
-CDN_BASE_URL=""
 ```
-
-> `SECRET_KEY` must be set to a cryptographically random value. An empty or default key is a critical security vulnerability.
-> Generate one with: `openssl rand -hex 32`
 
 ---
 
 ## Database Migrations
 
 ```bash
-cd backend
-
-# Apply all pending migrations
 alembic upgrade head
-
-# Create a new migration after model changes
 alembic revision --autogenerate -m "description"
-
-# Rollback one step
 alembic downgrade -1
-
-# Check current revision
 alembic current
 ```
 
-Migrations live in `migrations/versions/`. The Alembic env converts the `+asyncpg` URL to a synchronous driver for migration execution.
+Migrations live in `migrations/versions/`. Note: PostgreSQL named ENUMs require manual `ALTER TYPE ... ADD VALUE IF NOT EXISTS` — Alembic cannot autogenerate these.
 
 ### Seed data
 
 ```bash
-python -m app.seed.seed_environment       # Base config, model versions
-python -m app.seed.seed_tests_surveys     # Psychometric test catalogue + questions
+python -m app.seed.seed                        # Full : drop + recreate + seed tout
+python -m app.seed.seed --module environment   # Reseed uniquement employers/candidates/yachts
+python -m app.seed.seed --module tests         # Reseed uniquement les 7 catalogues
+python -m app.seed.seed --module surveys       # Reseed uniquement surveys + pulses
 ```
 
 ---
@@ -612,34 +390,25 @@ python -m app.seed.seed_tests_surveys     # Psychometric test catalogue + questi
 ## Running the Server
 
 ```bash
-cd backend
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Interactive API docs available at `http://localhost:8000/docs` (Swagger UI) and `http://localhost:8000/redoc`.
-
-Health check: `GET /health`
+Swagger UI: `http://localhost:8000/docs` · Health check: `GET /health`
 
 ---
 
 ## Running Tests
 
 ```bash
-cd backend
-
-# Full suite (530 tests)
+# Full suite (1104 tests, 0 failures)
 pytest tests/ -v
 
-# Engine layer only — no DB, no mocks required
-pytest tests/engine/ -v -m engine
+# By layer
+pytest tests/engine/ -v -m engine     # Pure functions — no DB, no mocks
+pytest tests/ -v -m service           # Service layer — mocked AsyncSession
+pytest tests/ -v -m router            # Router layer — httpx AsyncClient
 
-# Service layer only — mocked AsyncSession + repos
-pytest tests/ -v -m service
-
-# Router layer only — httpx AsyncClient + dependency overrides
-pytest tests/ -v -m router
-
-# With coverage
+# Coverage
 pytest tests/ --cov=app --cov-report=term-missing
 ```
 
@@ -647,51 +416,25 @@ pytest tests/ --cov=app --cov-report=term-missing
 
 ```
 tests/
-├── conftest.py                   # Fixtures, factories, dependency overrides
-│
-├── engine/                       # Pure function tests — zero DB, zero mocks
-│   ├── psychometrics/
-│   │   ├── test_scoring.py       # Likert/cognitive scoring, reliability detection
-│   │   ├── test_snapshot.py      # Snapshot rebuild from TestResult set
-│   │   ├── test_tirt_scoring.py  # T-IRT engine — MAP, probit, reversed items (49 tests)
-│   │   ├── test_normalizer.py    # Score normalization against population norms
-│   │   └── test_reliability.py   # Response bias and speedrun detection
+├── conftest.py
+├── engine/
+│   ├── psychometrics/             # scoring, snapshot, tirt_scoring, normalizer, reliability
 │   ├── recruitment/
-│   │   ├── DNRE/
-│   │   │   └── test_dnre.py      # Stage 1: global_fit, centile, safety_level
-│   │   ├── MLPSM/
-│   │   │   ├── test_master.py    # Ŷ equation, batch computation, MLPSMResult
-│   │   │   ├── test_p_ind.py     # P_ind: conscientiousness, GCA, autonomy
-│   │   │   ├── test_f_team.py    # F_team: jerk filter, faultline, ES buffer
-│   │   │   ├── test_f_env.py     # F_env: JD-R demands vs. resources
-│   │   │   └── test_f_lmx.py    # F_lmx: captain style vs. crew preferences
-│   │   └── test_pipeline.py      # DNRE → MLPSM orchestration
-│   └── benchmarking/
-│       ├── test_diagnosis.py     # Perf × Cohesion matrix, TVI, HCD
-│       └── test_matrice.py       # Sociogram data generation
-│
-└── modules/                      # Two layers per module: service + router
-    ├── auth/
-    │   ├── test_service.py        # JWT, bcrypt, token rotation
-    │   └── test_router.py         # POST /register, /login, /refresh, GET /me
-    ├── assessment/
-    │   ├── test_service.py        # submit_and_score, snapshot propagation
-    │   └── test_router.py         # GET /catalogue, POST /submit, GET /results
-    ├── crew/
-    │   ├── test_service.py        # assign_member, get_full_dashboard, TVI pipeline
-    │   └── test_router.py         # /members, /dashboard, /pulse
-    ├── identity/
-    │   ├── test_service.py        # get_full_profile, resolve_access_context, reports
-    │   └── test_router.py         # GET /candidate/{id}, PATCH /me, POST /experiences
-    ├── recruitment/
-    │   ├── test_service.py        # create_campaign, apply, get_matching
-    │   └── test_router.py         # POST /campaigns, GET /matching, POST /apply
-    ├── survey/
-    │   ├── test_service.py        # trigger_survey, submit_response, _normalize_response
-    │   └── test_router.py         # GET /pending, POST /respond, GET /results
-    └── vessel/
-        ├── test_service.py        # create, get_secure, update, delete, boarding-token
-        └── test_router.py         # CRUD /vessels, PATCH /environment, /boarding-token
+│   │   └── pe_fit/
+│   │       ├── test_master.py         # PEFitResult, global_score, weights
+│   │       ├── test_da_fit.py         # Demands-Abilities
+│   │       ├── test_ns_fit.py         # Needs-Supplies (JD-R)
+│   │       ├── test_pg_fit.py         # Person-Group (Bell 2007)
+│   │       ├── test_ps_fit.py         # Person-Supervisor (LMX)
+│   │       ├── test_po_values.py      # Person-Organisation (CES values)
+│   │       ├── test_profiles_extended.py   # 16 positions
+│   │       ├── test_profiles_matrix.py     # SME matrix (position × yacht_type)
+│   │       └── test_vessel_profile.py      # YachtStructuralProfile
+│   ├── use_cases/                 # recruitment, management, training, talent, rps
+│   └── benchmarking/              # diagnosis, matrice (sociogram)
+└── modules/                       # service + router tests per module
+    ├── auth/ · identity/ · crew/ · assessment/
+    ├── recruitment/ · survey/ · vessel/
 ```
 
 ### Test layers
@@ -699,10 +442,8 @@ tests/
 | Layer | Strategy | Tools |
 |-------|----------|-------|
 | Engine | Direct function calls, no mocks | pytest, parametrize |
-| Service | Mock repos via `AsyncMock`; real service logic | pytest-mock, `make_async_db()` |
-| Router | HTTP round-trip via `httpx.AsyncClient + ASGITransport`; mock service | dependency_overrides, `mocker.patch` |
-
-**Current status: 535 tests, 0 failures.**
+| Service | Mock repos via `AsyncMock`; real service logic | pytest-mock |
+| Router | HTTP round-trip via `httpx.AsyncClient + ASGITransport` | dependency_overrides |
 
 ---
 
@@ -719,14 +460,13 @@ All protected endpoints require `Authorization: Bearer <access_token>`.
 | Recruitment | `/recruitment` | `EmployerDep` |
 | Survey | `/surveys` | `CrewDep` / `EmployerDep` |
 | Vessel | `/vessels` | `EmployerDep` |
-| Gateway | `/gateway` | `EmployerDep` |
 
-Full schema available at `/docs` when the server is running.
+Full schema at `/docs`.
 
 ### Auth roles
 
-| Dependency | Role required | Returns |
-|------------|---------------|---------|
+| Dependency | Role | Returns |
+|------------|------|---------|
 | `UserDep` | Any authenticated | `User` |
 | `CrewDep` | `CANDIDATE` | `CrewProfile` |
 | `EmployerDep` | `CLIENT` or `ADMIN` | `EmployerProfile` |
@@ -738,97 +478,35 @@ Full schema available at `/docs` when the server is running.
 
 ### Critical (blocks production)
 
-- [ ] `SECRET_KEY` defaults to an unsafe placeholder — rotate before any deployment
-- [ ] `allow_origins=["*"]` in CORS config — restrict to frontend domain
+- [ ] `SECRET_KEY` defaults to unsafe placeholder — rotate before any deployment
+- [ ] `allow_origins=["*"]` in CORS — restrict to frontend domain
 - [ ] `DEBUG=True` in `.env` — exposes stack traces
-- [ ] `app.state.limiter` never set in `main.py` — rate limiter is defined but inactive
-- [ ] `infra/email.py` is empty — survey invitations and hiring notifications will silently fail
+- [ ] `app.state.limiter` never set in `main.py` — rate limiter defined but inactive
+- [ ] `infra/email.py` empty — survey invitations will silently fail
+
+### Application bugs
+
+- [ ] **`SurveyTriggerIn` missing `yacht_id`** — `modules/survey/router.py:37` accesses `payload.yacht_id` but the schema has no such field → `AttributeError 500`. Fix: add `yacht_id: int` to `SurveyTriggerIn`.
 
 ### High priority
 
-- [ ] Alembic migration for `job_weight_configs` table (`JobWeightConfig` model added, migration not yet generated)
-- [ ] Replace `print()` calls with `logging.getLogger(__name__)` throughout
-- [ ] Background task error handling — currently swallows exceptions silently; needs `try/except` + structured logging
-- [ ] File upload size limit — no max size validation on document upload endpoint
-- [ ] Add composite index on `daily_pulses(crew_profile_id, yacht_id, created_at)` — required for TVI queries at scale
-- [x] Unit test coverage for engine and module layers — 530 tests across engine, service and router layers
-- [x] T-IRT engine for CUTTY SARK (Brown & Maydeu-Olivares, 2011) — MAP estimation, probit, reversed items, 49 tests
-
-### Application bugs (surfaced by test suite)
-
-- [ ] **`SurveyTriggerIn` missing `yacht_id`** — `modules/survey/router.py` line 37 accesses `payload.yacht_id` but the schema declares no such field. Any authenticated `POST /surveys/trigger` call raises `AttributeError 500`. Fix: add `yacht_id: int` to `SurveyTriggerIn`.
-- [x] **Vessel router / service interface mismatch** — fixed. Tests now mock `service.get_all_for_employer` (matching the actual service method name).
+- [ ] Endpoints sociogramme (`GET /crew/{id}/sociogram`, `GET /crew/{id}/simulate/{cid}`)
+- [ ] Module Training (ORM models, 5 endpoints, seed, trigger logic in assessment service)
+- [ ] Replace `print()` with `logging.getLogger(__name__)` throughout
+- [ ] Background task error handling — currently swallows exceptions silently
 
 ### Medium priority
 
-- [ ] Wire S3-compatible storage in `infra/storage.py` — currently writes to local `uploads/` directory
-- [ ] Define psychometric basis for `captain_leadership_vector` — currently populated manually with no validated instrument
-- [ ] Add R² bounds check on OLS retrain — prevent theoretically invalid β values (e.g., negative weights)
-- [ ] Integration tests for assessment submission → snapshot propagation flow
+- [ ] Wire S3 storage in `infra/storage.py`
+- [ ] Physical Fit engine (`pj_fit/physical_fit/`) — feeds `snapshot['maritime_tolerance']` from METS
+- [ ] Mobility Fit engine (`pj_fit/mobility_fit/`) — feeds `snapshot['mobility_profile']` from MMFS
+- [ ] P-O Fit (Temps 2) — value congruence via OCP/Q-Sort (`po_fit/` currently empty)
+- [ ] Centile normalization on candidate pool (replace raw scores with percentiles)
 - [ ] Docker + docker-compose setup
 
-### Low priority
+### Psychometric validation roadmap
 
-- [ ] Redis caching layer for vessel_snapshot (currently in-process only)
-- [ ] Prometheus metrics endpoint
-- [ ] WebSocket endpoint for live dashboard updates
+- [ ] CFA (confirmatory factor analysis) on METS, MMFS, CES — N ≥ 200 required
+- [ ] Calibrate PSI breakpoints on real field data before production use
+- [ ] Calibrate CUTTY SARK item parameters (λ, μ) from ≥ 200 field administrations
 - [ ] Population norm tables for maritime-specific percentile computation
-
-### CUTTY SARK — pending
-
-- [ ] Seed CUTTY SARK into DB (`seed_tests_surveys.py`) — create `TestCatalogue(test_type="tirt")` + 60 `Question` objects with `options` JSON
-- [ ] Service-layer test for `submit_and_score()` with `test_type = "tirt"` (mock `calculate_tirt_scores`)
-- [ ] Router-layer test for `POST /assessments/{test_id}/submit` with forced-choice responses
-- [ ] Validate social desirability balance across pairs — current item parameters ($\lambda$, $\mu$) are based on literature priors; empirical verification that $\mu_{\text{left}} \approx \mu_{\text{right}}$ for each pair is required before production use (**prototype status**)
-- [ ] Calibrate item parameters $(\lambda, \mu)$ with field data once n > 200 administrations — planned as a nightly ML script analogous to the MLPSM β-retrain loop
-
-### Module Training — backend à créer (frontend prêt)
-
-Le module de formation asynchrone est entièrement maquetté côté mobile (`apps/mobile/src/features/training/`) avec des données statiques. Le backend doit être construit pour alimenter ces écrans.
-
-**ORM models** (à ajouter dans `shared/models/`) :
-
-```
-TrainingAxe           – id, slug, title, subtitle, icon, color, trigger_description, order
-TrainingModule        – id, axe_id, title, subtitle, type (lesson/exercise/checklist/self_assessment),
-                        duration_min, level (junior/mid/senior), points,
-                        trigger_conditions (JSON), content (JSON), order
-CandidateModuleStatus – candidate_id, module_id, status (locked/available/in_progress/completed),
-                        completed_at, updated_at
-CandidatePath         – candidate_id, level (junior/mid/senior), current_module_id,
-                        queued_module_ids (ARRAY/JSON), trigger_summary (JSON snapshot), updated_at
-```
-
-**Endpoints à créer** (`modules/training/`) :
-
-| Endpoint | Auth | Description |
-|---|---|---|
-| `GET /training/axes` | `CrewDep` | 4 axes + modules + statuts pour le candidat authentifié |
-| `GET /training/path` | `CrewDep` | Parcours personnalisé (niveau, module courant, modules en attente) |
-| `GET /training/modules/{module_id}` | `CrewDep` | Contenu complet d'un module |
-| `POST /training/modules/{module_id}/complete` | `CrewDep` | Marquer terminé → recalcul du parcours |
-| `POST /training/trigger` | `AdminDep` (ou service interne) | Débloquer des modules suite à un score de test |
-
-**Logique de déclenchement :** le service assessment (`modules/assessment/service.py`) doit appeler `training_service.evaluate_triggers(crew_profile_id, snapshot)` après chaque rebuild du `psychometric_snapshot`. Cette fonction évalue les `trigger_conditions` de chaque module `locked` et passe à `available` les modules dont les seuils sont franchis.
-
-**Seed :** créer `seed/seed_training.py` pour peupler `TrainingAxe` et `TrainingModule` avec les 4 axes (Excellence opérationnelle, Leadership maritime, Résilience & stress, Cohésion équipage) et leurs modules — le contenu de référence se trouve dans `apps/mobile/src/features/training/data.ts`.
-
-- [ ] ORM models (`TrainingAxe`, `TrainingModule`, `CandidateModuleStatus`, `CandidatePath`)
-- [ ] Alembic migration
-- [ ] Repository layer (CRUD + trigger evaluation)
-- [ ] Service layer (path computation, trigger logic, module completion)
-- [ ] Router + schemas (5 endpoints, `CrewDep` auth)
-- [ ] Seed script `seed_training.py`
-- [ ] Tests (engine: trigger logic · service · router — 3 couches)
-- [ ] Hook d'intégration dans `assessment/service.py` (appel `evaluate_triggers` post-snapshot)
-
----
-
-### Étalonnage & validation des tests (futur — mobile)
-
-Roadmap psychométrique post-prototype :
-
-- [ ] **Module mobile de validation des questions** — interface permettant à des évaluateurs internes (psychologues, SME maritime) de noter chaque item sur deux axes : pertinence contextuelle (1–5) et désirabilité sociale perçue (1–5). Alimente une table `ItemValidation(item_ipip_id, rater_id, relevance, desirability, comment)`.
-- [ ] **Vérification d'équilibre des paires** — après collecte de ≥ 30 évaluations par item, vérifier automatiquement que $|\mu_{\text{left}} - \mu_{\text{right}}|$ < 0.3 pour chaque paire (seuil T-IRT). Paires déséquilibrées → flaggées `CALIBRATION_REQUIRED`.
-- [ ] **Recalibration des paramètres** ($\lambda$, $\mu$) à partir des réponses candidates réelles — via un modèle IRT multivarié une fois n > 200 passages complets. Versionné dans une table `ItemParamVersion` (pattern analogue à `ModelVersion` pour MLPSM).
-- [ ] **Score de consistance interne** — coefficient omega de McDonald (ω) par domaine Big Five, calculé sur les n premiers passages ; déclenche une alerte si ω < 0.70 pour un domaine.

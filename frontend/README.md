@@ -1,6 +1,6 @@
-# Harmony — Frontend
+# Radiant Analytics — Frontend
 
-Interface utilisateur de la plateforme Harmony Analytics.
+Interface utilisateur de la plateforme Radiant Analytics by Fondation Technologies.
 
 **Stack :** Turborepo · Next.js 15 · Expo SDK 55 · React Three Fiber · D3-force · TanStack Query v5 · Zustand · NativeWind · shadcn/ui
 
@@ -26,7 +26,7 @@ Le frontend est un **monorepo Turborepo** avec deux applications et trois packag
 frontend/
 ├── apps/
 │   ├── web/                    # Next.js 15 — dashboard employeur
-│   └── mobile/                 # Expo SDK 52 — app candidat iOS/Android
+│   └── mobile/                 # Expo SDK 55 — app candidat iOS/Android
 │
 ├── packages/
 │   ├── types/                  # Miroirs TypeScript de tous les schémas Pydantic backend
@@ -216,7 +216,11 @@ npx expo start
 ```bash
 cd frontend/apps/web
 npm test
-# → 126 tests, 13 suites, 0 failures (backend : 481 tests, 0 failures)
+# → 126 tests, 13 suites, 0 failures
+
+cd frontend/apps/mobile
+npm test
+# → 121 tests, 19 suites, 0 failures
 ```
 
 ### Build complet
