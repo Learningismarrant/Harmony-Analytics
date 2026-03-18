@@ -1,72 +1,143 @@
-import { Tabs } from "expo-router";
-import { Text } from "react-native";
+import { Tabs, useRouter } from "expo-router";
+import { TouchableOpacity, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { useAuthStore } from "@/features/auth/store";
 
-function TabIcon({ label, focused }: { label: string; focused: boolean }) {
+// ── React Navigation style props can't use className, so we reference
+//    tailwind token values here as a single source of truth.
+const NAV = {
+  bgPrimary:   "#0D1B2A",  // bg-bg-primary
+  bgSecondary: "#1A2C42",  // bg-bg-secondary
+  bgBorder:    "#1E3050",  // bg-bg-border
+  teak:        "#A67C52",  // teak
+  silver:      "#94A3B8",  // silver / muted
+} as const;
+
+// ── Header components — use NativeWind className ──────────────────────────────
+
+function HeaderTitle({ title }: { title: string }) {
   return (
-    <Text style={{ color: focused ? "#0EA5E9" : "#8FA3B8", fontSize: 20 }}>
-      {label}
-    </Text>
+    <View className="flex-row items-center">
+      <Text className="text-teak text-xs font-black tracking-widest">
+        HARMONY
+      </Text>
+      <Text className="text-slate text-xs font-light mx-1.5">·</Text>
+      <Text className="text-ice text-xs font-bold tracking-widest">
+        {title.toUpperCase()}
+      </Text>
+    </View>
   );
 }
+
+function LogoutButton() {
+  const router = useRouter();
+  const logout = useAuthStore((s) => s.logout);
+
+  async function handleLogout() {
+    await logout();
+    router.replace("/(auth)/login");
+  }
+
+  return (
+    <TouchableOpacity
+      onPress={handleLogout}
+      className="mr-4 flex-row items-center px-2.5 py-1.5 rounded-lg bg-teak/10 border border-teak/20"
+    >
+      <Ionicons name="log-out-outline" size={14} color={NAV.teak} />
+    </TouchableOpacity>
+  );
+}
+
+// ── Shared screen options ─────────────────────────────────────────────────────
+
+const SCREEN_TITLES: Record<string, string> = {
+  profile:              "Profile",
+  "assessment/index":   "Assessment",
+  "survey/index":       "Survey",
+  "training/index":     "Training",
+  "applications/index": "Applications",
+};
+
+const sharedOptions = (name: string) => ({
+  headerTitle: () => <HeaderTitle title={SCREEN_TITLES[name] ?? name} />,
+  headerTitleAlign: "left" as const,
+  headerRight: () => <LogoutButton />,
+  headerStyle: { backgroundColor: NAV.bgPrimary },
+  headerShadowVisible: false,
+});
+
+// ── Layout ────────────────────────────────────────────────────────────────────
 
 export default function CandidateLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: "#07090F" },
-        headerTintColor: "#E8EFF7",
-        headerTitleStyle: { fontWeight: "600" },
         tabBarStyle: {
-          backgroundColor: "#0D1117",
-          borderTopColor: "#1E2733",
+          backgroundColor: NAV.bgPrimary,
+          borderTopColor: NAV.bgBorder,
           borderTopWidth: 1,
           height: 60,
           paddingBottom: 8,
         },
-        tabBarActiveTintColor: "#0EA5E9",
-        tabBarInactiveTintColor: "#8FA3B8",
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "500" },
+        tabBarActiveTintColor: NAV.teak,
+        tabBarInactiveTintColor: NAV.silver,
+        tabBarLabelStyle: { fontSize: 10, fontWeight: "600", letterSpacing: 0.5 },
       }}
     >
       <Tabs.Screen
         name="profile"
         options={{
-          title: "Profile",
+          ...sharedOptions("profile"),
           tabBarLabel: "Profile",
-          tabBarIcon: ({ focused }) => <TabIcon label="◈" focused={focused} />,
-          headerTitle: "My Profile",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="analytics-outline" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="assessment/index"
         options={{
-          title: "Tests",
+          ...sharedOptions("assessment/index"),
           tabBarLabel: "Tests",
-          tabBarIcon: ({ focused }) => <TabIcon label="⊞" focused={focused} />,
-          headerTitle: "Psychometric Tests",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="layers-outline" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
         name="survey/index"
         options={{
-          title: "Survey",
+          ...sharedOptions("survey/index"),
           tabBarLabel: "Survey",
-          tabBarIcon: ({ focused }) => <TabIcon label="◎" focused={focused} />,
-          headerTitle: "Surveys & Pulse",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="compass-outline" size={size} color={color} />
+          ),
         }}
       />
       <Tabs.Screen
-        name="assessment/[testId]"
-        options={{ href: null, headerTitle: "Take Test" }}
+        name="training/index"
+        options={{
+          ...sharedOptions("training/index"),
+          tabBarLabel: "Training",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="medal-outline" size={size} color={color} />
+          ),
+        }}
       />
       <Tabs.Screen
-        name="assessment/result"
-        options={{ href: null, headerTitle: "Results" }}
+        name="applications/index"
+        options={{
+          ...sharedOptions("applications/index"),
+          tabBarLabel: "Applications",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="briefcase-outline" size={size} color={color} />
+          ),
+        }}
       />
-      <Tabs.Screen
-        name="survey/[surveyId]"
-        options={{ href: null, headerTitle: "Survey Response" }}
-      />
+      <Tabs.Screen name="assessment/[testId]" options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="assessment/result"   options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="survey/[surveyId]"   options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="training/[moduleId]" options={{ href: null, headerShown: false }} />
     </Tabs>
   );
 }

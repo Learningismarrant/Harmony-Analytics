@@ -702,7 +702,7 @@ tests/
 | Service | Mock repos via `AsyncMock`; real service logic | pytest-mock, `make_async_db()` |
 | Router | HTTP round-trip via `httpx.AsyncClient + ASGITransport`; mock service | dependency_overrides, `mocker.patch` |
 
-**Current status: 530 tests, 0 failures.**
+**Current status: 535 tests, 0 failures.**
 
 ---
 
@@ -781,6 +781,48 @@ Full schema available at `/docs` when the server is running.
 - [ ] Router-layer test for `POST /assessments/{test_id}/submit` with forced-choice responses
 - [ ] Validate social desirability balance across pairs — current item parameters ($\lambda$, $\mu$) are based on literature priors; empirical verification that $\mu_{\text{left}} \approx \mu_{\text{right}}$ for each pair is required before production use (**prototype status**)
 - [ ] Calibrate item parameters $(\lambda, \mu)$ with field data once n > 200 administrations — planned as a nightly ML script analogous to the MLPSM β-retrain loop
+
+### Module Training — backend à créer (frontend prêt)
+
+Le module de formation asynchrone est entièrement maquetté côté mobile (`apps/mobile/src/features/training/`) avec des données statiques. Le backend doit être construit pour alimenter ces écrans.
+
+**ORM models** (à ajouter dans `shared/models/`) :
+
+```
+TrainingAxe           – id, slug, title, subtitle, icon, color, trigger_description, order
+TrainingModule        – id, axe_id, title, subtitle, type (lesson/exercise/checklist/self_assessment),
+                        duration_min, level (junior/mid/senior), points,
+                        trigger_conditions (JSON), content (JSON), order
+CandidateModuleStatus – candidate_id, module_id, status (locked/available/in_progress/completed),
+                        completed_at, updated_at
+CandidatePath         – candidate_id, level (junior/mid/senior), current_module_id,
+                        queued_module_ids (ARRAY/JSON), trigger_summary (JSON snapshot), updated_at
+```
+
+**Endpoints à créer** (`modules/training/`) :
+
+| Endpoint | Auth | Description |
+|---|---|---|
+| `GET /training/axes` | `CrewDep` | 4 axes + modules + statuts pour le candidat authentifié |
+| `GET /training/path` | `CrewDep` | Parcours personnalisé (niveau, module courant, modules en attente) |
+| `GET /training/modules/{module_id}` | `CrewDep` | Contenu complet d'un module |
+| `POST /training/modules/{module_id}/complete` | `CrewDep` | Marquer terminé → recalcul du parcours |
+| `POST /training/trigger` | `AdminDep` (ou service interne) | Débloquer des modules suite à un score de test |
+
+**Logique de déclenchement :** le service assessment (`modules/assessment/service.py`) doit appeler `training_service.evaluate_triggers(crew_profile_id, snapshot)` après chaque rebuild du `psychometric_snapshot`. Cette fonction évalue les `trigger_conditions` de chaque module `locked` et passe à `available` les modules dont les seuils sont franchis.
+
+**Seed :** créer `seed/seed_training.py` pour peupler `TrainingAxe` et `TrainingModule` avec les 4 axes (Excellence opérationnelle, Leadership maritime, Résilience & stress, Cohésion équipage) et leurs modules — le contenu de référence se trouve dans `apps/mobile/src/features/training/data.ts`.
+
+- [ ] ORM models (`TrainingAxe`, `TrainingModule`, `CandidateModuleStatus`, `CandidatePath`)
+- [ ] Alembic migration
+- [ ] Repository layer (CRUD + trigger evaluation)
+- [ ] Service layer (path computation, trigger logic, module completion)
+- [ ] Router + schemas (5 endpoints, `CrewDep` auth)
+- [ ] Seed script `seed_training.py`
+- [ ] Tests (engine: trigger logic · service · router — 3 couches)
+- [ ] Hook d'intégration dans `assessment/service.py` (appel `evaluate_triggers` post-snapshot)
+
+---
 
 ### Étalonnage & validation des tests (futur — mobile)
 

@@ -24,11 +24,21 @@ class TestCatalogue(Base):
     name                   = Column(String, nullable=False)
     description            = Column(String, nullable=True)
     instructions           = Column(Text, nullable=True)
-    test_type              = Column(String, nullable=False)   # "likert" | "cognitive"
+    test_type              = Column(String, nullable=False)   # "likert" | "qcm" | "Ipsatif"
     n_questions            = Column(Integer, default=1)
     max_score_per_question = Column(Integer, default=5)
     is_active              = Column(Boolean, default=True)
     created_at             = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Statut de validation et licence
+    # status : "ALPHA" | "VALIDATED" | "CALIBRATED"
+    status             = Column(String, default="ALPHA", nullable=False)
+    # license : "PUBLIC_DOMAIN" | "PUBLISHED_RESEARCH" | "CUSTOM_ALPHA"
+    license            = Column(String, default="CUSTOM_ALPHA", nullable=False)
+    # Avertissements, limitations, TODO calibration
+    validation_notes   = Column(Text, nullable=True)
+    # Définition des modules : [{"index": 0, "name": "...", "n_items": 24, ...}]
+    modules_config     = Column(JSON, nullable=True)
 
     questions = relationship("Question",   back_populates="test", cascade="all, delete-orphan")
     results   = relationship("TestResult", back_populates="test")
@@ -48,6 +58,8 @@ class Question(Base):
     correct_answer = Column(String,  nullable=True)
     reverse        = Column(Boolean, default=False)
     order          = Column(Integer, default=0)
+    # Index du module auquel appartient cet item (0-based). None = pas de découpage modulaire.
+    module_index   = Column(Integer, nullable=True)
 
     test = relationship("TestCatalogue", back_populates="questions")
 

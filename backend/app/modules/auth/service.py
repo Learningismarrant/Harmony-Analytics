@@ -4,7 +4,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 
 from app.shared.models import User, CrewProfile, EmployerProfile
-from app.shared.enums import UserRole
+from app.shared.enums import UserRole, YachtPosition
+from typing import Optional
 from app.core.security import (
     hash_password, verify_password,
     create_access_token, create_refresh_token, decode_token,
@@ -43,7 +44,11 @@ class AuthService:
         await db.refresh(user)
         await db.refresh(crew)
 
-        return self._build_tokens(user, profile_id=crew.id)
+        return self._build_tokens(
+            user,
+            profile_id=crew.id,
+            position_targeted=crew.position_targeted,
+        )
 
     async def register_employer(self, db: AsyncSession, payload: RegisterEmployerIn) -> TokenOut:
         await self._assert_email_free(db, payload.email)
@@ -70,7 +75,7 @@ class AuthService:
 
         return self._build_tokens(user, profile_id=employer.id)
 
-    # ── Login ─────────────────────────────────────────────────
+    # ── Login ──────────────────────────────────────────────────
 
     async def login(self, db: AsyncSession, payload: LoginIn) -> TokenOut:
         result = await db.execute(select(User).where(User.email == payload.email))
@@ -84,8 +89,12 @@ class AuthService:
         if not user.is_active:
             raise HTTPException(status_code=403, detail="Compte désactivé")
 
-        profile_id = await self._get_profile_id(db, user)
-        return self._build_tokens(user, profile_id=profile_id)
+        profile_id, position_targeted = await self._get_profile_info(db, user)
+        return self._build_tokens(
+            user,
+            profile_id=profile_id,
+            position_targeted=position_targeted,
+        )
 
     # ── Refresh ───────────────────────────────────────────────
 
@@ -123,20 +132,31 @@ class AuthService:
         if result.scalar_one_or_none():
             raise HTTPException(status_code=409, detail="Email déjà utilisé")
 
-    async def _get_profile_id(self, db: AsyncSession, user: User) -> int:
+    async def _get_profile_info(
+        self, db: AsyncSession, user: User
+    ) -> tuple[int, Optional[YachtPosition]]:
+        """Retourne (profile_id, position_targeted) selon le rôle."""
         if user.role == UserRole.CANDIDATE:
             result = await db.execute(
                 select(CrewProfile).where(CrewProfile.user_id == user.id)
             )
             profile = result.scalar_one_or_none()
+            if profile:
+                return profile.id, profile.position_targeted
+            return 0, None
         else:
             result = await db.execute(
                 select(EmployerProfile).where(EmployerProfile.user_id == user.id)
             )
             profile = result.scalar_one_or_none()
-        return profile.id if profile else 0
+            return (profile.id if profile else 0), None
 
-    def _build_tokens(self, user: User, profile_id: int) -> TokenOut:
+    def _build_tokens(
+        self,
+        user: User,
+        profile_id: int,
+        position_targeted: Optional[YachtPosition] = None,
+    ) -> TokenOut:
         data = {"sub": str(user.id), "role": user.role}
         return TokenOut(
             access_token=create_access_token(data),
@@ -144,4 +164,5 @@ class AuthService:
             role=user.role,
             user_id=user.id,
             profile_id=profile_id,
+            position_targeted=position_targeted,
         )

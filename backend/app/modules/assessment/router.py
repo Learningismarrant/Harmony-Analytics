@@ -7,7 +7,7 @@ Changements v2 :
 - Accès client via employer (EmployerProfile)
 - service.submit_and_score reçoit crew (CrewProfile)
 """
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Path, Request, status
 from typing import List
 
 from app.shared.deps import DbDep, CrewDep, EmployerDep, UserDep

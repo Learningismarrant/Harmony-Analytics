@@ -352,7 +352,7 @@ class RecruitmentRepository:
 
     async def get_active_model_betas(self, db: AsyncSession) -> Dict:
         """Betas du ModelVersion actif — fallback sur DEFAULT_BETAS si absent."""
-        from app.engine.recruitment.MLPSM.master import DEFAULT_BETAS
+        from app.engine.pe_fit.compat import DEFAULT_BETAS
         r = await db.execute(
             select(ModelVersion)
             .where(ModelVersion.is_active == True)

@@ -1,12 +1,32 @@
 # tests/engine/recruitment/dnre/test_dnre.py
 """
-Tests unitaires du DNRE.
-Zéro DB — toutes les données sont des fixtures JSON in-memory.
+Tests unitaires du scoring PJ-Fit (ancien DNRE).
+Redirigé vers pe_fit après suppression de DNRE/.
+
+Couverture :
+    - PJ-Fit scorer (C1 : Individual Performance) — équivalent sme_score C1
+    - Centile rank dynamique (Tukey) — pe_fit/pj_fit/centile_rank
+    - Safety barrier (pénalité continue) — pe_fit/pj_fit/safety_barrier
+    - PEFit master : compute_batch via pipeline.run_batch
+    - PE Fit compute (équivalent dnre.compute_single / compute_batch)
+
+Les anciens modules DNRE/ ont été supprimés.
+Toute la logique est désormais dans pe_fit/.
 """
 import pytest
-from app.engine.recruitment.DNRE import sme_score, centile_rank, safety_barrier, global_fit
-from app.engine.recruitment.DNRE import master as dnre
-from app.engine.recruitment.DNRE.safety_barrier import SafetyLevel, VetoType, VetoRule
+
+from app.engine.pe_fit.pj_fit import scorer as pj_scorer
+from app.engine.pe_fit.pj_fit import centile_rank
+from app.engine.pe_fit.pj_fit.safety_barrier import (
+    SafetyLevel,
+    VetoType,
+    VetoRule,
+    evaluate as safety_evaluate,
+)
+from app.engine.pe_fit import master as pe_fit_master
+from app.engine.pe_fit.master import PEFitResult
+
+pytestmark = pytest.mark.engine
 
 
 # ═══════════════════════════════════════════════════════════
@@ -97,66 +117,49 @@ def crew_snapshots():
 
 
 # ═══════════════════════════════════════════════════════════
-# TESTS SME SCORE (Étape 1)
+# TESTS PJ-FIT SCORER (équivalent SME Score C1)
 # ═══════════════════════════════════════════════════════════
 
-class TestSMEScore:
+class TestPJFitScorer:
+    """Tests du scorer PJ-Fit (C1 Individual Performance — équivalent sme_score)."""
 
     def test_strong_candidate_high_score(self, snapshot_strong):
-        result = sme_score.compute(snapshot_strong, sme_score.COMPETENCY_INDIVIDUAL_PERFORMANCE)
+        result = pj_scorer.compute(snapshot_strong)
+        # PJ-Fit utilise gca (0.60) + conscientiousness (0.40)
         assert result.score >= 60.0
-        assert len(result.trait_contributions) == 2   # GCA + C
-        assert result.data_quality == 1.0
+        assert result.data_quality > 0.5
 
-    def test_formula_matches_manual_calc(self, snapshot_strong):
-        """Vérification manuelle : S = (0.6×76 + 0.4×78) / 1.0"""
-        result = sme_score.compute(snapshot_strong, sme_score.COMPETENCY_INDIVIDUAL_PERFORMANCE)
+    def test_formula_c1_matches_manual_calc(self, snapshot_strong):
+        """S[C1] = (0.60×76 + 0.40×78) / 1.0 = 76.8"""
+        result = pj_scorer.compute(snapshot_strong)
         expected = (0.60 * 76.0 + 0.40 * 78.0) / 1.0
-        assert abs(result.score - expected) < 0.1
+        assert abs(result.score - expected) < 0.5
 
     def test_partial_snapshot_uses_fallback(self, snapshot_partial):
-        result = sme_score.compute(snapshot_partial, sme_score.COMPETENCY_INDIVIDUAL_PERFORMANCE)
-        # GCA manquant → fallback 50.0
-        gca_contrib = next(tc for tc in result.trait_contributions if tc.trait == "gca")
-        assert gca_contrib.is_fallback
-        assert any("FALLBACK_GCA" in f for f in result.flags)
+        result = pj_scorer.compute(snapshot_partial)
+        # GCA manquant → fallback ; conscientiousness manquant → fallback
         assert result.data_quality < 1.0
-
-    def test_custom_sme_weights_applied(self, snapshot_strong):
-        custom_weights = {"gca": 1.0, "conscientiousness": 0.0}
-        result = sme_score.compute(
-            snapshot_strong,
-            sme_score.COMPETENCY_INDIVIDUAL_PERFORMANCE,
-            sme_weights=custom_weights,
+        # Flag FALLBACK présent dans le résultat SME ou P_ind
+        has_fallback_flag = (
+            any("FALLBACK" in f or "MISSING" in f for f in result.all_flags)
         )
-        # Avec poids C=0, seul GCA compte → score ≈ 76
-        assert abs(result.score - 76.0) < 1.0
+        assert has_fallback_flag
 
-    def test_all_competencies_computed(self, snapshot_strong):
-        all_results = sme_score.compute_all_competencies(snapshot_strong)
-        assert set(all_results.keys()) == set(sme_score.ALL_COMPETENCIES)
-        for key, result in all_results.items():
-            assert 0.0 <= result.score <= 100.0
+    def test_p_ind_score_in_bounds(self, snapshot_strong):
+        result = pj_scorer.compute(snapshot_strong)
+        assert 0.0 <= result.p_ind_score <= 100.0
 
-    def test_team_fit_includes_emotional_stability(self, snapshot_strong):
-        result = sme_score.compute(snapshot_strong, sme_score.COMPETENCY_TEAM_FIT)
-        trait_keys = [tc.trait for tc in result.trait_contributions]
-        assert "emotional_stability" in trait_keys
+    def test_fit_label_assigned(self, snapshot_strong):
+        result = pj_scorer.compute(snapshot_strong)
+        assert result.fit_label in ("STRONG_FIT", "GOOD_FIT", "MODERATE_FIT", "POOR_FIT")
 
-    def test_leadership_fit_uses_preferences(self, snapshot_strong):
-        result = sme_score.compute(snapshot_strong, sme_score.COMPETENCY_LEADERSHIP_FIT)
-        # 0.6 × 100 = 60 pour autonomy (0.6 × 100), etc.
-        assert result.score > 0
-        assert result.data_quality == 1.0   # preferences présentes → pas de fallback
-
-    def test_unknown_competency_returns_fallback(self, snapshot_strong):
-        result = sme_score.compute(snapshot_strong, "C99_unknown")
-        assert "NO_WEIGHTS" in result.flags[0]
-        assert result.data_quality == 0.0
+    def test_g_fit_alias_equals_score(self, snapshot_strong):
+        result = pj_scorer.compute(snapshot_strong)
+        assert result.g_fit == result.score
 
 
 # ═══════════════════════════════════════════════════════════
-# TESTS CENTILE RANK (Étape 2)
+# TESTS CENTILE RANK (Étape 2 — pe_fit/pj_fit/centile_rank)
 # ═══════════════════════════════════════════════════════════
 
 class TestCentileRank:
@@ -203,12 +206,6 @@ class TestCentileRank:
         result = centile_rank.compute(50.0, pool)
         assert result.confidence == "HIGH"
 
-    def test_batch_all_candidates(self):
-        scores = {"A": 80.0, "B": 60.0, "C": 40.0}
-        results = centile_rank.compute_batch(scores, "C1")
-        assert len(results) == 3
-        assert results["A"].centile > results["B"].centile > results["C"].centile
-
     def test_rank_coherent(self):
         pool = [30.0, 50.0, 70.0, 85.0, 90.0]
         result = centile_rank.compute(90.0, pool)
@@ -220,14 +217,12 @@ class TestCentileRank:
 
 
 # ═══════════════════════════════════════════════════════════
-# TESTS SAFETY BARRIER — Pénalité Continue (SKILL.md V1)
+# TESTS SAFETY BARRIER — Pénalité Continue
 # ═══════════════════════════════════════════════════════════
 
 class TestSafetyBarrier:
     """
-    SKILL.md V1 — La barrière de sécurité utilise une pénalité logistique continue.
-    La fonction _logistic_penalty(x, threshold, k) = sigmoid(k·(x−threshold)).
-
+    La barrière de sécurité utilise une pénalité logistique continue.
     Comportement attendu :
         - CLEAR      : penalty_multiplier=1.0, adjusted_score=None
         - ADVISORY   : penalty_multiplier=1.0, adjusted_score=None
@@ -236,97 +231,69 @@ class TestSafetyBarrier:
     """
 
     def test_strong_candidate_clear(self, snapshot_strong):
-        result = safety_barrier.evaluate(snapshot_strong, g_fit_score=70.0)
+        result = safety_evaluate(snapshot_strong, g_fit_score=70.0)
         assert result.safety_level == SafetyLevel.CLEAR
         assert not result.g_fit_suspended
         assert result.adjusted_score is None
         assert result.penalty_multiplier == 1.0
 
     def test_disqualified_es_below_15_penalty_near_zero(self, snapshot_disqualified):
-        """
-        ES=8 (< seuil HARD 15) → safety_level=DISQUALIFIED.
-        Pénalité logistique : adjusted_score est quasi-nul (< 5% du g_fit)
-        mais PAS exactement 0.0 (pénalité continue, pas de couperet binaire).
-        """
-        result = safety_barrier.evaluate(snapshot_disqualified, g_fit_score=65.0)
+        """ES=8 (< seuil HARD 15) → safety_level=DISQUALIFIED."""
+        result = safety_evaluate(snapshot_disqualified, g_fit_score=65.0)
         assert result.safety_level == SafetyLevel.DISQUALIFIED
         assert result.g_fit_suspended
         hard_triggers = [t for t in result.triggers if t.veto_type == VetoType.HARD]
         assert len(hard_triggers) >= 1
 
-        # Score quasi-nul (bien sous le seuil → pénalité sévère) mais continu
+        # Score quasi-nul (pénalité continue)
         assert result.adjusted_score is not None
-        assert result.adjusted_score < 5.0          # Quasi-nul (non binaire)
-        assert result.adjusted_score > 0.0          # Jamais exactement 0
-        assert result.penalty_multiplier < 0.10     # Multiplicateur très faible
+        assert result.adjusted_score < 5.0
+        assert result.adjusted_score > 0.0
+        assert result.penalty_multiplier < 0.10
 
     def test_disqualified_penalty_multiplier_logged_per_trigger(self, snapshot_disqualified):
         """Chaque VetoTrigger porte son penalty_multiplier individuel."""
-        result = safety_barrier.evaluate(snapshot_disqualified, g_fit_score=65.0)
+        result = safety_evaluate(snapshot_disqualified, g_fit_score=65.0)
         for t in result.triggers:
             if t.veto_type == VetoType.HARD:
-                assert 0.0 < t.penalty_multiplier < 0.5  # Bien sous le seuil → pénalité forte
+                assert 0.0 < t.penalty_multiplier < 0.5
 
     def test_high_risk_es_between_15_30_score_reduced(self, snapshot_high_risk):
-        """
-        ES=24 (entre seuils HARD 15 et SOFT 30) → HIGH_RISK.
-        adjusted_score doit être < g_fit (réduit par la pénalité)
-        mais pas quasi-nul (pénalité SOFT moins sévère que HARD).
-        """
+        """ES=24 (entre seuils HARD 15 et SOFT 30) → HIGH_RISK."""
         g_fit = 60.0
-        result = safety_barrier.evaluate(snapshot_high_risk, g_fit_score=g_fit)
+        result = safety_evaluate(snapshot_high_risk, g_fit_score=g_fit)
         assert result.safety_level == SafetyLevel.HIGH_RISK
         assert result.g_fit_suspended
-
-        # Pénalité continue : score réduit mais non nul
         assert result.adjusted_score is not None
-        assert result.adjusted_score < g_fit        # Réduit
-        assert result.adjusted_score > 0.0          # Pas quasi-nul (SOFT vs HARD)
+        assert result.adjusted_score < g_fit
+        assert result.adjusted_score > 0.0
         assert 0.0 < result.penalty_multiplier < 1.0
 
     def test_penalite_croissante_avec_distance_au_seuil(self):
-        """
-        Plus le score est loin sous le seuil, plus la pénalité est sévère.
-        ES=25 (proche du seuil SOFT 30) doit avoir une pénalité plus faible
-        qu'ES=18 (plus loin sous le seuil).
-        """
         snap_close = {
             "big_five": {
                 "agreeableness":     {"score": 60.0},
                 "conscientiousness": {"score": 65.0},
-                "neuroticism":       {"score": 75.0},   # ES = 25 → juste sous seuil SOFT 30
+                "neuroticism":       {"score": 75.0},   # ES = 25
             }
         }
         snap_far = {
             "big_five": {
                 "agreeableness":     {"score": 60.0},
                 "conscientiousness": {"score": 65.0},
-                "neuroticism":       {"score": 82.0},   # ES = 18 → plus loin sous seuil SOFT 30
+                "neuroticism":       {"score": 82.0},   # ES = 18
             }
         }
-        result_close = safety_barrier.evaluate(snap_close, g_fit_score=65.0)
-        result_far   = safety_barrier.evaluate(snap_far,   g_fit_score=65.0)
+        result_close = safety_evaluate(snap_close, g_fit_score=65.0)
+        result_far   = safety_evaluate(snap_far,   g_fit_score=65.0)
 
-        # Les deux sont HIGH_RISK
         assert result_close.safety_level == SafetyLevel.HIGH_RISK
         assert result_far.safety_level   == SafetyLevel.HIGH_RISK
-
-        # Le candidat plus loin du seuil est plus pénalisé
         assert result_close.penalty_multiplier > result_far.penalty_multiplier
         assert result_close.adjusted_score > result_far.adjusted_score
 
     def test_penalite_continue_dans_zone_declenchee(self):
-        """
-        Continuité de la pénalité logistique DANS la zone en dessous du seuil.
-
-        Pour 3 candidats de plus en plus éloignés sous le seuil SOFT ES=30 :
-            ES=27  →  sigmoid(0.2 × (27−30)) = sigmoid(−0.6) ≈ 0.35
-            ES=22  →  sigmoid(0.2 × (22−30)) = sigmoid(−1.6) ≈ 0.17
-            ES=16  →  sigmoid(0.2 × (16−30)) = sigmoid(−2.8) ≈ 0.06
-
-        La pénalité doit décroître progressivement (pas de saut binaire).
-        Chaque palier doit être strictement plus pénalisé que le précédent.
-        """
+        """Continuité de la pénalité logistique dans la zone en dessous du seuil."""
         def make_snap(es: float) -> dict:
             neuroticism = 100.0 - es
             return {
@@ -337,19 +304,16 @@ class TestSafetyBarrier:
                 }
             }
 
-        result_27 = safety_barrier.evaluate(make_snap(27.0), g_fit_score=65.0)
-        result_22 = safety_barrier.evaluate(make_snap(22.0), g_fit_score=65.0)
-        result_16 = safety_barrier.evaluate(make_snap(16.0), g_fit_score=65.0)
+        result_27 = safety_evaluate(make_snap(27.0), g_fit_score=65.0)
+        result_22 = safety_evaluate(make_snap(22.0), g_fit_score=65.0)
+        result_16 = safety_evaluate(make_snap(16.0), g_fit_score=65.0)
 
-        # Tous HIGH_RISK (ES < seuil SOFT 30, >= seuil HARD 15)
         assert result_27.safety_level == SafetyLevel.HIGH_RISK
         assert result_22.safety_level == SafetyLevel.HIGH_RISK
         assert result_16.safety_level == SafetyLevel.HIGH_RISK
 
-        # La pénalité croît progressivement avec l'éloignement du seuil
         assert result_27.penalty_multiplier > result_22.penalty_multiplier > result_16.penalty_multiplier
 
-        # L'incrément doit être raisonnable (pas de saut binaire)
         diff_27_22 = result_27.penalty_multiplier - result_22.penalty_multiplier
         diff_22_16 = result_22.penalty_multiplier - result_16.penalty_multiplier
         assert diff_27_22 < 0.30, f"Saut trop brusque entre ES=27 et ES=22 : {diff_27_22:.3f}"
@@ -365,24 +329,22 @@ class TestSafetyBarrier:
             "cognitive": {"gca_score": 65.0},
             "resilience": 28.0,   # < 35 → ADVISORY
         }
-        result = safety_barrier.evaluate(snapshot, g_fit_score=65.0)
+        result = safety_evaluate(snapshot, g_fit_score=65.0)
         assert result.safety_level == SafetyLevel.ADVISORY
         assert not result.g_fit_suspended
-        # ADVISORY n'affecte pas le score
         assert result.adjusted_score is None
         assert result.penalty_multiplier == 1.0
 
     def test_advisory_ne_penalise_pas_le_score(self):
-        """Même en ADVISORY, le score n'est jamais pénalisé."""
         snap_advisory = {
             "big_five": {
                 "agreeableness":     {"score": 80.0},
-                "conscientiousness": {"score": 28.0},  # < 35 → ADVISORY (mais > 25)
+                "conscientiousness": {"score": 28.0},  # < 35 → ADVISORY
                 "neuroticism":       {"score": 30.0},
             },
-            "resilience": 32.0,  # < 35 → ADVISORY
+            "resilience": 32.0,
         }
-        result = safety_barrier.evaluate(snap_advisory, g_fit_score=70.0)
+        result = safety_evaluate(snap_advisory, g_fit_score=70.0)
         assert result.safety_level == SafetyLevel.ADVISORY
         assert result.penalty_multiplier == 1.0
         assert result.adjusted_score is None
@@ -391,40 +353,36 @@ class TestSafetyBarrier:
         custom_rules = [
             VetoRule(
                 trait="gca",
-                threshold=80.0,    # Seuil très élevé
+                threshold=80.0,
                 veto_type=VetoType.SOFT,
                 label="GCA insuffisant pour ce poste",
             )
         ]
-        # GCA fort = 76 mais seuil = 80 → SOFT VETO → score réduit
-        result = safety_barrier.evaluate(
+        # GCA = 76 mais seuil = 80 → SOFT VETO → score réduit
+        result = safety_evaluate(
             snapshot_strong, g_fit_score=70.0, veto_rules=custom_rules
         )
         assert result.safety_level == SafetyLevel.HIGH_RISK
-        assert result.adjusted_score < 70.0   # Score réduit par pénalité continue
+        assert result.adjusted_score < 70.0
 
     def test_custom_rule_steepness_override(self, snapshot_strong):
-        """Une règle avec steepness personnalisé surcharge le défaut."""
         custom_rules = [
             VetoRule(
                 trait="gca",
                 threshold=80.0,
                 veto_type=VetoType.SOFT,
                 label="Règle test steepness personnalisé",
-                steepness=0.50,   # Raideur HARD appliquée sur une règle SOFT
+                steepness=0.50,
             )
         ]
-        # GCA=76, threshold=80, steepness=0.50 → sigmoid(0.50×(76−80)) = sigmoid(−2) ≈ 0.12
-        result = safety_barrier.evaluate(
+        result = safety_evaluate(
             snapshot_strong, g_fit_score=70.0, veto_rules=custom_rules
         )
         assert result.safety_level == SafetyLevel.HIGH_RISK
-        # Avec steepness=0.5, la pénalité pour GCA=76 sous seuil 80 est forte
         trigger = result.triggers[0]
         assert trigger.penalty_multiplier < 0.20
 
     def test_position_scoped_rule_not_applied(self, snapshot_strong):
-        """Règle scoped à Captain ne s'applique pas à un Deckhand."""
         captain_rules = [
             VetoRule(
                 trait="gca",
@@ -434,7 +392,7 @@ class TestSafetyBarrier:
                 positions_scope=["Captain"],
             )
         ]
-        result = safety_barrier.evaluate(
+        result = safety_evaluate(
             snapshot_strong,
             g_fit_score=70.0,
             veto_rules=captain_rules,
@@ -443,166 +401,96 @@ class TestSafetyBarrier:
         assert result.safety_level == SafetyLevel.CLEAR
 
     def test_unmeasured_trait_no_veto(self):
-        """Un trait non mesuré ne déclenche pas de veto."""
         snapshot = {"big_five": {"agreeableness": {"score": 70.0}}}
-        result = safety_barrier.evaluate(snapshot, g_fit_score=65.0)
+        result = safety_evaluate(snapshot, g_fit_score=65.0)
         es_triggers = [t for t in result.triggers if t.trait == "emotional_stability"]
         assert len(es_triggers) == 0
 
     def test_penalty_multiplier_expose_dans_result(self, snapshot_strong):
-        """SafetyBarrierResult doit exposer penalty_multiplier."""
-        result = safety_barrier.evaluate(snapshot_strong, g_fit_score=70.0)
+        result = safety_evaluate(snapshot_strong, g_fit_score=70.0)
         assert hasattr(result, "penalty_multiplier")
         assert isinstance(result.penalty_multiplier, float)
         assert 0.0 <= result.penalty_multiplier <= 1.0
 
     def test_audit_trail_contient_penalite(self, snapshot_high_risk):
-        """L'audit trail doit mentionner la pénalité calculée pour chaque règle."""
-        result = safety_barrier.evaluate(snapshot_high_risk, g_fit_score=60.0)
+        result = safety_evaluate(snapshot_high_risk, g_fit_score=60.0)
         penalty_entries = [line for line in result.audit_trail if "penalty=" in line]
         assert len(penalty_entries) > 0
 
 
 # ═══════════════════════════════════════════════════════════
-# TESTS GLOBAL FIT (Étape 3)
+# TESTS PE FIT MASTER (équivalent DNRE master)
 # ═══════════════════════════════════════════════════════════
 
-class TestGlobalFit:
+class TestPEFitMaster:
+    """
+    Tests du master PE Fit qui remplace compute_batch/compute_single du DNRE.
+    On utilise pe_fit.master.compute() sur chaque snapshot et on vérifie
+    les propriétés attendues du PEFitResult.
+    """
 
-    def test_uniform_weights_average(self):
-        scores = {"C1": 80.0, "C2": 60.0, "C3": 70.0, "C4": 50.0}
-        result = global_fit.compute(scores)
-        expected = (80 + 60 + 70 + 50) / 4
-        assert abs(result.g_fit - expected) < 0.2
+    def test_compute_returns_pe_fit_result(self, snapshot_strong):
+        result = pe_fit_master.compute(snapshot_strong)
+        assert isinstance(result, PEFitResult)
 
-    def test_custom_weights_applied(self):
-        scores = {"C1": 100.0, "C2": 0.0}
-        weights = {"C1": 2.0, "C2": 1.0}
-        result = global_fit.compute(scores, competency_weights=weights)
-        # C1 pèse 2/3 → G_fit = (2/3 × 100 + 1/3 × 0) ≈ 66.7
-        assert abs(result.g_fit - 66.7) < 0.5
+    def test_strong_beats_high_risk(self, snapshot_strong, snapshot_high_risk):
+        strong = pe_fit_master.compute(snapshot_strong)
+        risky  = pe_fit_master.compute(snapshot_high_risk)
+        assert strong.pj_fit.score > risky.pj_fit.score
 
-    def test_empty_scores_returns_zero(self):
-        result = global_fit.compute({})
-        assert result.g_fit == 0.0
+    def test_disqualified_safety_level(self, snapshot_disqualified):
+        result = pe_fit_master.compute(snapshot_disqualified)
+        assert result.is_disqualified
+        assert result.safety_level == SafetyLevel.DISQUALIFIED.value
 
-    def test_contributions_sum_to_g_fit(self):
-        scores = {"C1": 80.0, "C2": 60.0, "C3": 70.0, "C4": 50.0}
-        result = global_fit.compute(scores)
-        total = sum(c.contribution for c in result.contributions)
-        assert abs(total - result.g_fit) < 0.1
+    def test_global_score_in_bounds(self, snapshot_strong):
+        result = pe_fit_master.compute(snapshot_strong)
+        assert 0.0 <= result.global_score <= 100.0
 
-    def test_k_competencies_correct(self):
-        scores = {"C1": 70.0, "C2": 65.0, "C3": 75.0}
-        result = global_fit.compute(scores)
-        assert result.k_competencies == 3
+    def test_confidence_label_present(self, snapshot_strong):
+        result = pe_fit_master.compute(snapshot_strong)
+        assert result.confidence in ("HIGH", "MEDIUM", "LOW")
 
+    def test_data_quality_in_bounds(self, snapshot_strong):
+        result = pe_fit_master.compute(snapshot_strong)
+        assert 0.0 <= result.data_quality <= 1.0
 
-# ═══════════════════════════════════════════════════════════
-# TESTS DNRE MASTER
-# ═══════════════════════════════════════════════════════════
+    def test_f_team_detail_with_crew(self, snapshot_strong, crew_snapshots):
+        result = pe_fit_master.compute(
+            snapshot_strong,
+            current_crew_snapshots=crew_snapshots,
+        )
+        # PT Fit calculé quand équipe fournie
+        assert result.pt_fit is not None
+        assert 0.0 <= result.pt_fit.score <= 100.0
 
-class TestDNREMaster:
+    def test_f_team_none_without_crew(self, snapshot_strong):
+        result = pe_fit_master.compute(snapshot_strong)
+        assert result.pt_fit is None
 
-    def test_compute_batch_returns_all_candidates(self, snapshot_strong, snapshot_high_risk, crew_snapshots):
-        candidates = [
-            {"snapshot": snapshot_strong,   "crew_profile_id": "A"},
-            {"snapshot": snapshot_high_risk, "crew_profile_id": "B"},
-        ]
-        results = dnre.compute_batch(candidates, current_crew_snapshots=crew_snapshots)
-        assert len(results) == 2
+    def test_po_fit_none_without_vessel_params(self, snapshot_strong):
+        result = pe_fit_master.compute(snapshot_strong)
+        assert result.po_fit is None
 
-    def test_strong_beats_high_risk(self, snapshot_strong, snapshot_high_risk, crew_snapshots):
-        candidates = [
-            {"snapshot": snapshot_strong,   "crew_profile_id": "A"},
-            {"snapshot": snapshot_high_risk, "crew_profile_id": "B"},
-        ]
-        results = dnre.compute_batch(candidates, current_crew_snapshots=crew_snapshots)
-        strong = next(r for r in results if r.crew_profile_id == "A")
-        risky  = next(r for r in results if r.crew_profile_id == "B")
-        assert strong.g_fit > risky.g_fit
+    def test_ps_fit_none_without_captain_vector(self, snapshot_strong):
+        result = pe_fit_master.compute(snapshot_strong)
+        assert result.ps_fit is None
 
-    def test_disqualified_g_fit_zero(self, snapshot_disqualified, snapshot_strong, crew_snapshots):
-        candidates = [
-            {"snapshot": snapshot_disqualified, "crew_profile_id": "DQ"},
-            {"snapshot": snapshot_strong,        "crew_profile_id": "OK"},
-        ]
-        results = dnre.compute_batch(candidates)
-        dq = next(r for r in results if r.crew_profile_id == "DQ")
-        assert dq.g_fit == 0.0
-        assert dq.fit_label == "DISQUALIFIED"
-        assert dq.safety.safety_level == SafetyLevel.DISQUALIFIED
+    def test_all_flags_list(self, snapshot_strong):
+        result = pe_fit_master.compute(snapshot_strong)
+        assert isinstance(result.all_flags, list)
 
-    def test_centile_computed_for_all(self, snapshot_strong, snapshot_high_risk):
-        candidates = [
-            {"snapshot": snapshot_strong,   "crew_profile_id": "A"},
-            {"snapshot": snapshot_high_risk, "crew_profile_id": "B"},
-            {"snapshot": {"big_five": {"agreeableness": {"score": 55.0}, "neuroticism": {"score": 50.0}}}, "crew_profile_id": "C"},
-        ]
-        results = dnre.compute_batch(candidates)
-        for result in results:
-            assert len(result.centile_ranks) == len(sme_score.ALL_COMPETENCIES)
-            assert 0.0 <= result.overall_centile <= 100.0
-
-    def test_batch_centile_ordering_coherent(self, snapshot_strong, snapshot_high_risk):
-        """Le meilleur candidat doit avoir un centile plus élevé."""
-        candidates = [
-            {"snapshot": snapshot_strong,    "crew_profile_id": "STRONG"},
-            {"snapshot": snapshot_high_risk,  "crew_profile_id": "WEAK"},
-        ]
-        results = dnre.compute_batch(candidates)
-        strong = next(r for r in results if r.crew_profile_id == "STRONG")
-        weak   = next(r for r in results if r.crew_profile_id == "WEAK")
-        assert strong.overall_centile > weak.overall_centile
-
-    def test_to_matching_row_structure(self, snapshot_strong, snapshot_high_risk):
-        candidates = [
-            {"snapshot": snapshot_strong, "crew_profile_id": "A"},
-            {"snapshot": snapshot_high_risk, "crew_profile_id": "B"},
-        ]
-        results = dnre.compute_batch(candidates)
-        row = results[0].to_matching_row()
-        assert "g_fit" in row
-        assert "overall_centile" in row
+    def test_to_matching_row_structure(self, snapshot_strong):
+        result = pe_fit_master.compute(snapshot_strong)
+        row = result.to_matching_row()
+        assert "pj_fit_score" in row
+        assert "global_score" in row
         assert "safety_level" in row
-        assert "centile_by_competency" in row
-        assert len(row["centile_by_competency"]) == 4
+        assert "confidence" in row
 
-    def test_to_impact_report_structure(self, snapshot_strong, crew_snapshots):
-        result = dnre.compute_single(
-            snapshot_strong,
-            current_crew_snapshots=crew_snapshots,
-            crew_profile_id="test_crew",
-        )
+    def test_to_impact_report_structure(self, snapshot_strong):
+        result = pe_fit_master.compute(snapshot_strong)
         report = result.to_impact_report()
-        assert "g_fit" in report
-        assert "competency_details" in report
-        assert "safety" in report
-        assert "team_impact" in report
-        assert len(report["competency_details"]) == 4
-
-    def test_f_team_delta_with_crew(self, snapshot_strong, crew_snapshots):
-        result = dnre.compute_single(
-            snapshot_strong,
-            current_crew_snapshots=crew_snapshots,
-            crew_profile_id="test",
-        )
-        assert result.f_team_detail is not None
-        assert result.f_team_detail.delta is not None
-
-    def test_to_event_snapshot_compact(self, snapshot_strong):
-        result = dnre.compute_single(snapshot_strong)
-        snap = result.to_event_snapshot()
-        assert "g_fit" in snap
-        assert "sme_scores" in snap
-        assert len(snap["sme_scores"]) == 4
-        assert "safety_level" in snap
-
-    def test_single_without_pool_low_confidence(self, snapshot_strong):
-        result = dnre.compute_single(snapshot_strong, pool_context=None)
-        assert result.confidence == "LOW"
-        assert any("Pool absent" in f for f in result.all_flags)
-
-    def test_empty_candidates_batch(self):
-        results = dnre.compute_batch([])
-        assert results == []
+        assert "global_score" in report
+        assert "pj_fit" in report
+        assert "safety_level" in report

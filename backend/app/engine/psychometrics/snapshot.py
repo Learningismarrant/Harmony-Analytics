@@ -59,6 +59,11 @@ TRAIT_TO_SNAPSHOT_CAT = {
     "numerical": "cognitive",
     "logical": "cognitive",
     "verbal": "cognitive",
+    # HMR-24 (Gf — raisonnement fluide) — clés déjà préfixées
+    "fluid_reasoning":       "cognitive",
+    "hfr_induction":         "cognitive",
+    "hfr_analogy":           "cognitive",
+    "hfr_matrix_reasoning":  "cognitive",
     # Motivation
     "intrinsic": "motivation",
     "extrinsic_social": "motivation",
@@ -69,6 +74,15 @@ TRAIT_TO_SNAPSHOT_CAT = {
     # Résilience (test futur)
     "resilience_global": "resilience",
     "stress_tolerance": "resilience",
+}
+
+# Traits HMR-24 produits par le scorer QCM → renommage avec préfixe hfr_ dans le snapshot.
+# Le scorer utilise les traits des questions directement (induction, analogy, matrix_reasoning).
+# build_snapshot() les transforme en hfr_* et calcule fluid_reasoning comme composite.
+HMR24_TRAIT_REMAP = {
+    "induction":        "hfr_induction",
+    "analogy":          "hfr_analogy",
+    "matrix_reasoning": "hfr_matrix_reasoning",
 }
 
 # Traits minimum requis par l'engine pour calculer Ŷ_success
@@ -114,10 +128,13 @@ def build_snapshot(test_results: List[Any]) -> Dict:
                 continue
 
             score = data.get("score", 0) if isinstance(data, dict) else data
-            cat = TRAIT_TO_SNAPSHOT_CAT.get(trait)
+
+            # HMR-24 : renommer induction/analogy/matrix_reasoning → hfr_*
+            snapshot_trait = HMR24_TRAIT_REMAP.get(trait, trait)
+            cat = TRAIT_TO_SNAPSHOT_CAT.get(snapshot_trait)
 
             if cat and cat in snapshot:
-                snapshot[cat][trait] = round(score, 1)
+                snapshot[cat][snapshot_trait] = round(score, 1)
 
     # --- Calculs dérivés ---
 
@@ -127,11 +144,27 @@ def build_snapshot(test_results: List[Any]) -> Dict:
             100 - snapshot["big_five"]["neuroticism"], 1
         )
 
-    # GCA score = moyenne cognitive
-    if snapshot["cognitive"]:
-        snapshot["cognitive"]["gca_score"] = round(
-            sum(snapshot["cognitive"].values()) / len(snapshot["cognitive"]), 1
+    # fluid_reasoning = composite HMR-24 (moyenne des 3 sous-traits hfr_*)
+    # Calculé avant gca_score pour être inclus dans la moyenne cognitive.
+    hfr_keys = ["hfr_induction", "hfr_analogy", "hfr_matrix_reasoning"]
+    hfr_values = [snapshot["cognitive"][k] for k in hfr_keys if k in snapshot["cognitive"]]
+    if hfr_values:
+        snapshot["cognitive"]["fluid_reasoning"] = round(
+            sum(hfr_values) / len(hfr_values), 1
         )
+
+    # GCA score = moyenne des sous-scores cognitifs (hors préfixe hfr_ qui sont des détails HMR-24)
+    # Les traits hfr_* contribuent via fluid_reasoning uniquement — les inclure directement
+    # doublerait leur poids dans la moyenne.
+    if snapshot["cognitive"]:
+        gca_traits = {
+            k: v for k, v in snapshot["cognitive"].items()
+            if not k.startswith("hfr_")
+        }
+        if gca_traits:
+            snapshot["cognitive"]["gca_score"] = round(
+                sum(gca_traits.values()) / len(gca_traits), 1
+            )
 
     # Préférences de leadership (dérivées des scores de personnalité/motivation)
     # Calibration à affiner avec les données réelles

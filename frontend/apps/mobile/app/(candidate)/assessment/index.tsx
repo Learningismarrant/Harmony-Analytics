@@ -1,39 +1,55 @@
-import { View, Text, ScrollView, ActivityIndicator } from "react-native";
+import { View, Text, FlatList, ActivityIndicator } from "react-native";
 import { useRouter } from "expo-router";
 import { useAssessment } from "@/features/assessment/hooks/useAssessment";
-import { TestCard } from "@/features/assessment/components/TestCard";
-import { ProgressHeader } from "@/features/assessment/components/ProgressHeader";
+import { useAuthStore } from "@/features/auth/store";
+import { TestCard } from "@/features/assessment/components/catalogue/TestCard";
+import { ProgressHeader } from "@/features/assessment/components/catalogue/ProgressHeader";
 
 export default function AssessmentListScreen() {
   const router = useRouter();
+  const name = useAuthStore((s) => s.name);
   const { catalogue, myResults, completedTestIds, isLoading } = useAssessment();
 
-  return (
-    <ScrollView
-      className="flex-1 bg-bg-primary"
-      contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
-    >
-      {catalogue && myResults && (
-        <ProgressHeader completed={myResults.length} total={catalogue.length} />
-      )}
+  const completed = myResults?.length ?? 0;
+  const total = catalogue?.length ?? 0;
 
+  return (
+    <View style={{ flex: 1, backgroundColor: "#0D1B2A" }}>
+           
+
+      {/* ── Card list — overlaps header by 20px ───────────────────── */}
       {isLoading ? (
-        <View className="items-center py-10">
-          <ActivityIndicator color="#0EA5E9" size="large" />
-          <Text className="text-muted mt-3 text-sm">Loading tests…</Text>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator color="#A67C52" size="large" />
+          <Text style={{ color: "#64748B", marginTop: 12, fontSize: 13 }}>
+            Loading Assessments...
+          </Text>
         </View>
       ) : (
-        <>
-          {catalogue?.map((test) => (
+        <FlatList
+          data={catalogue}
+          keyExtractor={(item) => item.id.toString()}
+          renderItem={({ item }) => (
             <TestCard
-              key={test.id}
-              test={test}
-              isCompleted={completedTestIds.has(test.id)}
-              onPress={() => router.push(`/(candidate)/assessment/${test.id}`)}
+              test={item}
+              isCompleted={completedTestIds.has(item.id)}
+              onPress={() => router.push(`/(candidate)/assessment/${item.id}`)}
             />
-          ))}
-        </>
+          )}
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingTop: 20,
+            paddingBottom: 48,
+            marginTop: -20,
+          }}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            catalogue && myResults ? (
+              <ProgressHeader completed={completed} total={total} />
+            ) : null
+          }
+        />
       )}
-    </ScrollView>
+    </View>
   );
 }

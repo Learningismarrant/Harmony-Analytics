@@ -9,7 +9,7 @@ Changements v2 :
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Optional, List, Dict
 
-from app.engine.recruitment.MLPSM.f_team import compute_baseline
+from app.engine.pe_fit.pt_fit.f_team import compute_baseline
 from app.modules.vessel.repository import VesselRepository
 from app.shared.models import EmployerProfile
 

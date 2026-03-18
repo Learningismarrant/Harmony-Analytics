@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
 from datetime import date, datetime, timezone
 
-from app.engine.recruitment.MLPSM.f_team import compute_baseline, compute_delta, FTeamResult
+from app.engine.pe_fit.pt_fit.f_team import compute_baseline, compute_delta, FTeamResult
 from app.engine.benchmarking.diagnosis import generate_combined_diagnosis
 from app.engine.benchmarking.matrice import compute_sociogram
 from app.modules.crew.repository import CrewRepository

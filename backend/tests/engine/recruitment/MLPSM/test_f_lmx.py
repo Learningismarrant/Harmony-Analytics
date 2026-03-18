@@ -16,9 +16,11 @@ Couverture :
 import pytest
 import math
 
-from app.engine.recruitment.MLPSM.f_lmx import (
+from app.engine.pe_fit.ps_fit.f_lmx import (
     compute,
     FLmxResult,
+)
+from app.engine.pe_fit.ps_fit.weights import (
     D_MAX_UNIFORM,
     CRITICAL_DISTANCE_THRESHOLD,
     HIGH_DISTANCE_THRESHOLD,

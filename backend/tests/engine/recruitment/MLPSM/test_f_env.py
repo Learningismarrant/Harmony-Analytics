@@ -16,9 +16,11 @@ Couverture :
 """
 import pytest
 
-from app.engine.recruitment.MLPSM.f_env import (
+from app.engine.pe_fit.po_fit.f_env import (
     compute,
     FEnvResult,
+)
+from app.engine.pe_fit.po_fit.weights import (
     BURNOUT_RISK_THRESHOLD,
     COMFORT_THRESHOLD,
     RESILIENCE_LOW_THRESHOLD,

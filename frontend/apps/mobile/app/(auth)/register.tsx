@@ -112,12 +112,12 @@ export default function RegisterScreen() {
         </View>
 
         {/* Form */}
-        <View className="space-y-4">
+        <View className="space-y-6">
           {/* Full name */}
           <View>
-            <Text className="text-muted text-sm mb-1.5">Full name</Text>
+            <Text className="text-muted text-sm mb-2">Full name</Text>
             <TextInput
-              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-3 text-text-primary text-base"
+              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-4 text-text-primary text-base"
               placeholder="John Smith"
               placeholderTextColor="#8FA3B8"
               autoCapitalize="words"
@@ -128,9 +128,9 @@ export default function RegisterScreen() {
 
           {/* Email */}
           <View>
-            <Text className="text-muted text-sm mb-1.5">Email</Text>
+            <Text className="text-muted text-sm mb-2">Email</Text>
             <TextInput
-              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-3 text-text-primary text-base"
+              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-4 text-text-primary text-base"
               placeholder="your@email.com"
               placeholderTextColor="#8FA3B8"
               keyboardType="email-address"
@@ -143,9 +143,9 @@ export default function RegisterScreen() {
 
           {/* Password */}
           <View>
-            <Text className="text-muted text-sm mb-1.5">Password</Text>
+            <Text className="text-muted text-sm mb-2">Password</Text>
             <TextInput
-              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-3 text-text-primary text-base"
+              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-4 text-text-primary text-base"
               placeholder="••••••••"
               placeholderTextColor="#8FA3B8"
               secureTextEntry
@@ -156,9 +156,9 @@ export default function RegisterScreen() {
 
           {/* Confirm password */}
           <View>
-            <Text className="text-muted text-sm mb-1.5">Confirm password</Text>
+            <Text className="text-muted text-sm mb-2">Confirm password</Text>
             <TextInput
-              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-3 text-text-primary text-base"
+              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-4 text-text-primary text-base"
               placeholder="••••••••"
               placeholderTextColor="#8FA3B8"
               secureTextEntry
@@ -169,10 +169,10 @@ export default function RegisterScreen() {
 
           {/* Position */}
           <View>
-            <Text className="text-muted text-sm mb-1.5">Position targeted</Text>
+            <Text className="text-muted text-sm mb-2">Position targeted</Text>
             <TouchableOpacity
               onPress={() => setShowPositionPicker(!showPositionPicker)}
-              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-3 flex-row justify-between items-center"
+              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-4 flex-row justify-between items-center"
             >
               <Text className="text-text-primary text-base">{position}</Text>
               <Text className="text-muted text-sm">{showPositionPicker ? "▲" : "▼"}</Text>
@@ -203,9 +203,9 @@ export default function RegisterScreen() {
 
           {/* Experience years */}
           <View>
-            <Text className="text-muted text-sm mb-1.5">Years of experience</Text>
+            <Text className="text-muted text-sm mb-2">Years of experience</Text>
             <TextInput
-              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-3 text-text-primary text-base"
+              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-4 text-text-primary text-base"
               placeholder="0"
               placeholderTextColor="#8FA3B8"
               keyboardType="numeric"
@@ -218,7 +218,7 @@ export default function RegisterScreen() {
           <TouchableOpacity
             onPress={handleRegister}
             disabled={loading}
-            className="bg-brand-primary rounded-xl py-4 items-center mt-2"
+            className="bg-brand-primary rounded-xl py-4 items-center mt-8"
             style={{ opacity: loading ? 0.6 : 1 }}
           >
             {loading ? (

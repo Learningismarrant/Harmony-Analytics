@@ -5,7 +5,7 @@ Tests unitaires pour engine.psychometrics.scoring.calculate_scores()
 Couverture :
     - Test Likert nominal (score, niveau, global_score)
     - Inversion d'items (reverse=True)
-    - Test cognitif (correcte = max_score, incorrecte = 0)
+    - Test QCM / cognitif (correcte = max_score, incorrecte = 0)
     - Fiabilité : réponses trop rapides → is_reliable=False
     - Fiabilité : biais extrêmes > 70% → is_reliable=False
     - Questions inconnues (question_id absent de la map) → ignorées
@@ -15,16 +15,30 @@ Couverture :
 import pytest
 from types import SimpleNamespace
 
-from app.engine.psychometrics.scoring import (
-    calculate_scores,
-    _get_level_label,
+from app.engine.psychometrics.scoring import calculate_scores
+from app.engine.psychometrics.scoring.formatter import (
+    level_label_likert,
+    level_label_qcm,
     THRESHOLD_LIKERT_HIGH,
     THRESHOLD_LIKERT_MEDIUM,
-    THRESHOLD_COGNITIVE_EXCELLENT,
-    THRESHOLD_COGNITIVE_STANDARD,
+    THRESHOLD_QCM_EXCELLENT,
+    THRESHOLD_QCM_STANDARD,
+)
+from app.engine.psychometrics.scoring.reliability import (
     MIN_SECONDS_PER_QUESTION,
     DESIRABILITY_EXTREME_THRESHOLD,
 )
+
+# Alias pour la compatibilité des tests existants
+THRESHOLD_COGNITIVE_EXCELLENT = THRESHOLD_QCM_EXCELLENT
+THRESHOLD_COGNITIVE_STANDARD  = THRESHOLD_QCM_STANDARD
+
+
+def _get_level_label(test_type: str, score: float) -> str:
+    """Shim de compatibilité pour les tests existants."""
+    if test_type in ("cognitive", "qcm"):
+        return level_label_qcm(score)
+    return level_label_likert(score)
 
 pytestmark = pytest.mark.engine
 
@@ -192,7 +206,7 @@ class TestCognitiveScoring:
             make_response(2, "B"),
             make_response(3, "C"),
         ]
-        result = calculate_scores(responses, q_map, "cognitive", 1)
+        result = calculate_scores(responses, q_map, "qcm", 1)
         assert result["traits"]["logical"]["score"] == 100.0
         assert result["traits"]["numerical"]["score"] == 100.0
         assert result["traits"]["verbal"]["score"] == 100.0
@@ -205,14 +219,14 @@ class TestCognitiveScoring:
             make_response(2, "X"),
             make_response(3, "X"),
         ]
-        result = calculate_scores(responses, q_map, "cognitive", 1)
+        result = calculate_scores(responses, q_map, "qcm", 1)
         assert result["traits"]["logical"]["score"] == 0.0
 
     def test_case_insensitive(self):
         """La comparaison est insensible à la casse."""
         q_map = {1: make_question(1, "logical", correct_answer="A")}
         result = calculate_scores(
-            [make_response(1, "a")], q_map, "cognitive", 1
+            [make_response(1, "a")], q_map, "qcm", 1
         )
         assert result["traits"]["logical"]["score"] == 100.0
 
@@ -220,7 +234,7 @@ class TestCognitiveScoring:
         """Les espaces autour de la valeur sont ignorés."""
         q_map = {1: make_question(1, "logical", correct_answer="B")}
         result = calculate_scores(
-            [make_response(1, " B ")], q_map, "cognitive", 1
+            [make_response(1, " B ")], q_map, "qcm", 1
         )
         assert result["traits"]["logical"]["score"] == 100.0
 
@@ -232,7 +246,7 @@ class TestCognitiveScoring:
             make_response(2, "X"),   # incorrect
             make_response(3, "C"),   # correct
         ]
-        result = calculate_scores(responses, q_map, "cognitive", 1)
+        result = calculate_scores(responses, q_map, "qcm", 1)
         assert result["traits"]["logical"]["score"] == 100.0
         assert result["traits"]["numerical"]["score"] == 0.0
         assert result["traits"]["verbal"]["score"] == 100.0

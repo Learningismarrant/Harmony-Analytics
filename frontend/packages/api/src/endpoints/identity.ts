@@ -4,6 +4,7 @@ import type {
   IdentityUpdateIn,
   ExperienceCreateIn,
   ExperienceOut,
+  PsychometricReportOut,
 } from "@harmony/types";
 import { get, patch, post } from "../client";
 
@@ -15,6 +16,10 @@ export const identityApi = {
   /** Get just the identity section */
   getIdentity: (crewProfileId: number) =>
     get<UserIdentityOut>(`/identity/candidate/${crewProfileId}/identity`),
+
+  /** Get psychometric report for a crew profile */
+  getReports: (crewProfileId: number) =>
+    get<PsychometricReportOut>(`/identity/candidate/${crewProfileId}/reports`),
 
   /** Update own identity */
   updateMe: (body: IdentityUpdateIn) =>

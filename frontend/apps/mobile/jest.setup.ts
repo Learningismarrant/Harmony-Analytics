@@ -1,3 +1,14 @@
+// ── RN 0.83: BatchedBridge invariant ─────────────────────────────────────
+// @testing-library/react-native (in root node_modules) loads the ROOT copy of
+// react-native via relative requires that bypass our jest.mock() intercept.
+// NativeModules.js:184 checks global.__fbBatchedBridgeConfig at load time.
+// Setting it here (before any test code requires react-native internals)
+// satisfies the invariant for ALL copies of NativeModules.js.
+(global as unknown as Record<string, unknown>).__fbBatchedBridgeConfig = {
+  remoteModuleConfig: [],
+  localModulesConfig: [],
+};
+
 // ── expo-secure-store ──────────────────────────────────────────────────────
 jest.mock("expo-secure-store", () => ({
   setItemAsync: jest.fn().mockResolvedValue(undefined),
@@ -39,7 +50,16 @@ jest.mock("react-native/Libraries/TurboModule/TurboModuleRegistry", () => {
     get: jest.fn((name: string) => {
       if (name === "PlatformConstants") return platformConstants;
       if (name === "DeviceInfo") return deviceInfo;
-      return null;
+      // Return a non-null stub for any other module (e.g. KeyboardObserver, Appearance).
+      // NativeEventEmitter throws if get() returns null.
+      // Appearance.js calls getColorScheme() at module load time via react-native-css-interop.
+      return {
+        getConstants: jest.fn(() => ({})),
+        addListener: jest.fn(),
+        removeListeners: jest.fn(),
+        getColorScheme: jest.fn(() => null),
+        setColorScheme: jest.fn(),
+      };
     }),
     getEnforcing: jest.fn((name: string) => {
       if (name === "PlatformConstants") return platformConstants;
@@ -97,5 +117,53 @@ jest.mock("expo-router", () => ({
     back: jest.fn(),
   })),
   useLocalSearchParams: jest.fn(() => ({})),
+  useFocusEffect: jest.fn(),
   Stack: { Screen: jest.fn(() => null) },
+}));
+
+// ── react-native-svg ──────────────────────────────────────────────────────
+// All locals must live inside the factory (jest.mock() is hoisted — outer
+// vars are in the TDZ when the factory runs).
+jest.mock("react-native-svg", () => {
+  const mockR = require("react");
+  const mockSvg      = (p: object) => mockR.createElement("Svg",            p);
+  const mockCircle   = (p: object) => mockR.createElement("Circle",         p);
+  const mockG        = (p: object) => mockR.createElement("G",              p);
+  const mockText     = (p: object) => mockR.createElement("SvgText",        p);
+  const mockPath     = (p: object) => mockR.createElement("Path",           p);
+  const mockPolygon  = (p: object) => mockR.createElement("Polygon",        p);
+  const mockLine     = (p: object) => mockR.createElement("Line",           p);
+  const mockRect     = (p: object) => mockR.createElement("Rect",           p);
+  const mockDefs     = (p: object) => mockR.createElement("Defs",           p);
+  const mockLinGrad  = (p: object) => mockR.createElement("LinearGradient", p);
+  const mockStop     = (p: object) => mockR.createElement("Stop",           p);
+  const mockClip     = (p: object) => mockR.createElement("ClipPath",       p);
+  const mockMask     = (p: object) => mockR.createElement("Mask",           p);
+  return {
+    __esModule: true,
+    default:        mockSvg,
+    Svg:            mockSvg,
+    Circle:         mockCircle,
+    G:              mockG,
+    Text:           mockText,
+    Path:           mockPath,
+    Polygon:        mockPolygon,
+    Line:           mockLine,
+    Rect:           mockRect,
+    Defs:           mockDefs,
+    LinearGradient: mockLinGrad,
+    Stop:           mockStop,
+    ClipPath:       mockClip,
+    Mask:           mockMask,
+  };
+});
+
+// ── @expo/vector-icons ────────────────────────────────────────────────────
+// vector-icons loads react-native-css-interop → Appearance → NativeEventEmitter
+// → Platform.ios.js → TurboModuleRegistry chain that crashes in jsdom.
+// Replace with lightweight string stubs — we only test behaviour, not icons.
+jest.mock("@expo/vector-icons", () => ({
+  Ionicons: "Ionicons",
+  MaterialIcons: "MaterialIcons",
+  FontAwesome: "FontAwesome",
 }));

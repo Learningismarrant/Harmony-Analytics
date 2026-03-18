@@ -54,6 +54,7 @@ export const queryKeys = {
   identity: {
     fullProfile: (id: number) => ["identity", "profile", id] as const,
     identity: (id: number) => ["identity", "identity", id] as const,
+    reports: (id: number) => ["identity", "reports", id] as const,
   },
   survey: {
     pending: () => ["survey", "pending"] as const,

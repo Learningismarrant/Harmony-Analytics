@@ -49,7 +49,7 @@ Harmony/
 |---|---|
 | Monorepo | Turborepo 2 |
 | Web (employeur) | Next.js 15 App Router |
-| Mobile (candidat) | Expo SDK 52 + Expo Router 4 |
+| Mobile (candidat) | Expo SDK 55 + Expo Router |
 | 3D | React Three Fiber 8 + @react-three/drei |
 | Physique 3D | D3-force 3 |
 | Requêtes serveur | TanStack Query v5 |
@@ -190,7 +190,7 @@ npx expo start
 
 ## Tests
 
-### Backend — 481 tests, 0 failures
+### Backend — 535 tests, 0 failures
 
 ```bash
 cd backend
@@ -232,7 +232,7 @@ Les tests mobile (Jest + RNTL) sont listés dans le backlog.
 | Engine DNRE + MLPSM (sigmoid, P_ind interaction) + Sociogramme (P2 dyad) | ✅ Implémenté |
 | ORM models + Alembic migrations | ✅ Implémenté |
 | `JobWeightConfig` — weights DB-injectable (P3) | ✅ Implémenté |
-| Suite de tests (481 tests) | ✅ 0 failure |
+| Suite de tests (535 tests) | ✅ 0 failure |
 | Endpoints sociogramme (`/crew/{id}/sociogram`) | ⏳ Manquant |
 | Email (invitations survey, notifications embauche) | ⏳ Non implémenté |
 | Rate limiting | ⏳ Configuré mais inactif |
@@ -246,8 +246,9 @@ Les tests mobile (Jest + RNTL) sont listés dans le backlog.
 | Web — auth + layout + dashboard flotte | ✅ Complet |
 | Web — sociogramme 3D + mode simulation | ✅ Complet |
 | Web — matching DNRE/MLPSM | ✅ Complet |
-| Mobile — auth + profil candidat | ✅ Complet |
-| Mobile — passation tests psychométriques | ✅ Complet |
+| Mobile — auth + profil candidat (4 tabs : identité, soft skills, expériences, documents) | ✅ Complet |
+| Mobile — passation tests psychométriques (Likert + T-IRT CUTTY SARK) | ✅ Complet |
+| Mobile — training (4 axes, parcours personnalisé, 4 types de contenu) | ✅ Frontend · ⏳ Backend |
 | Web — register / campagnes / vessel detail | ⏳ À construire |
 | Mobile — survey / pulse / invitations | ⏳ À construire |
 

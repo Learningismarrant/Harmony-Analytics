@@ -21,7 +21,7 @@ Couverture :
 """
 import pytest
 
-from app.engine.recruitment.pipeline import (
+from app.engine.pe_fit.pipeline import (
     run_batch,
     run_single,
     PipelineResult,

@@ -22,11 +22,13 @@ Couverture :
 """
 import pytest
 
-from app.engine.recruitment.MLPSM.f_team import (
+from app.engine.pe_fit.pt_fit.f_team import (
     compute,
     compute_baseline,
     compute_delta,
     FTeamResult,
+)
+from app.engine.pe_fit.pt_fit.weights import (
     JERK_FILTER_DANGER,
     FAULTLINE_DANGER,
     ES_MINIMUM_THRESHOLD,

@@ -19,7 +19,6 @@ from .Assessment import TestCatalogue, Question, TestResult
 from .Campaign   import Campaign, CampaignCandidate
 from .Pulse      import DailyPulse
 from .Survey     import Survey, SurveyResponse, RecruitmentEvent, ModelVersion, JobWeightConfig
-
 __all__ = [
     # User
     "User", "CrewProfile", "EmployerProfile", "UserDocument",

@@ -2,7 +2,7 @@
 
 Interface utilisateur de la plateforme Harmony Analytics.
 
-**Stack :** Turborepo · Next.js 15 · Expo SDK 52 · React Three Fiber · D3-force · TanStack Query v5 · Zustand · NativeWind · shadcn/ui
+**Stack :** Turborepo · Next.js 15 · Expo SDK 55 · React Three Fiber · D3-force · TanStack Query v5 · Zustand · NativeWind · shadcn/ui
 
 ---
 
@@ -165,10 +165,12 @@ Physics engine : [`src/features/sociogram/physics.ts`](apps/web/src/features/soc
 | Route | Description |
 |---|---|
 | `/(auth)/login` | Authentification candidat |
-| `/(candidate)/profile` | Profil, Big Five, expériences |
+| `/(candidate)/profile` | Profil candidat — 4 tabs (identité, soft skills, expériences, documents) |
 | `/(candidate)/assessment` | Catalogue des tests psychométriques |
-| `/(candidate)/assessment/[testId]` | Passation — question par question, chronomètre |
+| `/(candidate)/assessment/[testId]` | Passation — Likert ou forced-choice T-IRT (CUTTY SARK) |
 | `/(candidate)/assessment/result` | Résultat immédiat post-soumission |
+| `/(candidate)/training` | Parcours formation personnalisé — 4 grands axes |
+| `/(candidate)/training/[moduleId]` | Contenu du module (leçon · exercice · checklist · auto-évaluation) |
 | `/(candidate)/applications` | Candidatures en cours *(à compléter)* |
 
 ---
@@ -295,6 +297,35 @@ Ces endpoints sont appelés par le frontend mais n'existent pas encore dans le b
 | `POST /auth/logout` | `void` | Supprimer le cookie `refresh_token` côté serveur |
 | Auth mobile | — | `/auth/refresh` doit accepter le token en header `Authorization: Refresh <token>` (pas seulement en cookie) pour React Native |
 
+#### Module Training — backend entièrement à créer
+
+Le frontend Training (`apps/mobile/src/features/training/`) est implémenté avec des données statiques hardcodées dans [`data.ts`](apps/mobile/src/features/training/data.ts). Toute la logique métier reste à construire côté backend :
+
+| Endpoint | Méthode | Description |
+|---|---|---|
+| `/training/axes` | `GET` | Liste des 4 axes avec modules et statuts pour le candidat authentifié |
+| `/training/modules/{id}` | `GET` | Contenu complet d'un module (leçon, exercice, checklist, auto-évaluation) |
+| `/training/modules/{id}/complete` | `POST` | Marquer un module comme terminé, recalcul du parcours |
+| `/training/path` | `GET` | Parcours personnalisé du candidat (module courant, modules en attente, niveau) |
+| `/training/trigger` | `POST` | (Interne) Déclenchement automatique d'un module suite à un résultat de test |
+
+**Modèles ORM à créer :**
+
+```
+TrainingAxe           – id, title, subtitle, icon, color, trigger_description
+TrainingModule        – id, axe_id, title, type (lesson/exercise/checklist/self_assessment),
+                        duration_min, level (junior/mid/senior), points,
+                        trigger_conditions (JSON), content (JSON)
+CandidateModuleStatus – candidate_id, module_id, status (locked/available/in_progress/completed),
+                        completed_at
+CandidatePath         – candidate_id, level, current_module_id, queued_module_ids (JSON),
+                        triggered_by (JSON snapshot des scores déclencheurs)
+```
+
+**Logique de déclenchement :** après chaque soumission de test (`POST /assessments/{id}/submit`), le service assessment doit interroger les `trigger_conditions` de chaque module et débloquer (`available`) les modules dont les seuils sont atteints. Cette logique s'insère dans le service assessment existant, après le rebuild du `psychometric_snapshot`.
+
+**Priorité :** 🟠 haute — le frontend est prêt à consommer ces données ; remplacer `data.ts` par des appels TanStack Query est une migration directe une fois les endpoints créés.
+
 ### 🔴 Bloquant (bugs backend existants)
 
 | Bug | Fichier | État |
@@ -361,8 +392,10 @@ Ces endpoints sont appelés par le frontend mais n'existent pas encore dans le b
 | Web — cockpit `/vessel/[id]` (sociogramme 3D + simulation + matching) | ✅ Complet *(endpoint backend manquant)* |
 | Web — tests Jest + Testing Library | ✅ 126 tests, 0 failures (13 suites) |
 | Mobile — auth (login + SecureStore) | ✅ Complet |
-| Mobile — profile candidat | ✅ Complet |
-| Mobile — catalogue + passation tests | ✅ Complet |
+| Mobile — profil candidat (4 tabs : identité, soft skills, expériences, documents) | ✅ Complet |
+| Mobile — catalogue + passation tests (Likert + T-IRT CUTTY SARK) | ✅ Complet |
+| Mobile — training (4 axes · parcours personnalisé · 4 types de contenu) | ✅ Frontend · ⏳ Backend |
 | Web — register / campagnes / vessel | ⏳ À construire |
 | Mobile — survey / pulse / invite | ⏳ À construire |
 | Backend — endpoints sociogramme | ⏳ À construire |
+| Backend — module training (axes, modules, path, trigger) | ⏳ À construire |

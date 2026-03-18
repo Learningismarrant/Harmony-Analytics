@@ -11,8 +11,8 @@ Flux matching :
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
 
-from app.engine.recruitment import pipeline
-from app.engine.recruitment.pipeline import PipelineResult
+from app.engine.pe_fit import pipeline
+from app.engine.pe_fit.pipeline import PipelineResult
 from app.modules.recruitment.repository import RecruitmentRepository
 from app.modules.vessel.repository import VesselRepository
 from app.shared.models import CrewProfile, EmployerProfile

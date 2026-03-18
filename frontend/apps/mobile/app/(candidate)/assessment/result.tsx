@@ -1,8 +1,8 @@
 import { useEffect } from "react";
 import { View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { useRouter, useLocalSearchParams, Stack } from "expo-router";
-import { ResultRing } from "@/features/assessment/components/ResultRing";
-import { TirtResultDetail } from "@/features/assessment/components/TirtResultDetail";
+import { ResultRing } from "@/features/assessment/components/result/ResultRing";
+import { RadarChart, type RadarDataPoint } from "@/features/assessment/components/result/RadarChart";
 import { useLastResultStore } from "@/features/assessment/store/useLastResultStore";
 
 export default function TestResultScreen() {
@@ -11,13 +11,20 @@ export default function TestResultScreen() {
   const scoreNum = parseInt(score ?? "0", 10);
 
   const { lastResult, clearLastResult } = useLastResultStore();
-  const tirtDetail = lastResult?.scores?.tirt_detail;
 
   useEffect(() => {
     return () => {
       clearLastResult();
     };
   }, [clearLastResult]);
+
+  const radarData: RadarDataPoint[] = lastResult?.scores?.traits
+    ? Object.entries(lastResult.scores.traits).map(([label, t]) => ({
+        label,
+        score: t.score,
+        niveau: t.niveau,
+      }))
+    : [];
 
   return (
     <>
@@ -26,19 +33,13 @@ export default function TestResultScreen() {
         className="flex-1 bg-bg-primary"
         contentContainerStyle={{ padding: 24, paddingBottom: 40 }}
       >
-        <View className="items-center mb-8">
-          {tirtDetail && scoreNum === 0 ? (
-            <Text className="text-text-primary text-2xl font-semibold text-center">
-              Your Big Five profile
-            </Text>
-          ) : (
-            <ResultRing score={scoreNum} />
-          )}
+        <View className="items-center mb-6">
+          <ResultRing score={scoreNum} />
         </View>
 
-        {tirtDetail && (
+        {radarData.length >= 3 && (
           <View className="mb-8">
-            <TirtResultDetail tirtDetail={tirtDetail} />
+            <RadarChart data={radarData} />
           </View>
         )}
 

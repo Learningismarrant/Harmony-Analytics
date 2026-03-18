@@ -2,6 +2,7 @@
 from pydantic import BaseModel, ConfigDict, Field
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from app.shared.enums import TestType
 
 
 # ── Catalogue ──────────────────────────────────────────────
@@ -12,7 +13,11 @@ class TestInfoOut(BaseModel):
     description: str
     instructions: Optional[str] = None
     max_score_per_question: int = 5
-    test_type: str
+    test_type: TestType
+    status: str = "ALPHA"
+    license: str = "CUSTOM_ALPHA"
+    validation_notes: Optional[str] = None
+    modules_config: Optional[list] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -21,8 +26,9 @@ class QuestionOut(BaseModel):
     test_id: int
     text: str
     question_type: str
-    options: Optional[List[Any]] = None
+    options: Optional[Any] = None   # list (Likert/TIRT) ou dict (Raven RavenMatrixConfig)
     trait: Optional[str] = None
+    module_index: Optional[int] = None
     model_config = ConfigDict(from_attributes=True)
 
 
@@ -62,5 +68,3 @@ class TestResultOut(BaseModel):
     scores: Dict[str, Any]          # {traits, reliability, meta}
     created_at: datetime
     model_config = ConfigDict(from_attributes=True)
-
-

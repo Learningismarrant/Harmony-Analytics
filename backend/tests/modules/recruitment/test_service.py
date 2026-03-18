@@ -104,7 +104,7 @@ class TestGetMatching:
              "position_targeted": "bosun", "name": "Jean", "avatar_url": None,
              "location": None},
         ]
-        from app.engine.recruitment.pipeline import PipelineResult, PipelineStage, DNREResult
+        from app.engine.pe_fit.pipeline import PipelineResult, PipelineStage, DNREResult
         # Create a mock PipelineResult
         mock_pr = MagicMock(spec=PipelineResult)
         mock_pr.crew_profile_id = "c1"

@@ -23,8 +23,8 @@ module.exports = {
         },
         // ── Brand ────────────────────────────────────────────
         brand: {
-          primary:   "#94A3B8",   // teak — CTA prestige, highlights
-          secondary: "#A67C52",   // silver — actions secondaires
+          primary:   "#A67C52",   // teak — CTA prestige, actions primaires (aligne avec @harmony/ui tokens.ts)
+          secondary: "#94A3B8",   // silver — icônes, éléments UI neutres
           glow:      "#C4945C",   // teak clair — hover / glow
         },
         // ── Utilitaires ──────────────────────────────────────

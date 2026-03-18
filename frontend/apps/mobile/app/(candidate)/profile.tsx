@@ -6,237 +6,140 @@ import {
   Alert,
 } from "react-native";
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { identityApi, queryKeys } from "@harmony/api";
+import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "@/features/auth/store";
+import { IdentityCard } from "@/features/profile/components/IdentityCard";
+import { HarmonyScoreSection } from "@/features/profile/components/HarmonyScoreSection";
+import { ExperienceSection } from "@/features/profile/components/ExperienceSection";
+import { DocumentVaultSection } from "@/features/profile/components/DocumentVaultSection";
 
-type Section = "info" | "experience" | "documents";
+type ProfileTab = "id" | "score" | "experience" | "vault";
 
-function SectionTab({
-  label,
-  active,
-  onPress,
-}: {
+const TABS: {
+  key: ProfileTab;
+  icon: keyof typeof Ionicons.glyphMap;
+  activeIcon: keyof typeof Ionicons.glyphMap;
   label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      className="flex-1 py-2.5 items-center"
-      style={{
-        borderBottomWidth: 2,
-        borderBottomColor: active ? "#4A90B8" : "transparent",
-      }}
-    >
-      <Text
-        className="text-sm font-medium"
-        style={{ color: active ? "#4A90B8" : "#8FA3B8" }}
-      >
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
-
-function InfoRow({ label, value }: { label: string; value: string | null | undefined }) {
-  if (!value) return null;
-  return (
-    <View className="flex-row justify-between py-3 border-b border-bg-border">
-      <Text className="text-muted text-sm">{label}</Text>
-      <Text className="text-text-primary text-sm font-medium flex-shrink ml-4 text-right">{value}</Text>
-    </View>
-  );
-}
-
-const AVAILABILITY_LABELS: Record<string, string> = {
-  available: "Available",
-  on_board: "On board",
-  unavailable: "Unavailable",
-  soon: "Available soon",
-};
-
-const DOCUMENT_TYPE_LABELS: Record<string, string> = {
-  passport: "Passport",
-  stcw: "STCW Certificate",
-  medical: "Medical Certificate",
-  cv: "CV",
-  other: "Document",
-};
+  title: string;
+  subtitle: string;
+}[] = [
+  {
+    key: "id",
+    icon: "person-outline",
+    activeIcon: "person",
+    label: "Profile",
+    title: "MY IDENTITY",
+    subtitle: "Your public profile",
+  },
+  {
+    key: "score",
+    icon: "analytics-outline",
+    activeIcon: "analytics",
+    label: "Skills",
+    title: "SOFT SKILLS",
+    subtitle: "Your behavioural signature",
+  },
+  {
+    key: "experience",
+    icon: "boat-outline",
+    activeIcon: "boat",
+    label: "History",
+    title: "EXPERIENCE",
+    subtitle: "Track record & references",
+  },
+  {
+    key: "vault",
+    icon: "shield-checkmark-outline",
+    activeIcon: "shield-checkmark",
+    label: "Docs",
+    title: "DOCUMENTS",
+    subtitle: "STCW compliance & certificates",
+  },
+];
 
 export default function ProfileScreen() {
-  const { crewProfileId, logout } = useAuthStore();
-  const [section, setSection] = useState<Section>("info");
+  const { logout } = useAuthStore();
+  const [activeTab, setActiveTab] = useState<ProfileTab>("id");
 
-  const { data: profile, isLoading } = useQuery({
-    queryKey: queryKeys.identity.fullProfile(crewProfileId ?? 0),
-    queryFn: () => identityApi.getFullProfile(crewProfileId!),
-    enabled: crewProfileId !== null,
-  });
+  const currentTab = TABS.find((t) => t.key === activeTab)!;
 
-  if (isLoading) {
-    return (
-      <View className="flex-1 bg-bg-primary items-center justify-center">
-        <Text className="text-muted">Loading profile...</Text>
-      </View>
-    );
+  function confirmLogout() {
+    Alert.alert("Sign out", "Are you sure?", [
+      { text: "Cancel", style: "cancel" },
+      { text: "Sign out", style: "destructive", onPress: logout },
+    ]);
   }
 
-  const identity = profile?.identity;
-  const crew = profile?.crew;
-  const experiences = profile?.experiences ?? [];
-  const documents = profile?.documents ?? [];
-
   return (
-    <ScrollView
-      className="flex-1 bg-bg-primary"
-      contentContainerStyle={{ paddingBottom: 32 }}
-    >
-      {/* Avatar + name */}
-      <View className="items-center pt-6 pb-5 px-4">
-        <View className="w-20 h-20 rounded-full bg-brand-primary/20 border-2 border-brand-primary/40 items-center justify-center mb-3">
-          <Text className="text-brand-primary text-3xl font-bold">
-            {identity?.name?.charAt(0) ?? "?"}
+    <View className="flex-1 bg-bg-primary">
+      {/* Page header */}
+      <View className="px-5 pt-4 pb-4 flex-row items-start justify-between">
+        <View>
+          <Text
+            className="text-text-primary font-black"
+            style={{ fontSize: 18, letterSpacing: 6 }}
+          >
+            {currentTab.title}
+          </Text>
+          <Text className="text-muted text-xs mt-0.5" style={{ letterSpacing: 2 }}>
+            {currentTab.subtitle.toUpperCase()}
           </Text>
         </View>
-        <Text className="text-text-primary text-xl font-semibold">{identity?.name}</Text>
-        <Text className="text-muted text-sm mt-0.5">{crew?.position_targeted}</Text>
-        {identity?.is_harmony_verified && (
-          <View className="mt-1.5">
-            <Text className="text-brand-primary text-xs">&#10003; Harmony Verified</Text>
-          </View>
-        )}
       </View>
 
-      {/* Section tabs */}
-      <View
-        className="flex-row mx-4 mb-4 bg-bg-secondary rounded-xl"
-        style={{ borderWidth: 1, borderColor: "#2A3142" }}
-      >
-        <SectionTab label="Info" active={section === "info"} onPress={() => setSection("info")} />
-        <SectionTab label="Experience" active={section === "experience"} onPress={() => setSection("experience")} />
-        <SectionTab label="Documents" active={section === "documents"} onPress={() => setSection("documents")} />
-      </View>
-
-      <View className="px-4">
-        {/* Info section */}
-        {section === "info" && (
-          <View className="bg-bg-secondary border border-bg-border rounded-xl px-4 mb-4">
-            <InfoRow label="Email" value={identity?.email} />
-            <InfoRow label="Phone" value={identity?.phone} />
-            <InfoRow label="Location" value={identity?.location} />
-            <InfoRow label="Position" value={crew?.position_targeted} />
-            <InfoRow
-              label="Experience"
-              value={
-                crew?.experience_years !== undefined
-                  ? `${crew.experience_years} year${crew.experience_years !== 1 ? "s" : ""}`
-                  : null
-              }
-            />
-            <InfoRow
-              label="Availability"
-              value={
-                crew?.availability_status
-                  ? (AVAILABILITY_LABELS[crew.availability_status] ?? crew.availability_status)
-                  : null
-              }
-            />
-          </View>
-        )}
-
-        {/* Experience section */}
-        {section === "experience" && (
-          <View>
-            {experiences.length === 0 ? (
-              <View className="bg-bg-secondary border border-bg-border rounded-xl p-6 items-center">
-                <Text className="text-muted text-sm">No experience added yet.</Text>
-              </View>
-            ) : (
-              <View className="bg-bg-secondary border border-bg-border rounded-xl p-4">
-                {experiences.map((exp, i) => (
-                  <View
-                    key={exp.id}
-                    className="border-l-2 border-brand-primary/30 pl-3"
-                    style={{ marginBottom: i < experiences.length - 1 ? 16 : 0 }}
-                  >
-                    <Text className="text-text-primary text-sm font-medium">
-                      {exp.role} — {exp.yacht_name}
-                    </Text>
-                    <Text className="text-muted text-xs mt-0.5">
-                      {new Date(exp.start_date).getFullYear()}
-                      {exp.end_date
-                        ? ` - ${new Date(exp.end_date).getFullYear()}`
-                        : " - present"}
-                    </Text>
-                    {exp.candidate_comment ? (
-                      <Text className="text-muted text-xs mt-1 italic">
-                        {exp.candidate_comment}
-                      </Text>
-                    ) : null}
-                    {exp.is_harmony_approved && (
-                      <Text className="text-brand-primary text-xs mt-0.5">&#10003; Verified</Text>
-                    )}
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Documents section */}
-        {section === "documents" && (
-          <View>
-            {documents.length === 0 ? (
-              <View className="bg-bg-secondary border border-bg-border rounded-xl p-6 items-center">
-                <Text className="text-muted text-sm text-center">
-                  No documents uploaded yet.
+      {/* Tab bar */}
+      <View className="px-4 mb-2">
+        <View className="bg-bg-elevated border border-bg-border rounded-2xl p-1.5 flex-row">
+          {TABS.map((tab) => {
+            const isActive = activeTab === tab.key;
+            return (
+              <TouchableOpacity
+                key={tab.key}
+                onPress={() => setActiveTab(tab.key)}
+                className="flex-1 items-center py-2.5 rounded-xl"
+                style={{ backgroundColor: isActive ? "#1A2C42" : "transparent" }}
+              >
+                <Ionicons
+                  name={isActive ? tab.activeIcon : tab.icon}
+                  size={18}
+                  color={isActive ? "#A67C52" : "#718096"}
+                />
+                <Text
+                  style={{
+                    fontSize: 10,
+                    fontWeight: "600",
+                    letterSpacing: 0.5,
+                    marginTop: 3,
+                    // ice on active (12.7:1 on bg-secondary) · silver on inactive (4.7:1 on bg-elevated)
+                    color: isActive ? "#F1F4F8" : "#94A3B8",
+                  }}
+                >
+                  {tab.label.toUpperCase()}
                 </Text>
-                <Text className="text-muted text-xs mt-1 text-center">Document management coming soon.</Text>
-              </View>
-            ) : (
-              <View className="bg-bg-secondary border border-bg-border rounded-xl overflow-hidden">
-                {documents.map((doc, i) => (
-                  <View
-                    key={doc.id}
-                    className="flex-row items-center px-4 py-3"
-                    style={{
-                      borderBottomWidth: i < documents.length - 1 ? 1 : 0,
-                      borderBottomColor: "#2A3142",
-                    }}
-                  >
-                    <View className="w-9 h-9 rounded-lg bg-brand-primary/10 items-center justify-center mr-3">
-                      <Text className="text-brand-primary text-base">&#128196;</Text>
-                    </View>
-                    <View className="flex-1">
-                      <Text className="text-text-primary text-sm font-medium">{doc.title}</Text>
-                      <Text className="text-muted text-xs mt-0.5">
-                        {DOCUMENT_TYPE_LABELS[doc.document_type] ?? doc.document_type}
-                        {" - "}
-                        {new Date(doc.uploaded_at).toLocaleDateString()}
-                      </Text>
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Sign out */}
-        <TouchableOpacity
-          onPress={() =>
-            Alert.alert("Sign out", "Are you sure?", [
-              { text: "Cancel", style: "cancel" },
-              { text: "Sign out", style: "destructive", onPress: logout },
-            ])
-          }
-          className="border border-bg-border rounded-xl py-3 items-center mt-4"
-        >
-          <Text className="text-muted text-sm">Sign out</Text>
-        </TouchableOpacity>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
       </View>
-    </ScrollView>
+
+      {/* Scrollable content */}
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 48 }}
+        showsVerticalScrollIndicator={false}
+      >
+        {activeTab === "id" && <IdentityCard />}
+        {activeTab === "score" && <HarmonyScoreSection />}
+        {activeTab === "experience" && <ExperienceSection />}
+        {activeTab === "vault" && <DocumentVaultSection />}
+
+        {/* Footer watermark */}
+        <View className="items-center mt-10 mb-2">
+          <Text style={{ color: "#718096", fontSize: 8, letterSpacing: 4, fontWeight: "700", opacity: 0.4 }}>
+            HARMONY · YACHTING ASSESSMENT CENTER
+          </Text>
+        </View>
+      </ScrollView>
+    </View>
   );
 }

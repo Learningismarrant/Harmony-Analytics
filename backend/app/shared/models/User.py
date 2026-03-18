@@ -118,7 +118,6 @@ class CrewProfile(Base):
         "DailyPulse", back_populates="crew_profile",
         cascade="all, delete-orphan",
     )
-
     # ── Pass-through helpers ──────────────────────────────────
     @property
     def name(self) -> str:

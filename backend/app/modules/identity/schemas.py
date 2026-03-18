@@ -21,9 +21,11 @@ class UserIdentityOut(BaseModel):
 
 
 class IdentityUpdateIn(BaseModel):
-    name: Optional[str] = None
-    phone: Optional[str] = None
-    location: Optional[str] = None
+    name:                Optional[str]               = None
+    phone:               Optional[str]               = None
+    location:            Optional[str]               = None
+    position_targeted:   Optional[YachtPosition]     = None
+    availability_status: Optional[AvailabilityStatus] = None
 
 
 # ── Crew Profile ───────────────────────────────────────────

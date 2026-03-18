@@ -12,10 +12,11 @@ Changements v2 :
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, cast, String
+from sqlalchemy.orm import selectinload
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 
-from app.shared.models import TestCatalogue, Question, TestResult, User, CrewProfile,Yacht, CrewAssignment, Campaign, CampaignCandidate
+from app.shared.models import TestCatalogue, Question, TestResult, User, CrewProfile, Yacht, CrewAssignment, Campaign, CampaignCandidate
 
 class AssessmentRepository:
 
@@ -53,14 +54,20 @@ class AssessmentRepository:
         )
         db.add(db_obj)
         await db.commit()
-        await db.refresh(db_obj)
-        return db_obj
+        # Re-fetch with test relationship eager-loaded so test_name property works.
+        r = await db.execute(
+            select(TestResult)
+            .options(selectinload(TestResult.test))
+            .where(TestResult.id == db_obj.id)
+        )
+        return r.scalar_one()
 
     async def get_results_by_crew(
         self, db: AsyncSession, crew_profile_id: int
     ) -> List[TestResult]:
         r = await db.execute(
             select(TestResult)
+            .options(selectinload(TestResult.test))
             .where(TestResult.crew_profile_id == crew_profile_id)
             .order_by(TestResult.created_at.asc())
         )
@@ -71,6 +78,7 @@ class AssessmentRepository:
     ) -> Optional[TestResult]:
         r = await db.execute(
             select(TestResult)
+            .options(selectinload(TestResult.test))
             .where(
                 TestResult.crew_profile_id == crew_profile_id,
                 TestResult.test_id == test_id,

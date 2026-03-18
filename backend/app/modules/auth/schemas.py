@@ -37,12 +37,13 @@ class LoginIn(BaseModel):
 # ── Tokens ───────────────────────────────────────────────
 
 class TokenOut(BaseModel):
-    access_token:  str
-    refresh_token: str
-    token_type:    str = "bearer"
-    role:          UserRole
-    user_id:       int
-    profile_id:    int   # crew_profile.id ou employer_profile.id
+    access_token:      str
+    refresh_token:     str
+    token_type:        str = "bearer"
+    role:              UserRole
+    user_id:           int
+    profile_id:        int             # crew_profile.id ou employer_profile.id
+    position_targeted: Optional[YachtPosition] = None   # null pour les employers
 
 
 class RefreshIn(BaseModel):

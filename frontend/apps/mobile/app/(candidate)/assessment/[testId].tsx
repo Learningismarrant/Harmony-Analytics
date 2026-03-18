@@ -1,38 +1,90 @@
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-} from "react-native";
-import { useLocalSearchParams, Stack } from "expo-router";
+import { useEffect } from "react";
+import { View, Text, ActivityIndicator, TouchableOpacity } from "react-native";
+import { useLocalSearchParams, Stack, useRouter } from "expo-router";
 import { useTakeTest } from "@/features/assessment/hooks/useTakeTest";
-import { LikertQuestion } from "@/features/assessment/components/LikertQuestion";
-import { SwipePairCard } from "@/features/assessment/components/SwipePairCard";
-import type { ForcedChoiceOption } from "@harmony/types";
+import { useQuestionTransition } from "@/features/assessment/hooks/useQuestionTransition";
+import { useLastResultStore } from "@/features/assessment/store/useLastResultStore";
+import { AssessmentHeader } from "@/features/assessment/components/session/AssessmentHeader";
+import { AssessmentFooter } from "@/features/assessment/components/session/AssessmentFooter";
+import { AssessmentSuccess } from "@/features/assessment/components/session/AssessmentSuccess";
+import { InstructionsView } from "@/features/assessment/components/session/InstructionsView";
+import { QuestionCard } from "@/features/assessment/components/session/QuestionCard";
+import { LikertQuestion } from "@/features/assessment/components/session/LikertQuestion";
+import type { RavenMatrixConfig } from "@harmony/types";
+import { RavenMatrix } from "@/features/assessment/components/session/RavenMatrix";
 
 export default function TakeTestScreen() {
+  const router = useRouter();
   const { testId } = useLocalSearchParams<{ testId: string }>();
   const id = parseInt(testId, 10);
 
   const {
     questions,
+    testInfo,
     isLoading,
+    isSubmitted,
+    showInstructions,
+    setShowInstructions,
     currentIndex,
     responses,
     submitMutation,
     selectAndAdvance,
-    selectAnswer,
-    goNext,
-    goPrev,
     handleSubmit,
   } = useTakeTest(id);
 
-  if (isLoading || !questions) {
+  const { animatedStyle, triggerTransition, resetAnimation } = useQuestionTransition();
+
+  useEffect(() => {
+    resetAnimation();
+  }, [id, resetAnimation]);
+
+  // ── 1. Loading ────────────────────────────────────────────────────────────
+  if (isLoading) {
     return (
       <View className="flex-1 bg-bg-primary items-center justify-center">
-        <ActivityIndicator color="#4A90B8" size="large" />
-        <Text className="text-muted mt-3">Loading questions…</Text>
+        <ActivityIndicator color="#94A3B8" size="large" />
+      </View>
+    );
+  }
+
+  // ── 2. Succès ─────────────────────────────────────────────────────────────
+  if (isSubmitted) {
+    const lastResult = useLastResultStore.getState().lastResult;
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <AssessmentSuccess
+          onExit={() =>
+            router.replace(
+              `/(candidate)/assessment/result?score=${Math.round(lastResult?.global_score ?? 0)}`,
+            )
+          }
+        />
+      </>
+    );
+  }
+
+  // ── 3. Instructions ───────────────────────────────────────────────────────
+  if (showInstructions) {
+    return (
+      <>
+        <Stack.Screen options={{ headerShown: false }} />
+        <InstructionsView
+          data={{
+            name: testInfo?.name,
+            instructions: testInfo?.instructions,
+            test_type: testInfo?.test_type,
+          }}
+          onStart={() => setShowInstructions(false)}
+        />
+      </>
+    );
+  }
+
+  if (!questions || questions.length === 0) {
+    return (
+      <View className="flex-1 bg-bg-primary items-center justify-center">
+        <Text className="text-muted">Aucune question disponible.</Text>
       </View>
     );
   }
@@ -43,70 +95,51 @@ export default function TakeTestScreen() {
   const progress = (currentIndex + 1) / totalQuestions;
   const isLastQuestion = currentIndex === totalQuestions - 1;
 
-  // Mode swipe T-IRT : tous les forced_choice avec swipe auto-avancement
-  const isSwipeMode = question?.question_type === "forced_choice";
-
-  if (isSwipeMode) {
-    const options = question.options as ForcedChoiceOption[] | null;
-    const leftOption = options?.find((o) => o.side === "left");
-    const rightOption = options?.find((o) => o.side === "right");
+  // ── 4. Mode Raven (matrices de raisonnement) ──────────────────────────────
+  if (question.question_type === "raven") {
+    const config = question.options as unknown as RavenMatrixConfig;
 
     return (
       <>
         <Stack.Screen
-          options={{
-            title: `${currentIndex + 1} / ${totalQuestions}`,
-            headerBackTitle: "Tests",
-          }}
+          options={{ title: `${currentIndex + 1} / ${totalQuestions}`, headerBackTitle: "Tests" }}
         />
-
         <View className="flex-1 bg-bg-primary">
-          {/* Barre de progression */}
-          <View className="h-1 bg-bg-border">
-            <View
-              style={{ width: `${progress * 100}%`, backgroundColor: "#4A90B8" }}
-              className="h-full"
-            />
-          </View>
+          <AssessmentHeader current={currentIndex} total={totalQuestions} />
 
-          {/* Indicateur progression texte */}
-          <View className="px-5 pt-3 pb-1 flex-row items-center justify-between">
+          <View className="px-5 pt-2 pb-1 flex-row items-center justify-between">
             <Text className="text-muted text-xs">
               {answeredCount} / {totalQuestions} répondues
             </Text>
-            <Text className="text-muted text-xs">
-              {Math.round(progress * 100)} %
-            </Text>
+            <Text className="text-muted text-xs">{Math.round(progress * 100)} %</Text>
           </View>
 
-          {/* Zone principale swipe */}
-          {leftOption && rightOption ? (
-            <SwipePairCard
-              leftOption={leftOption}
-              rightOption={rightOption}
-              selectedSide={responses[question.id] as "left" | "right" | undefined}
-              onChoose={(side) => selectAndAdvance(question.id, side)}
-              pairIndex={currentIndex}
-            />
-          ) : (
-            <View className="flex-1 items-center justify-center">
-              <Text className="text-muted">Options indisponibles</Text>
-            </View>
-          )}
+          <View className="flex-1 items-center justify-center px-4">
+            {config ? (
+              <RavenMatrix
+                config={config}
+                selectedAnswer={responses[question.id]}
+                onSelect={(answerId) => selectAndAdvance(question.id, answerId)}
+                disabled={submitMutation.isPending}
+              />
+            ) : (
+              <Text className="text-muted">Configuration de la matrice indisponible.</Text>
+            )}
+          </View>
 
-          {/* Bouton de soumission sur la dernière paire */}
           {isLastQuestion && (
             <View className="px-5 pb-8 pt-2">
               <TouchableOpacity
                 onPress={handleSubmit}
                 disabled={submitMutation.isPending}
-                className="bg-brand-primary rounded-xl py-4 items-center"
+                className="bg-teak rounded-xl py-4 items-center"
+                activeOpacity={0.85}
               >
                 {submitMutation.isPending ? (
-                  <ActivityIndicator color="#07090F" />
+                  <ActivityIndicator color="#0D1B2A" />
                 ) : (
-                  <Text className="text-bg-primary font-semibold text-base">
-                    Soumettre le test
+                  <Text className="text-bg-primary font-bold tracking-wider">
+                    SOUMETTRE LE TEST
                   </Text>
                 )}
               </TouchableOpacity>
@@ -117,7 +150,7 @@ export default function TakeTestScreen() {
     );
   }
 
-  // Mode classique (Likert ou autre)
+  // ── 6. Mode Likert (classique) ────────────────────────────────────────────
   return (
     <>
       <Stack.Screen
@@ -126,67 +159,46 @@ export default function TakeTestScreen() {
           headerBackTitle: "Tests",
         }}
       />
-
       <View className="flex-1 bg-bg-primary">
-        {/* Progress bar */}
-        <View className="h-1 bg-bg-border">
-          <View
-            style={{ width: `${progress * 100}%`, backgroundColor: "#4A90B8" }}
-            className="h-full"
+        <AssessmentHeader current={currentIndex} total={totalQuestions} />
+
+        <View className="flex-1 justify-center">
+          <QuestionCard
+            questionText={question.text}
+            questionNumber={currentIndex + 1}
+            totalQuestions={totalQuestions}
+            animatedStyle={animatedStyle}
           />
         </View>
 
-        <ScrollView
-          className="flex-1"
-          contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
-        >
-          <Text className="text-muted text-sm mb-4">
-            {answeredCount} / {totalQuestions} answered
-          </Text>
-
-          <Text className="text-text-primary text-xl font-medium leading-relaxed mb-8">
-            {question?.text}
-          </Text>
-
+        {/* Échelle Likert horizontale */}
+        <View className="px-6 pb-4">
           <LikertQuestion
             question={question}
-            selectedValue={responses[question?.id ?? 0]}
-            onSelect={selectAnswer}
+            selectedValue={responses[question.id]}
+            onSelect={(qId, val) => triggerTransition(() => selectAndAdvance(qId, val))}
           />
-        </ScrollView>
+        </View>
 
-        {/* Bottom nav */}
-        <View className="absolute bottom-0 left-0 right-0 bg-bg-secondary border-t border-bg-border px-5 py-4 flex-row gap-3">
-          <TouchableOpacity
-            onPress={goPrev}
-            disabled={currentIndex === 0}
-            className="border border-bg-border rounded-xl py-3 px-5"
-            style={{ opacity: currentIndex === 0 ? 0.3 : 1 }}
-          >
-            <Text className="text-text-primary font-medium">← Back</Text>
-          </TouchableOpacity>
-
-          {isLastQuestion ? (
+        {/* Soumettre uniquement sur la dernière question */}
+        {isLastQuestion && (
+          <View className="px-5 pb-4">
             <TouchableOpacity
               onPress={handleSubmit}
               disabled={submitMutation.isPending}
-              className="flex-1 bg-brand-primary rounded-xl py-3 items-center"
+              className="bg-teak rounded-xl py-4 items-center"
+              activeOpacity={0.85}
             >
               {submitMutation.isPending ? (
-                <ActivityIndicator color="#07090F" />
+                <ActivityIndicator color="#0D1B2A" />
               ) : (
-                <Text className="text-bg-primary font-semibold">Submit test</Text>
+                <Text className="text-bg-primary font-bold tracking-wider">SOUMETTRE LE TEST</Text>
               )}
             </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              onPress={goNext}
-              className="flex-1 bg-brand-primary/90 rounded-xl py-3 items-center"
-            >
-              <Text className="text-bg-primary font-semibold">Next →</Text>
-            </TouchableOpacity>
-          )}
-        </View>
+          </View>
+        )}
+
+        <AssessmentFooter />
       </View>
     </>
   );

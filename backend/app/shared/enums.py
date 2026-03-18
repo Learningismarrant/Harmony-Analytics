@@ -52,6 +52,10 @@ class FeedbackTarget(str, Enum):
     MANAGER    = "manager"     # Client avec marin actif dans l'équipage
     ONBOARDING = "onboarding"  # Client avec marin hired → embarquement imminent
 
+class TestType(str, Enum):
+    LIKERT   = "likert"    
+    QCM      = "qcm"     
+    IPSATIF  = "Ipsatif"   
 
 class SurveyTriggerType(str, Enum):
     POST_CHARTER   = "post_charter"    # Après un charter

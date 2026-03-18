@@ -3,7 +3,7 @@
  *
  * TypeScript mirrors of all backend Pydantic schemas.
  * Single source of truth — generated from app/shared/enums.py
- * and all modules/*/schemas.py files.
+ * and all modules/{module}/schemas.py files.
  */
 
 // ── Enums ────────────────────────────────────────────────────────────────────
@@ -42,10 +42,10 @@ export type DepartureReason =
   | "external"
   | "unknown";
 
-export type TestType = "likert" | "cognitive" | "free" | "tirt";
+export type TestType = "likert" | "qcm";
 
 /** Type d'une question individuelle (distinct du type de catalogue). */
-export type QuestionType = "likert" | "forced_choice" | "qcm" | "multiple_choice" | string;
+export type QuestionType = "likert" | "qcm" | "multiple_choice" | "raven" | string;
 
 export type NiveauScore = "Faible" | "Moyen" | "Élevé";
 
@@ -168,11 +168,40 @@ export interface DocumentOut {
   uploaded_at: string;
 }
 
+export interface DimensionScoresOut {
+  agreeableness?: number | null;
+  conscientiousness?: number | null;
+  openness?: number | null;
+  extraversion?: number | null;
+  emotional_stability?: number | null;
+  gca?: number | null;
+  resilience?: number | null;
+}
+
+export interface KeySignalOut {
+  type: string; // "strength" | "risk"
+  label: string;
+  trait?: string | null;
+}
+
 export interface PsychometricReportOut {
-  test_name: string;
-  global_score: number;
-  created_at: string;
-  summary: Record<string, unknown>;
+  has_data: boolean;
+  view_mode: string;
+  context_position?: string | null;
+  snapshot_version?: string | null;
+  message?: string | null;
+  dimensions?: DimensionScoresOut | null;
+  raw_scores?: Record<string, unknown> | null;
+  benchmarks?: Record<string, unknown> | null;
+  test_history?: unknown[] | null;
+  key_signals?: KeySignalOut[] | null;
+  risk_signals?: unknown[] | null;
+  work_style?: Record<string, unknown> | null;
+  team_contribution?: Record<string, unknown> | null;
+  communication_tips?: string[] | null;
+  onboarding_tips?: Record<string, unknown> | null;
+  integration_risks?: unknown[] | null;
+  management_advice?: Record<string, unknown> | null;
 }
 
 // ── Assessment ────────────────────────────────────────────────────────────────
@@ -186,22 +215,12 @@ export interface TestInfoOut {
   test_type: TestType;
 }
 
-/** Option d'une question forced_choice (T-IRT). */
-export interface ForcedChoiceOption {
-  side: "left" | "right";
-  ipip_id: string;
-  domain: "O" | "C" | "E" | "A" | "N";
-  facet: string;
-  score_weight: 1 | -1;
-  text: { fr: string; en: string };
-}
-
 export interface QuestionOut {
   id: number;
   test_id: number;
   text: string;
   question_type: QuestionType;
-  options: (string | ForcedChoiceOption)[] | null;
+  options: string[] | RavenMatrixConfig | null;
   trait: string | null;
 }
 
@@ -228,22 +247,6 @@ export interface ReliabilityOut {
   social_desirability_flag: boolean;
 }
 
-/** Détail d'un domaine Big Five dans un résultat T-IRT (z-score + percentile). */
-export interface TirtTraitDetail {
-  z_score: number;
-  percentile: number;
-}
-
-/** Section `tirt_detail` présente dans `TestResultOut.scores` pour les tests de type "tirt". */
-export interface TirtDetail {
-  O?: TirtTraitDetail;
-  C?: TirtTraitDetail;
-  E?: TirtTraitDetail;
-  A?: TirtTraitDetail;
-  N?: TirtTraitDetail;
-  reliability_index: number;
-}
-
 export interface TestResultOut {
   id: number;
   test_id: number;
@@ -258,7 +261,6 @@ export interface TestResultOut {
       total_time_seconds: number;
       avg_seconds_per_question: number;
     };
-    tirt_detail?: TirtDetail;
   };
   created_at: string;
 }
@@ -390,6 +392,15 @@ export interface DashboardOut {
   weather_trend: "improving" | "stable" | "degrading" | "unknown";
   sociogram: SociogramOut | null;
 }
+// ── RadarChart ───────────────────────────────────────────────────────
+
+export interface RadarPoint {
+  trait: string;
+  label: string;
+  A: number;
+  B: number;
+  fullMark: number;
+}
 
 // ── Sociogram / Matrice ───────────────────────────────────────────────────────
 
@@ -477,3 +488,42 @@ export interface PaginatedOut<T> {
   page: number;
   size: number;
 }
+
+// ── Harmony Matrix Reasoning Test (HMR-24) ───────────────────────────────────
+
+/** Forme d'une cellule dans une matrice Raven. */
+export type RavenShape = "circle" | "square" | "triangle" | "diamond";
+
+/** État de remplissage d'une cellule. */
+export type RavenFill = "empty" | "half" | "full";
+
+/** Une cellule dans la grille 3×3. null = cellule manquante (à compléter). */
+export interface RavenCell {
+  shape: RavenShape;
+  size: 1 | 2 | 3;
+  fill: RavenFill;
+  count: 1 | 2 | 3;
+  rotation?: 0 | 90 | 180 | 270;
+}
+
+/** Une option de réponse (candidate pour compléter la matrice). */
+export interface RavenAnswerOption {
+  id: string; // "A" | "B" | "C" | "D" | "E" | "F"
+  shape: RavenShape;
+  size: 1 | 2 | 3;
+  fill: RavenFill;
+  count: 1 | 2 | 3;
+  rotation?: 0 | 90 | 180 | 270;
+}
+
+/**
+ * Configuration complète d'une question HMR-24, stockée dans Question.options (JSON).
+ * La case manquante est toujours [2][2] (dernière case, bas-droite).
+ */
+export interface RavenMatrixConfig {
+  matrix: (RavenCell | null)[][];
+  answer_options: RavenAnswerOption[];
+  difficulty: 1 | 2 | 3;
+  rule: string;
+}
+

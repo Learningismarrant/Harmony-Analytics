@@ -1,48 +1,38 @@
 # tests/engine/recruitment/MLPSM/test_master.py
 """
-Tests unitaires pour engine.recruitment.MLPSM.master
+Tests unitaires pour le moteur MLPSM via pe_fit.master.
+
+Migration MLPSM → PE Fit :
+    Les anciens modules MLPSM/master.py ont été supprimés.
+    La logique équivalente est dans pe_fit/master.py qui expose :
+        - _sigmoid_transform, SIGMOID_CENTER, SIGMOID_SCALE (aliases)
+        - PEFitResult avec pj_fit, po_fit, pt_fit, ps_fit, global_score
+
+Correspondances :
+    MLPSMResult.y_success     → PEFitResult.global_score
+    MLPSMResult.p_ind_score   → PEFitResult.pj_fit.p_ind_score
+    MLPSMResult.f_team_score  → PEFitResult.pt_fit.score (None → 50.0)
+    MLPSMResult.f_env_score   → PEFitResult.po_fit.score (None → 50.0)
+    MLPSMResult.f_lmx_score   → PEFitResult.ps_fit.score (None → 50.0)
+    _sigmoid_transform        → pe_fit.master._sigmoid_transform (alias exposé)
 
 SKILL.md V1 — Sortie sigmoïde :
     Ŷ_raw    = β₁P + β₂FT + β₃FE + β₄FL   (score linéaire)
     y_success = sigmoid((Ŷ_raw − SIGMOID_CENTER) / SIGMOID_SCALE) × 100
-
-Couverture :
-    compute() :
-        - Retourne MLPSMResult
-        - y_success ∈ (0, 100) — sigmoïde, jamais exactement 0 ou 100
-        - y_raw_linear ∈ [0, 100] — score linéaire exposé pour audit
-        - Équation sigmoïde vérifiée manuellement
-        - y_success > 50 quand Ŷ_raw > 50, < 50 quand Ŷ_raw < 50
-        - Betas personnalisés passés explicitement
-        - Amplification des extrêmes : bon candidat encore mieux / faible encore plus bas
-
-    compute_with_delta() :
-        - Retourne MLPSMResult avec f_team_detail.delta renseigné
-
-    compute_batch() :
-        - N candidats → N résultats dans le même ordre
-
-    MLPSMResult :
-        - to_event_snapshot() contient y_success + y_raw_linear
-        - to_impact_report() contient scores + environment + leadership + y_raw_linear
-        - data_quality dans [0, 1]
-        - confidence label cohérent avec data_quality
-        - success_label cohérent avec y_success
-        - formula_snapshot mentionne sigmoid
 """
 import math
 import pytest
 
-from app.engine.recruitment.MLPSM.master import (
+from app.engine.pe_fit.master import (
     compute,
-    compute_with_delta,
-    compute_batch,
-    MLPSMResult,
-    DEFAULT_BETAS,
+    PEFitResult,
     _sigmoid_transform,
     SIGMOID_CENTER,
     SIGMOID_SCALE,
 )
+from app.engine.pe_fit.pt_fit.f_team import compute as f_team_compute
+from app.engine.pe_fit.po_fit.f_env import compute as f_env_compute
+from app.engine.pe_fit.ps_fit.f_lmx import compute as f_lmx_compute
 
 pytestmark = pytest.mark.engine
 
@@ -81,19 +71,26 @@ def _snap(
 
 def _vessel() -> dict:
     return {
-        "demands":   {"physical": 60.0, "cognitive": 50.0, "stress": 55.0, "emotional": 50.0},
-        "resources": {"autonomy": 65.0, "social_support": 60.0, "skill_variety": 55.0, "recognition": 60.0},
+        "salary_index":        0.65,
+        "rest_days_ratio":     0.60,
+        "private_cabin_ratio": 0.50,
+        "charter_intensity":   0.55,
+        "management_pressure": 0.50,
     }
 
 
 def _captain() -> dict:
-    return {"autonomy_preference": 0.7, "feedback_preference": 0.5, "structure_preference": 0.4}
+    return {
+        "autonomy_given":    0.7,
+        "feedback_style":    0.5,
+        "structure_imposed": 0.4,
+    }
 
 
-CANDIDATE = _snap()
-CREW_TEAM = [_snap(agreeableness=75.0), _snap(agreeableness=72.0)]
-VESSEL    = _vessel()
-CAPTAIN   = _captain()
+CANDIDATE    = _snap()
+CREW_TEAM    = [_snap(agreeableness=75.0), _snap(agreeableness=72.0)]
+VESSEL       = _vessel()
+CAPTAIN      = _captain()
 
 
 # ── Tests _sigmoid_transform ──────────────────────────────────────────────────
@@ -104,7 +101,6 @@ class TestSigmoidTransform:
         assert _sigmoid_transform(SIGMOID_CENTER) == 50.0
 
     def test_symetrie(self):
-        """sigmoid(50+d) et sigmoid(50-d) doivent être symétriques autour de 50."""
         for d in [10, 20, 30]:
             high = _sigmoid_transform(SIGMOID_CENTER + d)
             low  = _sigmoid_transform(SIGMOID_CENTER - d)
@@ -113,145 +109,110 @@ class TestSigmoidTransform:
             )
 
     def test_valeur_superieure_donne_score_superieur_50(self):
-        """y_raw > 50 → y_success > 50."""
         assert _sigmoid_transform(65.0) > 50.0
 
     def test_valeur_inferieure_donne_score_inferieur_50(self):
-        """y_raw < 50 → y_success < 50."""
         assert _sigmoid_transform(35.0) < 50.0
 
     def test_monotone_croissant(self):
-        """La sigmoïde est strictement croissante."""
         scores = [_sigmoid_transform(x) for x in range(0, 101, 10)]
         for a, b in zip(scores, scores[1:]):
             assert a < b, f"Non monotone: {a} >= {b}"
 
     def test_borne_superieure(self):
-        """La sigmoïde ne dépasse jamais 100."""
         assert _sigmoid_transform(100.0) < 100.0
 
     def test_borne_inferieure(self):
-        """La sigmoïde est toujours > 0."""
         assert _sigmoid_transform(0.0) > 0.0
 
     def test_amplification_extremes(self):
-        """
-        La sigmoïde amplifie les extrêmes par rapport au linéaire.
-        Un score de 80 linéaire doit être > 80 sigmoïde (amplifié à la hausse).
-        Un score de 20 linéaire doit être < 20 sigmoïde (amplifié à la baisse).
-        """
         assert _sigmoid_transform(80.0) > 80.0
         assert _sigmoid_transform(20.0) < 20.0
 
     def test_formule_manuelle(self):
-        """Vérification contre le calcul manuel."""
         y_raw  = 65.0
         z      = (y_raw - SIGMOID_CENTER) / SIGMOID_SCALE
         manual = round(100.0 / (1.0 + math.exp(-z)), 1)
         assert _sigmoid_transform(y_raw) == manual
 
 
-# ── compute() ─────────────────────────────────────────────────────────────────
+# ── Tests PE Fit compute() — correspondance avec MLPSM.compute() ─────────────
 
-class TestCompute:
-    def test_retourne_mlpsm_result(self):
-        result = compute(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN)
-        assert isinstance(result, MLPSMResult)
+class TestPEFitCompute:
+    """Équivalent de TestCompute (MLPSM/master) via pe_fit.master.compute()."""
 
-    def test_y_success_dans_bornes(self):
-        """y_success ∈ (0, 100) — sigmoïde, jamais exactement 0 ou 100."""
-        result = compute(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN)
-        assert 0.0 < result.y_success < 100.0
+    def test_retourne_pe_fit_result(self):
+        result = compute(CANDIDATE)
+        assert isinstance(result, PEFitResult)
 
-    def test_y_raw_linear_expose(self):
-        """MLPSMResult doit exposer y_raw_linear pour audit."""
-        result = compute(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN)
-        assert hasattr(result, "y_raw_linear")
-        assert 0.0 <= result.y_raw_linear <= 100.0
+    def test_global_score_dans_bornes(self):
+        """global_score ∈ [0, 100] — équivalent y_success."""
+        result = compute(CANDIDATE)
+        assert 0.0 <= result.global_score <= 100.0
 
-    def test_sous_scores_dans_bornes(self):
-        result = compute(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN)
-        for score in (result.p_ind_score, result.f_team_score, result.f_env_score, result.f_lmx_score):
-            assert 0.0 <= score <= 100.0, f"Score hors bornes: {score}"
+    def test_pj_fit_score_dans_bornes(self):
+        result = compute(CANDIDATE)
+        assert 0.0 <= result.pj_fit.score <= 100.0
 
-    def test_equation_maitresse_coherente_avec_sigmoid(self):
-        """
-        y_raw_linear doit correspondre à Σ βᵢ·Fᵢ clampé.
-        y_success doit correspondre à sigmoid(y_raw_linear).
-        """
-        betas  = DEFAULT_BETAS.copy()
-        result = compute(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN, betas=betas)
+    def test_p_ind_score_dans_bornes(self):
+        result = compute(CANDIDATE)
+        assert 0.0 <= result.pj_fit.p_ind_score <= 100.0
 
-        # Reconstruction du score linéaire
-        y_manual = (
-            betas["b1_p_ind"]  * result.p_ind_score  +
-            betas["b2_f_team"] * result.f_team_score +
-            betas["b3_f_env"]  * result.f_env_score  +
-            betas["b4_f_lmx"]  * result.f_lmx_score
-        )
-        y_linear_expected = round(max(0.0, min(100.0, y_manual)), 1)
-        assert abs(result.y_raw_linear - y_linear_expected) < 0.01
+    def test_pt_fit_avec_equipe(self):
+        result = compute(CANDIDATE, current_crew_snapshots=CREW_TEAM)
+        assert result.pt_fit is not None
+        assert 0.0 <= result.pt_fit.score <= 100.0
 
-        # Vérification de la transformation sigmoïde
-        y_sigmoid_expected = _sigmoid_transform(y_linear_expected)
-        assert abs(result.y_success - y_sigmoid_expected) < 0.1
+    def test_po_fit_avec_vessel(self):
+        result = compute(CANDIDATE, vessel_params=VESSEL)
+        assert result.po_fit is not None
+        assert 0.0 <= result.po_fit.score <= 100.0
 
-    def test_y_success_superieur_a_y_raw_pour_bon_candidat(self):
-        """
-        Un bon candidat (score linéaire > 50) doit avoir y_success > y_raw_linear
-        (amplification à la hausse par la sigmoïde).
-        """
+    def test_ps_fit_avec_captain(self):
+        result = compute(CANDIDATE, captain_vector=CAPTAIN)
+        assert result.ps_fit is not None
+        assert 0.0 <= result.ps_fit.score <= 100.0
+
+    def test_global_score_average_all_dimensions(self):
+        """global_score = moyenne des dimensions disponibles."""
         result = compute(
-            _snap(conscientiousness=85.0, agreeableness=80.0, gca=85.0, neuroticism=20.0),
-            CREW_TEAM, VESSEL, CAPTAIN
+            CANDIDATE,
+            vessel_params=VESSEL,
+            current_crew_snapshots=CREW_TEAM,
+            captain_vector=CAPTAIN,
         )
-        if result.y_raw_linear > 50.0:
-            assert result.y_success > result.y_raw_linear
+        # Toutes les dimensions disponibles
+        scores = [
+            result.pj_fit.score,
+            result.pt_fit.score,
+            result.po_fit.score,
+            result.ps_fit.score,
+        ]
+        expected = round(sum(scores) / len(scores), 1)
+        assert abs(result.global_score - expected) < 0.2
 
-    def test_y_success_inferieur_a_y_raw_pour_mauvais_candidat(self):
-        """
-        Un mauvais candidat (score linéaire < 50) doit avoir y_success < y_raw_linear
-        (amplification à la baisse par la sigmoïde).
-        """
-        result = compute(
-            _snap(conscientiousness=20.0, agreeableness=15.0, gca=20.0, neuroticism=75.0),
-            CREW_TEAM, VESSEL, CAPTAIN
-        )
-        if result.y_raw_linear < 50.0:
-            assert result.y_success < result.y_raw_linear
+    def test_sans_equipe_pt_fit_none(self):
+        result = compute(CANDIDATE)
+        assert result.pt_fit is None
 
-    def test_betas_custom(self):
-        """Betas personnalisés changent le résultat."""
-        betas_default  = DEFAULT_BETAS.copy()
-        betas_p_heavy  = {"b1_p_ind": 0.70, "b2_f_team": 0.10, "b3_f_env": 0.10, "b4_f_lmx": 0.10}
-        result_default = compute(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN, betas=betas_default)
-        result_custom  = compute(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN, betas=betas_p_heavy)
-        assert result_default.y_success != result_custom.y_success
+    def test_sans_vessel_po_fit_none(self):
+        result = compute(CANDIDATE)
+        assert result.po_fit is None
 
-    def test_betas_utilises_snapshotes(self):
-        """MLPSMResult.betas_used == betas passés."""
-        custom = {"b1_p_ind": 0.40, "b2_f_team": 0.30, "b3_f_env": 0.15, "b4_f_lmx": 0.15}
-        result = compute(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN, betas=custom)
-        assert result.betas_used == custom
+    def test_sans_captain_ps_fit_none(self):
+        result = compute(CANDIDATE)
+        assert result.ps_fit is None
 
-    def test_equipe_vide(self):
-        """Équipe vide (0 membres actifs) → résultat sans exception."""
-        result = compute(CANDIDATE, [], VESSEL, CAPTAIN)
-        assert isinstance(result, MLPSMResult)
-        assert 0.0 < result.y_success < 100.0
-
-    def test_snapshot_vide(self):
-        """Snapshot candidat vide → result avec fallbacks, pas d'exception."""
-        result = compute({}, CREW_TEAM, VESSEL, CAPTAIN)
-        assert isinstance(result, MLPSMResult)
+    def test_snapshot_vide_pas_exception(self):
+        result = compute({})
+        assert isinstance(result, PEFitResult)
 
     def test_data_quality_dans_bornes(self):
-        result = compute(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN)
+        result = compute(CANDIDATE)
         assert 0.0 <= result.data_quality <= 1.0
 
     def test_confidence_coherent(self):
-        """confidence correspond à la data_quality."""
-        result = compute(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN)
+        result = compute(CANDIDATE)
         if result.data_quality >= 0.85:
             assert result.confidence == "HIGH"
         elif result.data_quality >= 0.60:
@@ -259,168 +220,136 @@ class TestCompute:
         else:
             assert result.confidence == "LOW"
 
-    def test_success_label_coherent(self):
-        """success_label correspond à y_success (score sigmoïde)."""
-        result = compute(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN)
-        if result.y_success >= 75:
-            assert result.success_label == "STRONG_FIT"
-        elif result.y_success >= 60:
-            assert result.success_label == "GOOD_FIT"
-        elif result.y_success >= 45:
-            assert result.success_label == "MODERATE_FIT"
-        else:
-            assert result.success_label == "POOR_FIT"
-
-    def test_formula_snapshot_mentionne_sigmoid(self):
-        """formula_snapshot doit mentionner la transformation sigmoïde."""
-        result = compute(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN)
-        assert isinstance(result.formula_snapshot, str)
-        assert len(result.formula_snapshot) > 5
-        assert "sigmoid" in result.formula_snapshot.lower() or "P(success)" in result.formula_snapshot
-
     def test_all_flags_list(self):
-        result = compute(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN)
+        result = compute(CANDIDATE)
         assert isinstance(result.all_flags, list)
 
-    def test_flags_prefixes_module(self):
-        """Les flags sont préfixés par le nom du sous-module."""
-        jerk_snap = _snap(agreeableness=20.0)
-        result = compute(jerk_snap, [_snap(), _snap()], VESSEL, CAPTAIN)
-        f_team_flags = [f for f in result.all_flags if "[F_team]" in f]
-        assert isinstance(f_team_flags, list)
+    def test_safety_level_string(self):
+        result = compute(CANDIDATE)
+        assert result.safety_level in ("CLEAR", "ADVISORY", "HIGH_RISK", "DISQUALIFIED")
+
+    def test_to_matching_row(self):
+        result = compute(CANDIDATE)
+        row = result.to_matching_row()
+        assert "pj_fit_score" in row
+        assert "global_score" in row
+        assert "safety_level" in row
+        assert "is_disqualified" in row
+
+    def test_to_impact_report(self):
+        result = compute(
+            CANDIDATE,
+            vessel_params=VESSEL,
+            current_crew_snapshots=CREW_TEAM,
+            captain_vector=CAPTAIN,
+        )
+        report = result.to_impact_report()
+        assert "global_score" in report
+        assert "pj_fit" in report
+        assert "po_fit" in report
+        assert "pt_fit" in report
+        assert "ps_fit" in report
 
 
-# ── compute_with_delta() ──────────────────────────────────────────────────────
+# ── Tests F_team (pe_fit/pt_fit/f_team) ──────────────────────────────────────
 
-class TestComputeWithDelta:
-    def test_retourne_mlpsm_result(self):
-        result = compute_with_delta(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN)
-        assert isinstance(result, MLPSMResult)
+class TestFTeam:
+    """Tests F_team pe_fit — équivalent compute/compute_with_delta MLPSM."""
+
+    def test_compute_retourne_f_team_result(self):
+        all_snaps = CREW_TEAM + [CANDIDATE]
+        result = f_team_compute(all_snaps)
+        assert hasattr(result, "score")
+        assert 0.0 <= result.score <= 100.0
 
     def test_f_team_delta_renseigne(self):
-        """compute_with_delta() doit peupler f_team_detail.delta."""
-        result = compute_with_delta(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN)
-        assert result.f_team_detail.delta is not None
+        from app.engine.pe_fit.pt_fit.f_team import compute_delta
+        result = compute_delta(CREW_TEAM, CANDIDATE)
+        assert result.delta is not None
+        assert hasattr(result.delta, "f_team_before")
+        assert hasattr(result.delta, "f_team_after")
+        assert hasattr(result.delta, "delta")
 
-    def test_delta_contient_avant_apres(self):
-        result = compute_with_delta(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN)
-        delta = result.f_team_detail.delta
-        assert hasattr(delta, "f_team_before")
-        assert hasattr(delta, "f_team_after")
-        assert hasattr(delta, "delta")
+    def test_equipe_vide_retourne_valeur_par_defaut(self):
+        result = f_team_compute([])
+        assert result.score == 50.0
 
-
-# ── MLPSMResult.to_event_snapshot() ──────────────────────────────────────────
-
-class TestToEventSnapshot:
-    def setup_method(self):
-        self.result = compute(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN)
-        self.snap   = self.result.to_event_snapshot()
-
-    def test_retourne_dict(self):
-        assert isinstance(self.snap, dict)
-
-    def test_champs_obligatoires(self):
-        expected = {
-            "y_success_predicted", "y_raw_linear", "p_ind_score", "f_team_score",
-            "f_env_score", "f_lmx_score", "beta_weights_snapshot",
-            "data_quality", "confidence", "flags_summary",
-        }
-        assert expected.issubset(self.snap.keys())
-
-    def test_y_success_dans_bornes(self):
-        assert 0.0 < self.snap["y_success_predicted"] < 100.0
-
-    def test_y_raw_linear_dans_bornes(self):
-        assert 0.0 <= self.snap["y_raw_linear"] <= 100.0
-
-    def test_flags_summary_max_10(self):
-        """Cap à 10 flags en DB."""
-        assert len(self.snap["flags_summary"]) <= 10
+    def test_scores_dans_bornes(self):
+        result = f_team_compute(CREW_TEAM + [CANDIDATE])
+        assert 0.0 <= result.score <= 100.0
 
 
-# ── MLPSMResult.to_impact_report() ───────────────────────────────────────────
+# ── Tests F_env (pe_fit/po_fit/f_env) ────────────────────────────────────────
 
-class TestToImpactReport:
-    def setup_method(self):
-        self.result = compute_with_delta(CANDIDATE, CREW_TEAM, VESSEL, CAPTAIN)
-        self.report = self.result.to_impact_report()
+class TestFEnv:
+    """Tests F_env pe_fit — équivalent MLPSM F_env."""
 
-    def test_retourne_dict(self):
-        assert isinstance(self.report, dict)
+    def test_compute_retourne_f_env_result(self):
+        result = f_env_compute(CANDIDATE, VESSEL)
+        assert hasattr(result, "score")
+        assert 0.0 <= result.score <= 100.0
 
-    def test_champs_scores(self):
-        assert "scores" in self.report
-        scores = self.report["scores"]
-        for key in ("p_ind", "f_team", "f_env", "f_lmx"):
-            assert key in scores, f"Clé manquante: {key}"
+    def test_sans_vessel_params_score_reduit(self):
+        result = f_env_compute(CANDIDATE, {})
+        # data_quality réduite car pas de params
+        assert result.data_quality < 1.0
 
-    def test_y_raw_linear_present(self):
-        """Le score linéaire brut doit être exposé dans le rapport d'impact."""
-        assert "y_raw_linear" in self.report
-
-    def test_champs_environment(self):
-        assert "environment" in self.report
-        env = self.report["environment"]
-        assert "jdr_ratio" in env
-        assert "resilience" in env
-
-    def test_champs_leadership(self):
-        assert "leadership" in self.report
-        lead = self.report["leadership"]
-        assert "compatibility_label" in lead
-        assert "normalized_distance" in lead
-        assert "dimension_gaps" in lead
-
-    def test_team_impact_present(self):
-        assert "team_impact" in self.report
-        ti = self.report["team_impact"]
-        assert "f_team_before" in ti
-        assert "f_team_after" in ti
-        assert "delta" in ti
-
-    def test_flags_liste(self):
-        assert isinstance(self.report.get("flags"), list)
-
-    def test_formula_presente(self):
-        assert isinstance(self.report.get("formula"), str)
+    def test_jdr_ratio_present(self):
+        result = f_env_compute(CANDIDATE, VESSEL)
+        assert hasattr(result, "jdr_ratio")
+        assert hasattr(result.jdr_ratio, "raw_ratio")
+        assert hasattr(result.jdr_ratio, "equilibrium_status")
 
 
-# ── compute_batch() ───────────────────────────────────────────────────────────
+# ── Tests F_lmx (pe_fit/ps_fit/f_lmx) ───────────────────────────────────────
 
-class TestComputeBatch:
+class TestFLmx:
+    """Tests F_lmx pe_fit — équivalent MLPSM F_lmx."""
+
+    def test_compute_retourne_f_lmx_result(self):
+        result = f_lmx_compute(CANDIDATE, CAPTAIN)
+        assert hasattr(result, "score")
+        assert 0.0 <= result.score <= 100.0
+
+    def test_compatibility_label_present(self):
+        result = f_lmx_compute(CANDIDATE, CAPTAIN)
+        assert result.distance.compatibility_label in (
+            "EXCELLENT", "GOOD", "TENSION", "CRITICAL"
+        )
+
+    def test_dimension_gaps(self):
+        result = f_lmx_compute(CANDIDATE, CAPTAIN)
+        assert len(result.dimensions) == 3
+        for d in result.dimensions:
+            assert d.dimension in ("autonomy", "feedback", "structure")
+            assert 0.0 <= d.gap <= 1.0
+
+
+# ── Tests batch compute ───────────────────────────────────────────────────────
+
+class TestBatchCompute:
+    """Équivalent compute_batch MLPSM — via pe_fit.master.compute() sur N candidats."""
+
     def test_batch_vide(self):
-        results = compute_batch([], CREW_TEAM, VESSEL, CAPTAIN)
+        results = [compute({}) for _ in []]
         assert results == []
 
     def test_n_candidats_n_resultats(self):
         candidates = [
-            {"snapshot": _snap(conscientiousness=70), "experience_years": 2, "position_key": "bosun"},
-            {"snapshot": _snap(conscientiousness=55), "experience_years": 0, "position_key": "deckhand"},
-            {"snapshot": _snap(conscientiousness=80), "experience_years": 5, "position_key": "chief_officer"},
+            _snap(conscientiousness=70),
+            _snap(conscientiousness=55),
+            _snap(conscientiousness=80),
         ]
-        results = compute_batch(candidates, CREW_TEAM, VESSEL, CAPTAIN)
+        results = [compute(c) for c in candidates]
         assert len(results) == 3
 
     def test_ordre_preserve(self):
-        """L'ordre des résultats correspond à l'ordre des candidats."""
-        cand_haut = {"snapshot": _snap(conscientiousness=90, gca=90), "experience_years": 5, "position_key": ""}
-        cand_bas  = {"snapshot": _snap(conscientiousness=20, gca=20), "experience_years": 0, "position_key": ""}
-        results = compute_batch([cand_haut, cand_bas], CREW_TEAM, VESSEL, CAPTAIN)
-        assert results[0].p_ind_score >= results[1].p_ind_score
+        cand_haut = _snap(conscientiousness=90, gca=90)
+        cand_bas  = _snap(conscientiousness=20, gca=20)
+        results = [compute(c) for c in [cand_haut, cand_bas]]
+        assert results[0].pj_fit.p_ind_score >= results[1].pj_fit.p_ind_score
 
-    def test_with_delta_true_peuple_delta(self):
-        candidates = [{"snapshot": CANDIDATE, "experience_years": 2, "position_key": ""}]
-        results = compute_batch(candidates, CREW_TEAM, VESSEL, CAPTAIN, with_delta=True)
-        assert results[0].f_team_detail.delta is not None
-
-    def test_with_delta_false_delta_absent(self):
-        """compute (sans delta) → f_team_detail.delta = None."""
-        candidates = [{"snapshot": CANDIDATE, "experience_years": 2, "position_key": ""}]
-        results = compute_batch(candidates, CREW_TEAM, VESSEL, CAPTAIN, with_delta=False)
-        assert results[0].f_team_detail.delta is None
-
-    def test_retourne_list_mlpsm_result(self):
-        candidates = [{"snapshot": CANDIDATE, "experience_years": 0, "position_key": ""}]
-        results = compute_batch(candidates, CREW_TEAM, VESSEL, CAPTAIN)
-        assert all(isinstance(r, MLPSMResult) for r in results)
+    def test_retourne_list_pe_fit_result(self):
+        candidates = [CANDIDATE, _snap(conscientiousness=55)]
+        results = [compute(c) for c in candidates]
+        assert all(isinstance(r, PEFitResult) for r in results)

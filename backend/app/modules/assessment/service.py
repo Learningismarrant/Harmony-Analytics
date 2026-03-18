@@ -16,11 +16,19 @@ logger = logging.getLogger(__name__)
 
 from app.engine.psychometrics.scoring import calculate_scores
 from app.engine.psychometrics.snapshot import build_snapshot
-from app.engine.psychometrics.tirt_scoring import calculate_tirt_scores
 from app.modules.assessment.repository import AssessmentRepository
 from app.shared.models import CrewProfile
 
 repo = AssessmentRepository()
+
+
+def _gf_level(score: float) -> str:
+    """Convertit un score 0-100 en niveau qualitatif."""
+    if score >= 70:
+        return "Élevé"
+    if score >= 40:
+        return "Moyen"
+    return "Faible"
 
 
 class AssessmentService:
@@ -63,22 +71,12 @@ class AssessmentService:
         questions_map = {q.id: q for q in questions}
 
         # ── Calcul pur (engine) ───────────────────────────────
-        if test_info.test_type == "tirt":
-            total_secs = sum(
-                (r.seconds_spent or 0.0) for r in responses
-            )
-            result = calculate_tirt_scores(
-                responses=responses,
-                questions_map=questions_map,
-                total_seconds=float(total_secs),
-            )
-        else:
-            result = calculate_scores(
-                responses=responses,
-                questions_map=questions_map,
-                test_type=test_info.test_type,
-                max_score_per_question=test_info.max_score_per_question,
-            )
+        result = calculate_scores(
+            responses=responses,
+            questions_map=questions_map,
+            test_type=test_info.test_type,
+            max_score_per_question=test_info.max_score_per_question,
+        )
 
         # ── Sauvegarde via crew_profile_id ────────────────────
         saved = await repo.save_result(
@@ -131,36 +129,5 @@ class AssessmentService:
         await repo.update_crew_snapshot(db, crew_profile_id, snapshot)
 
     async def _propagate_to_vessel_and_fleet(self, crew_profile_id: int) -> None:
-        """
-        Background task : recalcule vessel_snapshot et fleet_snapshot.
-        v2 : utilise crew_profile_id partout.
-        Session DB indépendante (isolée du contexte HTTP).
-        """
-        from app.core.database import AsyncSessionLocal
-        from app.modules.vessel.repository import VesselRepository
-        from app.modules.vessel.service import VesselService
-        from engine.team.harmony import compute as compute_harmony
-
-        vessel_repo = VesselRepository()
-        vessel_service = VesselService()
-
-        async with AsyncSessionLocal() as db:
-            try:
-                active_yacht_ids = await repo.get_active_yacht_ids(db, crew_profile_id)
-
-                for yacht_id in active_yacht_ids:
-                    crew_snapshots = await vessel_repo.get_crew_snapshots(db, yacht_id)
-                    if len(crew_snapshots) >= 2:
-                        harmony = compute_harmony(crew_snapshots)
-                        await vessel_service.update_vessel_snapshot(db, yacht_id, harmony)
-
-                employer_ids = await vessel_repo.get_employer_ids_for_yachts(db, active_yacht_ids)
-                for employer_id in employer_ids:
-                    await vessel_service.refresh_fleet_snapshot_if_stale(db, employer_id)
-
-            except Exception:
-                logger.error(
-                    "[BACKGROUND] Échec propagation snapshot crew_profile_id=%s",
-                    crew_profile_id,
-                    exc_info=False,
-                )
+        """Propagation vessel + fleet — TODO post-bêta (snapshots denormalisés)."""
+        logger.debug("propagate_to_vessel_and_fleet crew_profile_id=%s (noop)", crew_profile_id)

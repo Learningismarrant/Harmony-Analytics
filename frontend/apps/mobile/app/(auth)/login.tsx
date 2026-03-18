@@ -69,13 +69,13 @@ export default function LoginScreen() {
         </View>
 
         {/* Form */}
-        <View className="space-y-4">
+        <View className="space-y-6">
           <View>
-            <Text className="text-muted text-xs mb-1.5 tracking-widest uppercase">
+            <Text className="text-muted text-xs mb-2 tracking-widest uppercase">
               Email
             </Text>
             <TextInput
-              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-3
+              className="bg-bg-elevated mb-2 border border-bg-border rounded-xl px-4 py-4
                          text-text-primary text-base"
               placeholder="your@email.com"
               placeholderTextColor="#8FA3B8"
@@ -88,11 +88,11 @@ export default function LoginScreen() {
           </View>
 
           <View>
-            <Text className="text-muted text-xs mb-1.5 tracking-widest uppercase">
+            <Text className="text-muted text-xs mb-2 tracking-widest uppercase">
               Password
             </Text>
             <TextInput
-              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-3
+              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-4
                          text-text-primary text-base"
               placeholder="••••••••"
               placeholderTextColor="#8FA3B8"
@@ -105,7 +105,7 @@ export default function LoginScreen() {
           <TouchableOpacity
             onPress={handleLogin}
             disabled={loading}
-            className="bg-brand-primary rounded-xl py-4 items-center mt-2"
+            className="bg-brand-primary rounded-xl py-4 items-center mt-8"
             style={{ opacity: loading ? 0.6 : 1 }}
           >
             {loading ? (
