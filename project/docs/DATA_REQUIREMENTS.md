@@ -1,8 +1,5 @@
 # Data Requirements — Harmony P-E Fit Engine
 
-> **Source canonique déplacée vers [project/docs/DATA_REQUIREMENTS.md](../../../../project/docs/DATA_REQUIREMENTS.md)**
-> Ce fichier est conservé ici pour la proximité avec le code seed. En cas de divergence, `project/docs/` fait autorité.
-
 **Version :** 1.0 — Mars 2026
 **Périmètre :** Données nécessaires pour alimenter le moteur P-E Fit et ses 5 use cases.
 
