@@ -1,6 +1,6 @@
 # Q1 — IPIP-HEXACO-60 Items
 
-**Version :** 1.0 — Mars 2026
+**Version :** 1.1 — Mars 2026 (wording vérifié sur ipip.ori.org/newHEXACO_PI_key.htm)
 **Construct :** 6 dimensions de personnalité (modele HEXACO)
 **Source :** IPIP — International Personality Item Pool (domaine public)
 **Reference primaire :** Ashton, M.C., Lee, K., & Goldberg, L.R. (2007). The IPIP-HEXACO scales: An alternative, public-domain measure of the personality constructs in the HEXACO model. *Personality and Individual Differences*, 42(8), 1515–1526.
@@ -44,47 +44,49 @@ Items marques [R] = items inverses (reponse recodee avant calcul : 5→1, 4→2,
 
 Source de la cle : ipip.ori.org/newHEXACO_PI_key.htm + Ashton et al. (2007) Appendix.
 
+**Note sur le wording :** Les items ci-dessous sont les items exacts de l'IPIP public domain (première personne, style descriptif court). Ils diffèrent délibérément du wording plus élaboré de la version proprietary hexaco.org — les deux mesurent les mêmes constructs (corrélations convergentes r = 0.75–0.84) mais seule la version IPIP est librement utilisable en produit commercial.
+
 ---
 
 ## Dimension 1 — Honesty-Humility (H)
 
 **Construct :** Tendance a etre sincere et non-manipulateur dans les relations interpersonnelles, a se conformer aux regles sociales et ethiques meme en l'absence de surveillance, a ne pas etre motive par les richesses et le statut social, et a avoir une vision modeste de soi-meme.
 
-**Facettes :** Sincerity (H1) | Fairness (H2) | Greed-Avoidance (H3) | Modesty (H4)
+**Facettes :** Sincerity (H:Sinc) α=.81 | Fairness (H:Fair) α=.77 | Greed-Avoidance (H:Gree) α=.69 | Modesty (H:Mode) α=.81
 
-**Alpha attendu :** α ≈ 0.74–0.79 (Ashton & Lee, 2009 ; Lee et al., 2018)
+**Alpha attendu (dimension) :** α ≈ 0.74–0.79 (Ashton & Lee, 2009 ; Lee et al., 2018)
 
 ---
 
-**Item Q1-H-01** | Facette: Sincerity (H1) | Inversé: Non
-EN: "I wouldn't use flattery to get a raise or promotion at work, even if I thought it would succeed."
+**Item Q1-H-01** | Facette: Sincerity (H:Sinc) | Inversé: Non
+EN: "Don't pretend to be more than I am."
 
-**Item Q1-H-02** | Facette: Sincerity (H1) | Inversé: Non
-EN: "I wouldn't pretend to like someone just to get that person to do favors for me."
+**Item Q1-H-02** | Facette: Sincerity (H:Sinc) | Inversé: Oui [R]
+EN: "Use flattery to get ahead."
 
-**Item Q1-H-03** | Facette: Sincerity (H1) | Inversé: Oui [R]
-EN: "I sometimes tell people that I agree with them even when I don't."
+**Item Q1-H-03** | Facette: Sincerity (H:Sinc) | Inversé: Oui [R]
+EN: "Put on a show to impress people."
 
-**Item Q1-H-04** | Facette: Fairness (H2) | Inversé: Oui [R]
-EN: "If I want something from a person I dislike, I will act very nicely toward that person in order to get it."
+**Item Q1-H-04** | Facette: Fairness (H:Fair) | Inversé: Non
+EN: "Would never take things that aren't mine."
 
-**Item Q1-H-05** | Facette: Fairness (H2) | Inversé: Non
-EN: "I wouldn't take advantage of an opportunity to take something belonging to someone else, even if I knew I would never get caught."
+**Item Q1-H-05** | Facette: Fairness (H:Fair) | Inversé: Oui [R]
+EN: "Cheat to get ahead."
 
-**Item Q1-H-06** | Facette: Fairness (H2) | Inversé: Oui [R]
-EN: "I would be tempted to buy stolen goods if they were attractively priced."
+**Item Q1-H-06** | Facette: Fairness (H:Fair) | Inversé: Non
+EN: "Try to follow the rules."
 
-**Item Q1-H-07** | Facette: Greed-Avoidance (H3) | Inversé: Non
-EN: "I don't crave luxury goods and high-status possessions."
+**Item Q1-H-07** | Facette: Greed-Avoidance (H:Gree) | Inversé: Oui [R]
+EN: "Love luxury."
 
-**Item Q1-H-08** | Facette: Greed-Avoidance (H3) | Inversé: Oui [R]
-EN: "I want people to know that I am an important and high-status person."
+**Item Q1-H-08** | Facette: Greed-Avoidance (H:Gree) | Inversé: Oui [R]
+EN: "Am mainly interested in money."
 
-**Item Q1-H-09** | Facette: Modesty (H4) | Inversé: Oui [R]
-EN: "I think I am entitled to more respect than the average person is."
+**Item Q1-H-09** | Facette: Modesty (H:Mode) | Inversé: Non
+EN: "Don't think that I'm better than other people."
 
-**Item Q1-H-10** | Facette: Modesty (H4) | Inversé: Oui [R]
-EN: "I think that I am better than most other people."
+**Item Q1-H-10** | Facette: Modesty (H:Mode) | Inversé: Oui [R]
+EN: "Believe that I am better than others."
 
 ---
 
@@ -92,85 +94,85 @@ EN: "I think that I am better than most other people."
 
 **Construct :** Tendance a ressentir de la peur, de l'anxiete, a avoir besoin de soutien emotionnel, et a ressentir de l'empathie. Dans HEXACO, l'Emotionality inclut des facettes de Peur et Dependance qui la distinguent du Neuroticism Big Five — elle est davantage orientee "vulnerable" que "instable emotionnellement". Les individus faibles en E sont peu affectes par le danger, emotionnellement autosuffisants et peu empathiques.
 
-**Facettes :** Fearfulness (E1) | Anxiety (E2) | Dependence (E3) | Sentimentality (E4)
+**Facettes :** Fearfulness (E:Fear) α=.84 | Anxiety (E:Anxi) α=.85 | Dependence (E:Depe) α=.73 | Sentimentality (E:Sent) α=.79
 
-**Alpha attendu :** α ≈ 0.78–0.83 (Ashton & Lee, 2009)
+**Alpha attendu (dimension) :** α ≈ 0.78–0.83 (Ashton & Lee, 2009)
 
 **Note maritime ICE :** E modere est optimal en environnement ICE — une E tres faible indique un manque d'empathie et une prise de risque excessive (pertinent pour Q7), une E tres haute peut signaler une vulnerabilite a l'isolement prolonge.
 
 ---
 
-**Item Q1-E-01** | Facette: Fearfulness (E1) | Inversé: Non
-EN: "I feel fear in response to physical danger or the possibility of harm."
+**Item Q1-E-01** | Facette: Fearfulness (E:Fear) | Inversé: Non
+EN: "Am a physical coward."
 
-**Item Q1-E-02** | Facette: Fearfulness (E1) | Inversé: Non
-EN: "I worry about potential dangers and bad events that might occur."
+**Item Q1-E-02** | Facette: Fearfulness (E:Fear) | Inversé: Non
+EN: "Begin to panic when there is danger."
 
-**Item Q1-E-03** | Facette: Fearfulness (E1) | Inversé: Oui [R]
-EN: "I feel little fear, even in situations that most people would find frightening."
+**Item Q1-E-03** | Facette: Fearfulness (E:Fear) | Inversé: Oui [R]
+EN: "Like to do frightening things."
 
-**Item Q1-E-04** | Facette: Anxiety (E2) | Inversé: Non
-EN: "I sometimes feel anxious for no particular reason."
+**Item Q1-E-04** | Facette: Anxiety (E:Anxi) | Inversé: Non
+EN: "Worry about things."
 
-**Item Q1-E-05** | Facette: Anxiety (E2) | Inversé: Oui [R]
-EN: "I tend to feel very relaxed and free from worry most of the time."
+**Item Q1-E-05** | Facette: Anxiety (E:Anxi) | Inversé: Oui [R]
+EN: "Rarely worry."
 
-**Item Q1-E-06** | Facette: Dependence (E3) | Inversé: Non
-EN: "I need the emotional support of other people when I am under stress."
+**Item Q1-E-06** | Facette: Dependence (E:Depe) | Inversé: Non
+EN: "Need reassurance."
 
-**Item Q1-E-07** | Facette: Dependence (E3) | Inversé: Oui [R]
-EN: "I can handle difficulties without any help from other people."
+**Item Q1-E-07** | Facette: Dependence (E:Depe) | Inversé: Non
+EN: "Need the approval of others."
 
-**Item Q1-E-08** | Facette: Sentimentality (E4) | Inversé: Non
-EN: "I am moved by sentimental scenes in movies or books."
+**Item Q1-E-08** | Facette: Sentimentality (E:Sent) | Inversé: Non
+EN: "Feel others' emotions."
 
-**Item Q1-E-09** | Facette: Sentimentality (E4) | Inversé: Non
-EN: "I feel a lot of sympathy for others who face difficulties in their lives."
+**Item Q1-E-09** | Facette: Sentimentality (E:Sent) | Inversé: Non
+EN: "Immediately feel sad when hearing of an unhappy event."
 
-**Item Q1-E-10** | Facette: Sentimentality (E4) | Inversé: Oui [R]
-EN: "When someone close to me experiences sadness, I don't tend to feel particularly emotional myself."
+**Item Q1-E-10** | Facette: Sentimentality (E:Sent) | Inversé: Oui [R]
+EN: "Seldom get emotional."
 
 ---
 
 ## Dimension 3 — eXtraversion (X)
 
-**Construct :** Tendance a avoir une opinion positive de soi, a se sentir a l'aise dans les interactions sociales, a etre energique et expressif. L'Extraversion HEXACO comprend une facette Social Self-Esteem (confiance sociale en soi) qui la rend plus riche que l'Extraversion Big Five standard.
+**Construct :** Tendance a avoir une expression sociale active, a se sentir a l'aise dans les interactions sociales, a prendre la parole facilement et a etre energique. La version IPIP de l'Extraversion comprend une facette Expressiveness (tendance a parler et a s'exprimer) là où la version proprietary hexaco.org utilise Social Self-Esteem — les deux mesurent des aspects de l'extraversion sociale mais par des items distincts.
 
-**Facettes :** Social Self-Esteem (X1) | Social Boldness (X2) | Sociability (X3) | Liveliness (X4)
+**Facettes :** Expressiveness (X:Expr) α=.84 | Social Boldness (X:SocB) α=.86 | Sociability (X:Soci) α=.85 | Liveliness (X:Live) α=.82
 
-**Alpha attendu :** α ≈ 0.76–0.82 (Ashton & Lee, 2009)
+**Alpha attendu (dimension) :** α ≈ 0.76–0.82 (Ashton & Lee, 2009)
 
 ---
 
-**Item Q1-X-01** | Facette: Social Self-Esteem (X1) | Inversé: Non
-EN: "I feel confident that people will find me interesting when I tell stories."
+**Item Q1-X-01** | Facette: Expressiveness (X:Expr) | Inversé: Non
+EN: "Talk a lot."
 
-**Item Q1-X-02** | Facette: Social Self-Esteem (X1) | Inversé: Oui [R]
-EN: "I often feel awkward or out of place in social situations."
+**Item Q1-X-02** | Facette: Expressiveness (X:Expr) | Inversé: Oui [R]
+EN: "Don't talk a lot."
 
-**Item Q1-X-03** | Facette: Social Self-Esteem (X1) | Inversé: Oui [R]
-EN: "In social situations, I feel that I am an uninteresting person."
+**Item Q1-X-03** | Facette: Expressiveness (X:Expr) | Inversé: Oui [R]
+EN: "Say little."
 
-**Item Q1-X-04** | Facette: Social Boldness (X2) | Inversé: Non
-EN: "I feel comfortable among large groups of people."
+**Item Q1-X-04** | Facette: Social Boldness (X:SocB) | Inversé: Non
+EN: "Am good at making impromptu speeches."
 
-**Item Q1-X-05** | Facette: Social Boldness (X2) | Inversé: Oui [R]
-EN: "I feel nervous when I have to give a speech in front of a large group of people."
+**Item Q1-X-05** | Facette: Social Boldness (X:SocB) | Inversé: Oui [R]
+EN: "Would be afraid to give a speech in public."
 
-**Item Q1-X-06** | Facette: Sociability (X3) | Inversé: Non
-EN: "I enjoy going to social gatherings and parties."
+**Item Q1-X-06** | Facette: Sociability (X:Soci) | Inversé: Non
+EN: "Usually like to spend my free time with people."
 
-**Item Q1-X-07** | Facette: Sociability (X3) | Inversé: Non
-EN: "I tend to seek out new friends and acquaintances."
+**Item Q1-X-07** | Facette: Sociability (X:Soci) | Inversé: Oui [R]
+EN: "Rarely enjoy being with people."
 
-**Item Q1-X-08** | Facette: Liveliness (X4) | Inversé: Non
-EN: "I always have a lot of energy and enthusiasm."
+**Item Q1-X-08** | Facette: Liveliness (X:Live) | Inversé: Non
+EN: "Am usually active and full of energy."
 
-**Item Q1-X-09** | Facette: Liveliness (X4) | Inversé: Oui [R]
-EN: "I am not a very enthusiastic person."
+**Item Q1-X-09** | Facette: Liveliness (X:Live) | Inversé: Oui [R]
+EN: "Tire out quickly."
 
-**Item Q1-X-10** | Facette: Liveliness (X4) | Inversé: Non
-EN: "I am a cheerful, high-spirited person."
+**Item Q1-X-10** | Facette: Liveliness (X:Live) | Inversé: Non
+EN: "Smile a lot."
 
 ---
 
@@ -178,43 +180,43 @@ EN: "I am a cheerful, high-spirited person."
 
 **Construct :** Dans HEXACO, l'Agreeableness capture la tendance a pardonner les offenses, a etre doux et patient plutot que susceptible et colereux. Cette dimension differe du Big Five Agreeableness : la variance liee a la sincerite et l'equite est capturee par H, pas A. L'A HEXACO est davantage une mesure de "tolerance interpersonnelle et de paix sociale" que de conformite ou de compliance.
 
-**Facettes :** Forgiveness (A1) | Gentleness (A2) | Flexibility (A3) | Patience (A4)
+**Facettes :** Forgiveness (A:Forg) α=.78 | Gentleness (A:Gent) α=.81 | Flexibility (A:Flex) α=.73 | Patience (A:Pati) α=.88
 
-**Alpha attendu :** α ≈ 0.71–0.76 (Ashton & Lee, 2009)
+**Alpha attendu (dimension) :** α ≈ 0.71–0.76 (Ashton & Lee, 2009)
 
 **Note Bell (2007) :** La formule utilise min(A) comme indicateur de la personne la plus difficile de l'equipe. Le A HEXACO est directement utilisable avec cette formule, avec une note de vigilance : la variance "cooperative" portee par H dans HEXACO n'est plus dans A — voir implications engine ci-dessous.
 
 ---
 
-**Item Q1-A-01** | Facette: Forgiveness (A1) | Inversé: Non
-EN: "I tend to be lenient in judging other people."
+**Item Q1-A-01** | Facette: Forgiveness (A:Forg) | Inversé: Non
+EN: "Am inclined to forgive others."
 
-**Item Q1-A-02** | Facette: Forgiveness (A1) | Inversé: Non
-EN: "I find it easy to forgive people who have mistreated me."
+**Item Q1-A-02** | Facette: Forgiveness (A:Forg) | Inversé: Oui [R]
+EN: "Hold a grudge."
 
-**Item Q1-A-03** | Facette: Gentleness (A2) | Inversé: Oui [R]
-EN: "I tend to be critical of others."
+**Item Q1-A-03** | Facette: Forgiveness (A:Forg) | Inversé: Oui [R]
+EN: "Get back at people who insult me."
 
-**Item Q1-A-04** | Facette: Gentleness (A2) | Inversé: Non
-EN: "I try to be gentle with people who deserve criticism."
+**Item Q1-A-04** | Facette: Gentleness (A:Gent) | Inversé: Non
+EN: "Accept people as they are."
 
-**Item Q1-A-05** | Facette: Gentleness (A2) | Inversé: Non
-EN: "I don't tend to say harsh things about others, even when I'm angry."
+**Item Q1-A-05** | Facette: Gentleness (A:Gent) | Inversé: Oui [R]
+EN: "Find fault with everything."
 
-**Item Q1-A-06** | Facette: Flexibility (A3) | Inversé: Oui [R]
-EN: "I tend to hold a grudge against people who have harmed me."
+**Item Q1-A-06** | Facette: Flexibility (A:Flex) | Inversé: Non
+EN: "Adjust easily."
 
-**Item Q1-A-07** | Facette: Flexibility (A3) | Inversé: Non
-EN: "I try to see other people's perspectives when I disagree with them."
+**Item Q1-A-07** | Facette: Flexibility (A:Flex) | Inversé: Oui [R]
+EN: "React strongly to criticism."
 
-**Item Q1-A-08** | Facette: Flexibility (A3) | Inversé: Oui [R]
-EN: "When people annoy me, I tend to get irritated with them."
+**Item Q1-A-08** | Facette: Flexibility (A:Flex) | Inversé: Oui [R]
+EN: "Am hard to reason with."
 
-**Item Q1-A-09** | Facette: Patience (A4) | Inversé: Oui [R]
-EN: "I find it difficult to control my temper."
+**Item Q1-A-09** | Facette: Patience (A:Pati) | Inversé: Non
+EN: "Am usually a patient person."
 
-**Item Q1-A-10** | Facette: Patience (A4) | Inversé: Non
-EN: "I remain calm when I'm upset or frustrated."
+**Item Q1-A-10** | Facette: Patience (A:Pati) | Inversé: Oui [R]
+EN: "Get angry easily."
 
 ---
 
@@ -222,83 +224,83 @@ EN: "I remain calm when I'm upset or frustrated."
 
 **Construct :** Tendance a etre organise, diligent, perfectionniste et prudent. Le C HEXACO est hautement convergent avec le C Big Five (r ≈ 0.82–0.88 — Ashton & Lee, 2009). C est le meilleur predicteur de la performance contextuelle (Borman & Motowidlo, 1993) et de l'observance des regles de securite, particulierement critique en environnement maritime.
 
-**Facettes :** Organization (C1) | Diligence (C2) | Perfectionism (C3) | Prudence (C4)
+**Facettes :** Organization (C:Orga) α=.85 | Diligence (C:Dili) α=.81 | Perfectionism (C:Perf) α=.80 | Prudence (C:Prud) α=.80
 
-**Alpha attendu :** α ≈ 0.77–0.82 (Ashton & Lee, 2009)
+**Alpha attendu (dimension) :** α ≈ 0.77–0.82 (Ashton & Lee, 2009)
 
 ---
 
-**Item Q1-C-01** | Facette: Organization (C1) | Inversé: Non
-EN: "I keep things tidy and neat in the places where I work."
+**Item Q1-C-01** | Facette: Organization (C:Orga) | Inversé: Non
+EN: "Keep things tidy."
 
-**Item Q1-C-02** | Facette: Organization (C1) | Inversé: Oui [R]
-EN: "I often make a mess of my living space."
+**Item Q1-C-02** | Facette: Organization (C:Orga) | Inversé: Oui [R]
+EN: "Leave a mess in my room."
 
-**Item Q1-C-03** | Facette: Diligence (C2) | Inversé: Non
-EN: "I work hard at everything I do."
+**Item Q1-C-03** | Facette: Diligence (C:Dili) | Inversé: Non
+EN: "Work hard."
 
-**Item Q1-C-04** | Facette: Diligence (C2) | Inversé: Oui [R]
-EN: "I put only a little effort into my work."
+**Item Q1-C-04** | Facette: Diligence (C:Dili) | Inversé: Non
+EN: "Get started quickly on doing a job."
 
-**Item Q1-C-05** | Facette: Perfectionism (C3) | Inversé: Oui [R]
-EN: "I often do only the minimum required of me."
+**Item Q1-C-05** | Facette: Diligence (C:Dili) | Inversé: Oui [R]
+EN: "Do just enough work to get by."
 
-**Item Q1-C-06** | Facette: Perfectionism (C3) | Inversé: Non
-EN: "I want every detail to be correct when I complete a task."
+**Item Q1-C-06** | Facette: Perfectionism (C:Perf) | Inversé: Non
+EN: "Pay attention to details."
 
-**Item Q1-C-07** | Facette: Perfectionism (C3) | Inversé: Non
-EN: "I strive to do my best at everything I do."
+**Item Q1-C-07** | Facette: Perfectionism (C:Perf) | Inversé: Non
+EN: "Continue until everything is perfect."
 
-**Item Q1-C-08** | Facette: Prudence (C4) | Inversé: Oui [R]
-EN: "I make decisions based on the feeling of the moment rather than on careful thought."
+**Item Q1-C-08** | Facette: Perfectionism (C:Perf) | Inversé: Oui [R]
+EN: "Pay too little attention to details."
 
-**Item Q1-C-09** | Facette: Prudence (C4) | Inversé: Oui [R]
-EN: "I do things without thinking about possible consequences."
+**Item Q1-C-09** | Facette: Prudence (C:Prud) | Inversé: Non
+EN: "Make plans and stick to them."
 
-**Item Q1-C-10** | Facette: Prudence (C4) | Inversé: Oui [R]
-EN: "I rush into things without thinking them through carefully."
+**Item Q1-C-10** | Facette: Prudence (C:Prud) | Inversé: Oui [R]
+EN: "Jump into things without thinking."
 
 ---
 
 ## Dimension 6 — Openness to Experience (O)
 
-**Construct :** Tendance a s'interesser a la nature, a l'art, aux idees abstraites, a la crativite et aux experiences non-conventionnelles. L'O HEXACO est similaire au O/Intellect Big Five, avec une facette Unconventionality (tendance a avoir des convictions inhabituelles) plus prononcee. Dans un contexte professionnel maritime, O modere est associe a l'adaptabilite, a la flexibilite cognitive et a la resolution de problemes a sea.
+**Construct :** Tendance a s'interesser a la nature, a l'art, aux idees abstraites, a la creativite et aux experiences non-conventionnelles. L'O HEXACO est similaire au O/Intellect Big Five, avec une facette Unconventionality (tendance a avoir des convictions inhabituelles) plus prononcee. Dans un contexte professionnel maritime, O modere est associe a l'adaptabilite, a la flexibilite cognitive et a la resolution de problemes en mer.
 
-**Facettes :** Aesthetic Appreciation (O1) | Inquisitiveness (O2) | Creativity (O3) | Unconventionality (O4)
+**Facettes :** Aesthetic Appreciation (O:AesA) α=.83 | Inquisitiveness (O:Inqu) α=.78 | Creativity (O:Crea) α=.85 | Unconventionality (O:Unco) α=.84
 
-**Alpha attendu :** α ≈ 0.75–0.80 (Ashton & Lee, 2009)
+**Alpha attendu (dimension) :** α ≈ 0.75–0.80 (Ashton & Lee, 2009)
 
 ---
 
-**Item Q1-O-01** | Facette: Aesthetic Appreciation (O1) | Inversé: Oui [R]
-EN: "I rarely notice the artistic or aesthetic qualities of places or things."
+**Item Q1-O-01** | Facette: Aesthetic Appreciation (O:AesA) | Inversé: Non
+EN: "Believe in the importance of art."
 
-**Item Q1-O-02** | Facette: Aesthetic Appreciation (O1) | Inversé: Non
-EN: "I feel great appreciation for nature, art, and music."
+**Item Q1-O-02** | Facette: Aesthetic Appreciation (O:AesA) | Inversé: Non
+EN: "See beauty in things that others might not notice."
 
-**Item Q1-O-03** | Facette: Inquisitiveness (O2) | Inversé: Non
-EN: "I enjoy having discussions about abstract ideas and theories."
+**Item Q1-O-03** | Facette: Aesthetic Appreciation (O:AesA) | Inversé: Oui [R]
+EN: "Do not like art."
 
-**Item Q1-O-04** | Facette: Inquisitiveness (O2) | Inversé: Oui [R]
-EN: "I have little interest in speculating about the nature of the universe or humanity."
+**Item Q1-O-04** | Facette: Inquisitiveness (O:Inqu) | Inversé: Non
+EN: "Am interested in science."
 
-**Item Q1-O-05** | Facette: Creativity (O3) | Inversé: Non
-EN: "I enjoy thinking about things in a creative way."
+**Item Q1-O-05** | Facette: Inquisitiveness (O:Inqu) | Inversé: Non
+EN: "Love to read challenging material."
 
-**Item Q1-O-06** | Facette: Creativity (O3) | Inversé: Non
-EN: "I like to create new and original things."
+**Item Q1-O-06** | Facette: Creativity (O:Crea) | Inversé: Non
+EN: "Have a vivid imagination."
 
-**Item Q1-O-07** | Facette: Creativity (O3) | Inversé: Oui [R]
-EN: "I have little interest in artistic or creative pursuits."
+**Item Q1-O-07** | Facette: Creativity (O:Crea) | Inversé: Non
+EN: "Am full of ideas."
 
-**Item Q1-O-08** | Facette: Unconventionality (O4) | Inversé: Oui [R]
-EN: "I tend to think in conventional ways, and I rarely question accepted ideas."
+**Item Q1-O-08** | Facette: Creativity (O:Crea) | Inversé: Oui [R]
+EN: "Do not have a good imagination."
 
-**Item Q1-O-09** | Facette: Unconventionality (O4) | Inversé: Non
-EN: "I find that conventional thinking limits my curiosity and creativity."
+**Item Q1-O-09** | Facette: Unconventionality (O:Unco) | Inversé: Non
+EN: "Am considered to be kind of eccentric."
 
-**Item Q1-O-10** | Facette: Unconventionality (O4) | Inversé: Non
-EN: "I enjoy considering alternative and unusual ways of looking at things."
+**Item Q1-O-10** | Facette: Unconventionality (O:Unco) | Inversé: Oui [R]
+EN: "Would hate to be considered odd or strange."
 
 ---
 
@@ -306,16 +308,16 @@ EN: "I enjoy considering alternative and unusual ways of looking at things."
 
 ### Fidélité (consistance interne)
 
-| Dimension | Alpha attendu | Source |
-|---|---|---|
-| Honesty-Humility (H) | 0.74–0.79 | Ashton & Lee (2009), Lee et al. (2018) |
-| Emotionality (E) | 0.78–0.83 | Ashton & Lee (2009) |
-| eXtraversion (X) | 0.76–0.82 | Ashton & Lee (2009) |
-| Agreeableness (A) | 0.71–0.76 | Ashton & Lee (2009) |
-| Conscientiousness (C) | 0.77–0.82 | Ashton & Lee (2009) |
-| Openness (O) | 0.75–0.80 | Ashton & Lee (2009) |
+| Dimension | Alpha attendu (dimension, 10 items) | Alphas facettes (pool complet) | Source |
+|---|---|---|---|
+| Honesty-Humility (H) | 0.74–0.79 | Sinc=.81, Fair=.77, Gree=.69, Mode=.81 | Ashton & Lee (2009), ipip.ori.org |
+| Emotionality (E) | 0.78–0.83 | Fear=.84, Anxi=.85, Depe=.73, Sent=.79 | Ashton & Lee (2009), ipip.ori.org |
+| eXtraversion (X) | 0.76–0.82 | Expr=.84, SocB=.86, Soci=.85, Live=.82 | Ashton & Lee (2009), ipip.ori.org |
+| Agreeableness (A) | 0.71–0.76 | Forg=.78, Gent=.81, Flex=.73, Pati=.88 | Ashton & Lee (2009), ipip.ori.org |
+| Conscientiousness (C) | 0.77–0.82 | Orga=.85, Dili=.81, Perf=.80, Prud=.80 | Ashton & Lee (2009), ipip.ori.org |
+| Openness (O) | 0.75–0.80 | AesA=.83, Inqu=.78, Crea=.85, Unco=.84 | Ashton & Lee (2009), ipip.ori.org |
 
-Tous les alphas sont au-dessus du seuil minimal de 0.70 requis pour les sous-echelles. Le seuil recommande pour les scores globaux (≥ 0.80) n'est atteint que pour E et C — acceptable pour un instrument de 10 items par dimension.
+Tous les alphas dimension sont au-dessus du seuil minimal de 0.70 requis pour les sous-echelles. Le seuil recommande pour les scores globaux (≥ 0.80) n'est atteint que pour E et C — acceptable pour un instrument de 10 items par dimension.
 
 ### Validite convergente (IPIP-HEXACO vs HEXACO-PI-R proprietary)
 

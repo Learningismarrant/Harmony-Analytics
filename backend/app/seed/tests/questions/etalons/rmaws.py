@@ -85,14 +85,15 @@ async def seed_rmaws(db: AsyncSession) -> TestCatalogue:
         max_score_per_question=7,
         n_questions=19,
         is_active=True,
-        status="VALIDATED",
-        license="PUBLISHED_RESEARCH",
+        status="ETALON",
+        license="COPYRIGHT_RESEARCH_ONLY",
         validation_notes=(
+            "⚠️ R-MAWS (Gagné et al. 2010) — Copyright CSDT. Usage autorisé R&D interne uniquement. "
+            "Ne pas déployer en production commerciale sans accord de licence. "
+            "Étalon de calibration pour SDT-6 propriétaire. "
             "R-MAWS — Gagné, M., Forest, J., Gilbert, M.-H., Aubé, C., Morin, E., & Malorni, A. (2010). "
             "The Motivation at Work Scale. Educational and Psychological Measurement, 70(4), 628-646. "
-            "⚠️ Usage commercial : les items sont publiés en revue académique. "
-            "Un accord des auteurs est recommandé pour usage commercial à grande échelle. "
-            "⚠️ ALPHA HARMONY : profils idéaux par poste calibrés par jugement SME Phase 0, "
+            "⚠️ ALPHA RADIANT : profils idéaux par poste calibrés par jugement SME Phase 0, "
             "non validés empiriquement. Pondération motivation_score = 0.15 dans pj_aggregate "
             "jusqu'à N ≥ 150 profils (recommandation head-of-science 2026-03). "
             "Validité discriminante introjected/identified à surveiller (r ≈ .40-.60)."

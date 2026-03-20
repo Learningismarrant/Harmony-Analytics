@@ -1,23 +1,19 @@
 # app/seed/tests/questions/maritime_tolerance.py
 """
-Maritime Environmental Tolerance Scale (METS)
+Tolérance ICE Physique — Q7 Physical Fit
 
-15 items Likert 1-5 évaluant la tolérance aux 5 contraintes physiques
-et environnementales du milieu maritime embarqué :
+24 items Likert 1-5 évaluant la self-efficacy perçue face aux exigences
+physiques et environnementales d'un environnement ICE maritime.
+6 domaines × 4 items chacun.
 
-    confined_space_tolerance  (3 items) — espace confiné à bord
-    isolation_tolerance       (3 items) — isolement prolongé en mer
-    physical_risk_tolerance   (3 items) — risques physiques maritimes
-    schedule_tolerance        (3 items) — horaires irréguliers / quarts
-    weather_tolerance         (3 items) — conditions météo exigeantes
+Construct : capacité PERÇUE (Bandura 1997) — NON la capacité réelle (ENG1).
+Ancre : "Dans quelle mesure êtes-vous confiant(e) dans votre capacité à..."
+Échelle : 1 = "Pas du tout confiant(e)" → 5 = "Totalement confiant(e)"
 
-Les scores alimentent snapshot['maritime_tolerance'] utilisé par
-l'engine physical_fit (Famille 6, Radiant Analytics v0.7 §6).
+Domaines : houle | sommeil | climat | confinement | mal_de_mer | isolement
 
-Source :
-    Construit ad hoc pour Radiant Analytics (2026) — pas d'étalon
-    externe disponible pour ce domaine spécifique.
-    Ancré sur les exigences opérationnelles des yachts de luxe (MCA, STCW).
+    seed_maritime_tolerance(db)   → idempotent, retourne le TestCatalogue
+    delete_maritime_tolerance(db) → supprime questions + catalogue
 
 Standalone :
     python -m app.seed.tests.questions.maritime_tolerance
@@ -29,101 +25,132 @@ from sqlalchemy import delete, select
 
 from app.shared.models import TestCatalogue, Question
 
+_CATALOGUE_NAME = "Tolérance ICE Physique"
+
 METS_QUESTIONS = [
-    # ── Espace confiné ────────────────────────────────────────────────────────
-    {"order": 1,  "trait": "confined_space_tolerance", "reverse": False,
-     "text": "I feel comfortable working and living in small, confined spaces for extended periods."},
-    {"order": 2,  "trait": "confined_space_tolerance", "reverse": True,
-     "text": "Spending weeks in a cramped cabin makes me feel anxious or claustrophobic."},
-    {"order": 3,  "trait": "confined_space_tolerance", "reverse": False,
-     "text": "I can adapt easily to having limited personal space when living aboard a vessel."},
+    # ── Domaine A — Endurance physique en conditions de houle ─────────────────
+    {"order":  1, "trait": "houle", "reverse": False,
+     "text": "...maintenir votre efficacité physique lors d'une traversée de plusieurs jours en mer formée ou agitée ?"},
+    {"order":  2, "trait": "houle", "reverse": False,
+     "text": "...continuer à exécuter vos tâches techniques correctement lorsque le bateau gîte fortement ou roule de manière continue ?"},
+    {"order":  3, "trait": "houle", "reverse": False,
+     "text": "...récupérer physiquement assez vite entre deux quarts pour rester pleinement opérationnel(le) dans des conditions de mer difficiles ?"},
+    {"order":  4, "trait": "houle", "reverse": False,
+     "text": "...rester physiquement actif(ve) et réactif(ve) pendant plusieurs heures de quart consécutives lorsque les conditions météorologiques sont mauvaises ?"},
 
-    # ── Isolement ─────────────────────────────────────────────────────────────
-    {"order": 4,  "trait": "isolation_tolerance", "reverse": False,
-     "text": "I am comfortable being away from family and friends for weeks at a time."},
-    {"order": 5,  "trait": "isolation_tolerance", "reverse": True,
-     "text": "Long periods without access to the city or social activities affect my well-being significantly."},
-    {"order": 6,  "trait": "isolation_tolerance", "reverse": False,
-     "text": "I enjoy the focused, self-contained environment of being at sea away from land."},
+    # ── Domaine B — Tolérance au manque de sommeil / quarts de nuit ───────────
+    {"order":  5, "trait": "sommeil", "reverse": False,
+     "text": "...maintenir votre vigilance et votre précision lors d'un quart de nuit après plusieurs nuits de sommeil fragmenté ?"},
+    {"order":  6, "trait": "sommeil", "reverse": False,
+     "text": "...accomplir des tâches qui requièrent de la concentration après avoir dormi moins de cinq heures consécutives ?"},
+    {"order":  7, "trait": "sommeil", "reverse": False,
+     "text": "...vous adapter rapidement à une rotation de quarts modifiée (par exemple, passage d'un quart de jour à un quart de nuit) sans que cela affecte significativement vos performances ?"},
+    {"order":  8, "trait": "sommeil", "reverse": False,
+     "text": "...maintenir votre sécurité et celle des autres à bord dans des situations où vous n'avez pas pu dormir suffisamment pendant plusieurs jours consécutifs ?"},
 
-    # ── Risques physiques ─────────────────────────────────────────────────────
-    {"order": 7,  "trait": "physical_risk_tolerance", "reverse": False,
-     "text": "Working in physically demanding or potentially hazardous conditions does not deter me."},
-    {"order": 8,  "trait": "physical_risk_tolerance", "reverse": False,
-     "text": "I am comfortable performing tasks at height, in the water, or in adverse weather conditions."},
-    {"order": 9,  "trait": "physical_risk_tolerance", "reverse": True,
-     "text": "The possibility of physical injury at work is a significant concern for me."},
+    # ── Domaine C — Résistance aux conditions climatiques extrêmes ────────────
+    {"order":  9, "trait": "climat", "reverse": False,
+     "text": "...travailler efficacement sur le pont exposé par températures froides (moins de 5°C) avec du vent et de la pluie ?"},
+    {"order": 10, "trait": "climat", "reverse": False,
+     "text": "...maintenir votre niveau de performance physique lors de missions en zone tropicale par forte chaleur et humidité élevée ?"},
+    {"order": 11, "trait": "climat", "reverse": False,
+     "text": "...effectuer des tâches de pont ou de maintenance en extérieur dans des conditions climatiques difficiles (pluie, vent fort, mer agitée) pendant plusieurs heures ?"},
+    {"order": 12, "trait": "climat", "reverse": False,
+     "text": "...vous adapter rapidement à des écarts importants de température entre l'intérieur du navire et l'extérieur lors de navigations en zones climatiquement contrastées ?"},
 
-    # ── Horaires irréguliers ──────────────────────────────────────────────────
-    {"order": 10, "trait": "schedule_tolerance", "reverse": False,
-     "text": "I adapt easily to rotating watch schedules and irregular sleep patterns."},
-    {"order": 11, "trait": "schedule_tolerance", "reverse": True,
-     "text": "Unpredictable work hours significantly impact my performance and mood."},
-    {"order": 12, "trait": "schedule_tolerance", "reverse": False,
-     "text": "I function well even when my daily routine changes frequently or without notice."},
+    # ── Domaine D — Performance en environnement confiné ─────────────────────
+    {"order": 13, "trait": "confinement", "reverse": False,
+     "text": "...rester efficace et concentré(e) après plusieurs semaines passées dans un espace de vie réduit partagé avec l'équipage ?"},
+    {"order": 14, "trait": "confinement", "reverse": False,
+     "text": "...maintenir votre niveau de performance professionnelle dans un environnement où vous disposez de peu d'espace personnel ?"},
+    {"order": 15, "trait": "confinement", "reverse": False,
+     "text": "...gérer la promiscuité permanente avec vos coéquipiers (partage de cabine, repas collectifs, absence d'intimité) sans que cela affecte votre efficacité au travail ?"},
+    {"order": 16, "trait": "confinement", "reverse": False,
+     "text": "...rester productif(ve) et créatif(ve) dans la résolution de problèmes à bord même après plusieurs semaines sans sortir du navire ?"},
 
-    # ── Conditions météo ──────────────────────────────────────────────────────
-    {"order": 13, "trait": "weather_tolerance", "reverse": False,
-     "text": "I remain calm and focused when working in rough sea conditions or heavy weather."},
-    {"order": 14, "trait": "weather_tolerance", "reverse": True,
-     "text": "Rough seas or strong winds significantly increase my stress levels and discomfort."},
-    {"order": 15, "trait": "weather_tolerance", "reverse": False,
-     "text": "I enjoy the physical challenge of operating in demanding weather conditions at sea."},
+    # ── Domaine E — Gestion du mal de mer ────────────────────────────────────
+    {"order": 17, "trait": "mal_de_mer", "reverse": False,
+     "text": "...continuer à travailler de façon sûre et efficace même lorsque vous vous sentez nauséeux(se) en mer formée ?"},
+    {"order": 18, "trait": "mal_de_mer", "reverse": False,
+     "text": "...gérer les symptômes du mal de mer (nausées, vertiges) sans que cela compromette votre sécurité à bord ?"},
+    {"order": 19, "trait": "mal_de_mer", "reverse": False,
+     "text": "...récupérer rapidement d'un épisode de mal de mer et reprendre vos fonctions dans un délai raisonnable ?"},
+    {"order": 20, "trait": "mal_de_mer", "reverse": False,
+     "text": "...maintenir votre niveau d'efficacité lors de longues traversées en mer agitée, même si vous êtes sujet(te) aux inconforts du roulis ?"},
+
+    # ── Domaine F — Tolérance à l'isolement physique prolongé ─────────────────
+    {"order": 21, "trait": "isolement", "reverse": False,
+     "text": "...rester psychologiquement stable lors de traversées ou de missions impliquant plusieurs semaines sans escale ni contact avec la terre ?"},
+    {"order": 22, "trait": "isolement", "reverse": False,
+     "text": "...maintenir votre bien-être mental dans une situation où les communications avec votre famille et vos amis sont limitées ou intermittentes ?"},
+    {"order": 23, "trait": "isolement", "reverse": False,
+     "text": "...garder votre équilibre personnel lors d'un embarquement long (plusieurs mois) éloigné de votre environnement habituel ?"},
+    {"order": 24, "trait": "isolement", "reverse": False,
+     "text": "...continuer à fonctionner efficacement à bord même en l'absence de stimulations extérieures variées (sorties, loisirs, contact social élargi) pendant une période prolongée ?"},
 ]
-
-_CATALOGUE_NAME = "Maritime Environmental Tolerance Scale (METS)"
 
 
 async def seed_maritime_tolerance(db: AsyncSession) -> TestCatalogue:
-    """Seed idempotent du METS — tolérance environnementale maritime."""
+    """Seed idempotent de la Tolérance ICE Physique."""
     existing = (await db.execute(
         select(TestCatalogue).where(TestCatalogue.name == _CATALOGUE_NAME)
     )).scalar_one_or_none()
 
     if existing:
-        print(f"  [mets] Déjà présent (id={existing.id}) — skip")
+        print(f"  [maritime_tolerance] Already present (id={existing.id}) — skip")
         return existing
 
     catalogue = TestCatalogue(
         name=_CATALOGUE_NAME,
         description=(
-            "Échelle de tolérance environnementale maritime — 15 items Likert 1-5. "
-            "Évalue 5 dimensions : espace confiné, isolement, risques physiques, "
-            "horaires irréguliers, conditions météo. "
-            "Conçu pour le recrutement en yachting de luxe (Radiant Analytics, 2026). "
-            "Durée estimée : 5-7 minutes."
+            "Tolérance ICE Physique — 24 items Likert 1-5 évaluant la self-efficacy perçue "
+            "face aux exigences physiques et environnementales d'un environnement ICE maritime. "
+            "6 domaines × 4 items : endurance en houle, tolérance sommeil/quarts, résistance climat, "
+            "performance en confinement, gestion mal de mer, isolement prolongé. "
+            "Ancre : confiance dans sa capacité à... (Bandura 1997). "
+            "Durée estimée : 8–10 minutes."
         ),
         instructions=(
-            "Indiquez dans quelle mesure chaque affirmation vous correspond, "
-            "de 1 (Pas du tout d'accord) à 5 (Tout à fait d'accord). "
-            "Répondez en pensant à votre expérience réelle ou à la façon dont "
-            "vous vous comporteriez dans ces situations."
+            "Dans quelle mesure êtes-vous confiant(e) dans votre capacité à... "
+            "Pour chaque situation, indiquez votre niveau de confiance. "
+            "1 = Pas du tout confiant(e)  →  5 = Totalement confiant(e). "
+            "Répondez en pensant à votre expérience réelle ou à la façon dont vous vous comporteriez."
         ),
         test_type="likert",
         max_score_per_question=5,
-        n_questions=15,
+        n_questions=24,
         is_active=True,
         status="ALPHA",
-        license="CUSTOM_ALPHA",
+        license="RADIANT_PROPRIETARY",
         validation_notes=(
-            "⚠️ INSTRUMENT ALPHA — PROTOTYPAGE UNIQUEMENT. "
-            "Construit ad hoc pour Radiant Analytics (2026). "
-            "3 items par dimension. Non étalonné. "
-            "Les scores alimentent snapshot['maritime_tolerance'] pour le physical_fit (Fam. 6). "
-            "Recommandation : valider la structure factorielle (CFA) sur N≥200 "
-            "avant utilisation décisionnelle."
+            "⚠️ INSTRUMENT ALPHA — Items custom originaux Radiant Analytics (2026). "
+            "Construct : self-efficacy (Bandura 1997) — ancre standardisée obligatoire. "
+            "Ancrage : Bandura, A. (1997). Self-Efficacy: The Exercise of Control. Freeman. "
+            "Stuster, J. (2010). NASA Technical Report — Behavioral Issues, Long-Duration Expeditions. "
+            "Effet plafond attendu sur population maritime active — comparer avec ENG1 si disponible. "
+            "α Cronbach cible : ≥ 0.78 global. Par domaine : ≥ 0.65 (acceptable pour 4 items). "
+            "Validation contenu : soumettre à experts maritimes (n ≥ 5 capitaines/chief officers). "
+            "Non étalonné sur population maritime."
         ),
         modules_config=[
-            {"index": 0, "name": "Espace confiné",
-             "trait": "confined_space_tolerance", "n_items": 3, "duration_min": 1, "priority": "STANDARD"},
-            {"index": 1, "name": "Isolement en mer",
-             "trait": "isolation_tolerance", "n_items": 3, "duration_min": 1, "priority": "STANDARD"},
-            {"index": 2, "name": "Risques physiques",
-             "trait": "physical_risk_tolerance", "n_items": 3, "duration_min": 1, "priority": "STANDARD"},
-            {"index": 3, "name": "Horaires irréguliers",
-             "trait": "schedule_tolerance", "n_items": 3, "duration_min": 1, "priority": "STANDARD"},
-            {"index": 4, "name": "Conditions météo",
-             "trait": "weather_tolerance", "n_items": 3, "duration_min": 1, "priority": "STANDARD"},
+            {"index": 0, "name": "Endurance en houle", "trait": "houle",
+             "n_items": 4, "duration_min": 2, "priority": "STANDARD",
+             "description": "Efficacité physique en conditions de mer formée ou agitée"},
+            {"index": 1, "name": "Manque de sommeil", "trait": "sommeil",
+             "n_items": 4, "duration_min": 2, "priority": "STANDARD",
+             "description": "Vigilance et performance lors de quarts de nuit / sommeil fragmenté"},
+            {"index": 2, "name": "Conditions climatiques", "trait": "climat",
+             "n_items": 4, "duration_min": 2, "priority": "STANDARD",
+             "description": "Résistance aux extrêmes thermiques (froid, chaleur tropicale)"},
+            {"index": 3, "name": "Environnement confiné", "trait": "confinement",
+             "n_items": 4, "duration_min": 2, "priority": "STANDARD",
+             "description": "Performance en espace réduit partagé sur durée longue"},
+            {"index": 4, "name": "Gestion mal de mer", "trait": "mal_de_mer",
+             "n_items": 4, "duration_min": 2, "priority": "STANDARD",
+             "description": "Maintien de la capacité opérationnelle malgré les symptômes"},
+            {"index": 5, "name": "Isolement prolongé", "trait": "isolement",
+             "n_items": 4, "duration_min": 2, "priority": "STANDARD",
+             "description": "Stabilité psychologique lors d'embarquements longs sans escale"},
         ],
     )
     db.add(catalogue)
@@ -142,7 +169,7 @@ async def seed_maritime_tolerance(db: AsyncSession) -> TestCatalogue:
         ))
 
     await db.flush()
-    print(f"  [mets] Seeded '{_CATALOGUE_NAME}' ({len(METS_QUESTIONS)} questions)")
+    print(f"  [maritime_tolerance] Seeded '{_CATALOGUE_NAME}' ({len(METS_QUESTIONS)} questions)")
     return catalogue
 
 
@@ -154,7 +181,7 @@ async def delete_maritime_tolerance(db: AsyncSession) -> None:
         await db.execute(delete(Question).where(Question.test_id == existing.id))
         await db.delete(existing)
         await db.flush()
-        print(f"  [mets] Supprimé '{_CATALOGUE_NAME}'")
+        print(f"  [maritime_tolerance] Deleted '{_CATALOGUE_NAME}'")
 
 
 async def _main() -> None:
