@@ -14,14 +14,15 @@ from slowapi.errors import RateLimitExceeded
 from app.core.config import settings
 from app.shared.limiter import limiter
 
-from app.modules.auth.router        import router as auth_router
-from app.modules.assessment.router  import router as assessment_router
-from app.modules.identity.router    import router as identity_router
-from app.modules.crew.router        import router as crew_router
-from app.modules.vessel.router      import router as vessel_router
-from app.modules.recruitment.router import router as recruitment_router
-from app.modules.survey.router      import router as survey_router
-from app.modules.gateway.router     import router as gateway_router
+from app.modules.auth.router          import router as auth_router
+from app.modules.assessment.router   import router as assessment_router
+from app.modules.identity.router     import router as identity_router
+from app.modules.crew.router         import router as crew_router
+from app.modules.vessel.router       import router as vessel_router
+from app.modules.recruitment.router  import router as recruitment_router
+from app.modules.survey.router       import router as survey_router
+from app.modules.gateway.router      import router as gateway_router
+from app.modules.calibration.router  import router as calibration_router
 
 app = FastAPI(
     title=settings.PROJECT_NAME,
@@ -47,6 +48,7 @@ app.include_router(vessel_router)
 app.include_router(recruitment_router)
 app.include_router(survey_router)
 app.include_router(gateway_router)
+app.include_router(calibration_router)
 
 
 @app.get("/health")

@@ -12,12 +12,13 @@ sys.path.insert(0, abspath(dirname(dirname(__file__))))
 from app.core.config import settings
 from app.core.database import Base
 # Import des modèles pour que Base.metadata soit peuplé
-from app.shared.models import ( 
+from app.shared.models import (
     User, CrewProfile, EmployerProfile, UserDocument, Yacht, CrewAssignment,
     TestCatalogue, Question, TestResult,
     Campaign, CampaignCandidate,
     DailyPulse,
-    Survey, SurveyResponse, RecruitmentEvent, ModelVersion
+    Survey, SurveyResponse, RecruitmentEvent, ModelVersion,
+    CalibratorUser, CalibSession, CalibResponse,
     )
 
 # Objet de configuration Alembic
