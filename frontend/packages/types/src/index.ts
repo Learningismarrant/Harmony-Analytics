@@ -8,7 +8,7 @@
 
 // ── Enums ────────────────────────────────────────────────────────────────────
 
-export type UserRole = "candidate" | "client" | "admin";
+export type UserRole = "candidate" | "client" | "admin" | "calibrator";
 
 export type YachtPosition =
   // Deck
@@ -609,6 +609,105 @@ export interface PEFitResult {
     flags: string[];
   } | null;
   all_flags: string[];
+}
+
+// ── Calibration ───────────────────────────────────────────────────────────────
+
+export interface CalibratorTokenOut {
+  access_token: string;
+  token_type: "bearer";
+  calibrator_id: number;
+  name: string;
+}
+
+export interface CalibratorMeOut {
+  id: number;
+  name: string;
+  email: string;
+  cohort: string | null;
+  age: number | null;
+  gender: string | null;
+  education_level: string | null;
+  occupation: string | null;
+  years_experience: number | null;
+  nationality: string | null;
+  created_at: string;
+}
+
+export interface CalibratorDemographicsIn {
+  age?: number;
+  gender?: string;
+  education_level?: string;
+  occupation?: string;
+  years_experience?: number;
+  nationality?: string;
+  cohort?: string;
+}
+
+export interface CalibCatalogueOut {
+  id: number;
+  name: string;
+  description: string;
+  instructions: string | null;
+  test_type: string;
+  question_count: number;
+  estimated_minutes: number;
+  is_etalon: boolean;
+}
+
+export interface CalibQuestionOut {
+  id: number;
+  catalogue_id: number;
+  text: string;
+  question_type: QuestionType;
+  options: string[] | RavenMatrixConfig | null;
+  trait: string | null;
+  order_index: number;
+}
+
+export interface CalibSessionOut {
+  id: number;
+  calibrator_id: number;
+  catalogue_id: number;
+  status: "in_progress" | "completed";
+  started_at: string;
+  completed_at: string | null;
+  response_count: number;
+}
+
+export interface CalibResponseItemIn {
+  question_id: number;
+  valeur_choisie: string;
+  seconds_spent: number;
+}
+
+export interface CalibSubmitIn {
+  session_id: number;
+  responses: CalibResponseItemIn[];
+}
+
+export interface CalibSubmitOut {
+  session_id: number;
+  status: "completed";
+  score: number | null;
+  message: string;
+}
+
+export interface CalibTraitScoreOut {
+  trait: string;
+  label: string;
+  score: number;
+  n_items: number;
+}
+
+export interface CalibSessionScoreOut {
+  session_id: number;
+  catalogue_id: number;
+  catalogue_name: string;
+  test_type: string;
+  global_score: number | null;
+  traits: CalibTraitScoreOut[];
+  completed_at: string;
 }
 
 // ── API response wrappers ─────────────────────────────────────────────────────

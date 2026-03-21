@@ -38,6 +38,17 @@ class CalibratorUser(Base):
     is_active       = Column(Boolean, default=True)
     created_at      = Column(DateTime(timezone=True), server_default=func.now())
 
+    # ── Démographiques (analyse DIF) ──────────────────────────────────────────
+    # Collectés après inscription via PATCH /calibration/me
+    # Permettent de détecter les biais d'items (genre, âge, langue, expérience)
+    gender          = Column(String(50),  nullable=True)   # "male"|"female"|"non_binary"|"prefer_not_to_say"
+    birth_year      = Column(Integer,     nullable=True)   # ex: 1990 — stable dans le temps (pas l'âge)
+    education_level = Column(String(50),  nullable=True)   # "below_bac"|"bac"|"bac_plus_2"|"bac_plus_3"|"bac_plus_5"|"phd"
+    native_language = Column(String(50),  nullable=True)   # "french"|"english"|"other" — critique pour items EN
+    years_at_sea    = Column(Integer,     nullable=True)   # 0 = aucune expérience maritime
+    maritime_role   = Column(String(100), nullable=True)   # "captain"|"officer"|"bosun"|"deckhand"|"other"|"none"
+    nationality     = Column(String(100), nullable=True)   # pays (biais culturel/linguistique)
+
     sessions = relationship(
         "CalibSession", back_populates="calibrator",
         cascade="all, delete-orphan",

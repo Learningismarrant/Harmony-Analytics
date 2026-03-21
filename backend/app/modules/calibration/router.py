@@ -8,6 +8,9 @@ Routes :
     POST /calibration/auth/register           → register (public, rate-limited)
     POST /calibration/auth/login              → login    (public, rate-limited)
     GET  /calibration/catalogues              → list_catalogues   (auth required)
+    GET  /calibration/me                      → get_me            (auth required)
+    PATCH /calibration/me                     → update_demographics (auth required)
+    GET  /calibration/catalogues              → list_catalogues   (auth required)
     GET  /calibration/catalogues/{id}/questions → get_questions   (auth required)
     POST /calibration/sessions                → start_session     (auth required)
     GET  /calibration/sessions                → list_sessions     (auth required)
@@ -25,12 +28,15 @@ from app.modules.calibration.schemas import (
     CalibratorRegisterIn,
     CalibratorLoginIn,
     CalibratorTokenOut,
+    CalibratorDemographicsIn,
+    CalibratorMeOut,
     CatalogueInfoOut,
     QuestionOut,
     StartSessionIn,
     SessionOut,
     SubmitResponsesIn,
     SubmitResponsesOut,
+    SessionScoreOut,
 )
 
 router = APIRouter(prefix="/calibration", tags=["Calibration"])
@@ -68,6 +74,42 @@ async def login(
 ) -> CalibratorTokenOut:
     """Authentifie un calibrateur et retourne un JWT."""
     return await service.login(db, payload)
+
+
+# ── Profil calibrateur ────────────────────────────────────────────────────────
+
+@router.get(
+    "/me",
+    response_model=CalibratorMeOut,
+    summary="Profil du calibrateur courant",
+)
+@limiter.limit("100/minute")
+async def get_me(
+    request: Request,
+    db: DbDep,
+    current_calibrator: CalibDep,
+) -> CalibratorMeOut:
+    """Retourne le profil complet du calibrateur authentifié."""
+    return await service.get_me(db, current_calibrator.id)
+
+
+@router.patch(
+    "/me",
+    response_model=CalibratorMeOut,
+    summary="Mettre à jour les données démographiques",
+)
+@limiter.limit("100/minute")
+async def update_demographics(
+    request: Request,
+    payload: CalibratorDemographicsIn,
+    db: DbDep,
+    current_calibrator: CalibDep,
+) -> CalibratorMeOut:
+    """
+    Met à jour les données démographiques du calibrateur (PATCH sémantique).
+    Ces données servent à l'analyse DIF (Differential Item Functioning).
+    """
+    return await service.update_demographics(db, current_calibrator.id, payload)
 
 
 # ── Catalogues ────────────────────────────────────────────────────────────────
@@ -170,3 +212,25 @@ async def submit_responses(
                 "code": "SUBMIT_ERROR",
             },
         ) from exc
+
+
+@router.get(
+    "/sessions/{session_id}/score",
+    response_model=SessionScoreOut,
+    summary="Score CTT d'une session complétée",
+)
+@limiter.limit("30/minute")
+async def get_session_score(
+    request: Request,
+    db: DbDep,
+    current_calibrator: CalibDep,
+    session_id: int = Path(..., gt=0),
+) -> SessionScoreOut:
+    """
+    Calcule et retourne le score CTT d'une session terminée.
+
+    - 404 si session introuvable.
+    - 403 si la session n'appartient pas au calibrateur courant.
+    - 400 (SESSION_NOT_COMPLETED) si la session n'est pas encore terminée.
+    """
+    return await service.get_session_score(db, current_calibrator.id, session_id)

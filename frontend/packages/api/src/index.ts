@@ -19,6 +19,7 @@ export { crewApi } from "./endpoints/crew";
 export { vesselApi } from "./endpoints/vessel";
 export { identityApi } from "./endpoints/identity";
 export { surveyApi } from "./endpoints/survey";
+export { calibrationApi, calibrationQueryKeys } from "./endpoints/calibration";
 
 // ── Query key factories — centralized for cache invalidation ──────────────────
 // Pattern: queryKeys.module.action(params)

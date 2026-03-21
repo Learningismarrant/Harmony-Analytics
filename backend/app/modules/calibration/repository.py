@@ -9,11 +9,12 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy import select
+from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.shared.models import TestCatalogue, Question
 from app.shared.models.Calibration import CalibratorUser, CalibSession, CalibResponse
-from app.modules.calibration.schemas import ResponseItemIn
+from app.modules.calibration.schemas import ResponseItemIn, CalibratorDemographicsIn
 
 
 class CalibrationRepository:
@@ -35,6 +36,19 @@ class CalibrationRepository:
             select(CalibratorUser).where(CalibratorUser.id == calibrator_id)
         )
         return r.scalar_one_or_none()
+
+    async def update_demographics(
+        self,
+        db: AsyncSession,
+        calibrator: CalibratorUser,
+        data: CalibratorDemographicsIn,
+    ) -> CalibratorUser:
+        """Met à jour les champs démographiques fournis (PATCH sémantique)."""
+        for field, value in data.model_dump(exclude_unset=True).items():
+            setattr(calibrator, field, value)
+        await db.commit()
+        await db.refresh(calibrator)
+        return calibrator
 
     async def create_calibrator(
         self,
@@ -170,3 +184,14 @@ class CalibrationRepository:
             select(CalibResponse).where(CalibResponse.session_id == session_id)
         )
         return len(r.scalars().all())
+
+    async def get_responses_with_questions(
+        self, db: AsyncSession, session_id: int
+    ) -> list[CalibResponse]:
+        """Retourne toutes les réponses d'une session avec leurs questions chargées."""
+        r = await db.execute(
+            select(CalibResponse)
+            .options(joinedload(CalibResponse.question))
+            .where(CalibResponse.session_id == session_id)
+        )
+        return list(r.scalars().all())

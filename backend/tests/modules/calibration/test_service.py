@@ -5,6 +5,8 @@ Tests unitaires pour modules.calibration.service.CalibrationService
 Couverture :
     register()   : succès, email dupliqué → 409
     login()      : succès, mauvais mot de passe → 401
+    get_me()     : succès, calibrateur introuvable → 404
+    update_demographics() : succès, calibrateur introuvable → 404
     list_catalogues() : délègue au repo
     get_questions()   : succès, catalogue inexistant → 404
     start_session()   : succès, session déjà complétée → 409
@@ -23,9 +25,11 @@ from app.modules.calibration.service import CalibrationService
 from app.modules.calibration.schemas import (
     CalibratorRegisterIn,
     CalibratorLoginIn,
+    CalibratorDemographicsIn,
     StartSessionIn,
     SubmitResponsesIn,
     ResponseItemIn,
+    SessionScoreOut,
 )
 
 pytestmark = pytest.mark.service
@@ -44,6 +48,13 @@ def make_calibrator(**kwargs) -> SimpleNamespace:
         "cohort": "ENSM Nantes 2026-03",
         "is_active": True,
         "created_at": datetime(2026, 1, 1),
+        "gender": None,
+        "birth_year": None,
+        "education_level": None,
+        "native_language": None,
+        "years_at_sea": None,
+        "maritime_role": None,
+        "nationality": None,
     }
     defaults.update(kwargs)
     return SimpleNamespace(**defaults)
@@ -392,3 +403,312 @@ class TestSubmitResponses:
             await service.submit_responses(db, calibrator_id=1, session_id=1, data=payload)
         assert exc_info.value.status_code == 409
         assert exc_info.value.detail["code"] == "SESSION_ALREADY_COMPLETED"
+
+
+# ── get_me ────────────────────────────────────────────────────────────────────
+
+class TestGetMe:
+    @pytest.mark.asyncio
+    async def test_get_me_ok(self, mocker):
+        db = AsyncMock()
+        calibrator = make_calibrator(id=1, name="Alice", birth_year=1990, years_at_sea=5)
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_calibrator_by_id",
+            AsyncMock(return_value=calibrator),
+        )
+        result = await service.get_me(db, calibrator_id=1)
+        assert result.id == 1
+        assert result.name == "Alice"
+        assert result.birth_year == 1990
+        assert result.years_at_sea == 5
+
+    @pytest.mark.asyncio
+    async def test_get_me_not_found_raises_404(self, mocker):
+        db = AsyncMock()
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_calibrator_by_id",
+            AsyncMock(return_value=None),
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await service.get_me(db, calibrator_id=99)
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail["code"] == "CALIBRATOR_NOT_FOUND"
+
+
+# ── update_demographics ───────────────────────────────────────────────────────
+
+class TestUpdateDemographics:
+    @pytest.mark.asyncio
+    async def test_update_demographics_ok(self, mocker):
+        db = AsyncMock()
+        calibrator = make_calibrator()
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_calibrator_by_id",
+            AsyncMock(return_value=calibrator),
+        )
+        updated = make_calibrator(gender="female", birth_year=1992, maritime_role="officer")
+        mocker.patch(
+            "app.modules.calibration.service.repo.update_demographics",
+            AsyncMock(return_value=updated),
+        )
+        payload = CalibratorDemographicsIn(
+            gender="female",
+            birth_year=1992,
+            maritime_role="officer",
+        )
+        result = await service.update_demographics(db, calibrator_id=1, data=payload)
+        assert result.gender == "female"
+        assert result.birth_year == 1992
+        assert result.maritime_role == "officer"
+
+    @pytest.mark.asyncio
+    async def test_update_demographics_not_found_raises_404(self, mocker):
+        db = AsyncMock()
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_calibrator_by_id",
+            AsyncMock(return_value=None),
+        )
+        payload = CalibratorDemographicsIn(gender="male")
+        with pytest.raises(HTTPException) as exc_info:
+            await service.update_demographics(db, calibrator_id=99, data=payload)
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail["code"] == "CALIBRATOR_NOT_FOUND"
+
+
+# ── get_session_score ──────────────────────────────────────────────────────────
+
+def make_response_with_question(
+    resp_id: int,
+    value: int,
+    question_id: int,
+    trait: str = "agreeableness",
+    question_type: str = "likert",
+    reverse: bool = False,
+    options: list | None = None,
+    correct_answer: str | None = None,
+) -> SimpleNamespace:
+    """Crée une CalibResponse simulée avec sa question embedded."""
+    question = SimpleNamespace(
+        id=question_id,
+        trait=trait,
+        question_type=question_type,
+        reverse=reverse,
+        options=options,
+        correct_answer=correct_answer,
+    )
+    return SimpleNamespace(
+        id=resp_id,
+        session_id=1,
+        question_id=question_id,
+        value=value,
+        question=question,
+    )
+
+
+class TestGetSessionScore:
+    @pytest.mark.asyncio
+    async def test_score_ok_likert(self, mocker):
+        """Session complétée avec réponses Likert — vérifie le score normalisé."""
+        db = AsyncMock()
+        completed_session = make_session(
+            id=1, calibrator_id=1, catalogue_id=1,
+            completed_at=datetime(2026, 3, 2, 10, 0, tzinfo=timezone.utc),
+        )
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_session",
+            AsyncMock(return_value=completed_session),
+        )
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_catalogue_by_id",
+            AsyncMock(return_value=make_catalogue(max_score_per_question=5)),
+        )
+        # 3 réponses Likert pour le même trait, valeurs 3, 4, 5 → mean=4.0 / 5 → 80%
+        responses = [
+            make_response_with_question(1, 3, 1, trait="agreeableness"),
+            make_response_with_question(2, 4, 2, trait="agreeableness"),
+            make_response_with_question(3, 5, 3, trait="agreeableness"),
+        ]
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_responses_with_questions",
+            AsyncMock(return_value=responses),
+        )
+        result = await service.get_session_score(db, calibrator_id=1, session_id=1)
+        assert isinstance(result, SessionScoreOut)
+        assert result.session_id == 1
+        assert result.n_responses == 3
+        assert len(result.traits) == 1
+        trait = result.traits[0]
+        assert trait.trait == "agreeableness"
+        assert trait.n_items == 3
+        assert abs(trait.raw_mean - 4.0) < 0.01
+        assert abs(trait.score - 80.0) < 0.01
+        assert abs(result.overall_score - 80.0) < 0.01
+
+    @pytest.mark.asyncio
+    async def test_score_ok_reverse_item(self, mocker):
+        """Item reverse : score = max_val - value."""
+        db = AsyncMock()
+        completed_session = make_session(
+            id=1, calibrator_id=1, catalogue_id=1,
+            completed_at=datetime(2026, 3, 2, 10, 0, tzinfo=timezone.utc),
+        )
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_session",
+            AsyncMock(return_value=completed_session),
+        )
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_catalogue_by_id",
+            AsyncMock(return_value=make_catalogue(max_score_per_question=5)),
+        )
+        # value=1, reverse=True → scored as 5-1=4 → mean=4.0/5=80%
+        responses = [
+            make_response_with_question(1, 1, 1, trait="neuroticism", reverse=True),
+        ]
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_responses_with_questions",
+            AsyncMock(return_value=responses),
+        )
+        result = await service.get_session_score(db, calibrator_id=1, session_id=1)
+        trait = result.traits[0]
+        assert abs(trait.raw_mean - 4.0) < 0.01
+        assert abs(trait.score - 80.0) < 0.01
+
+    @pytest.mark.asyncio
+    async def test_score_ok_qcm_correct(self, mocker):
+        """QCM — bonne réponse → score=100."""
+        db = AsyncMock()
+        completed_session = make_session(
+            id=1, calibrator_id=1, catalogue_id=1,
+            completed_at=datetime(2026, 3, 2, 10, 0, tzinfo=timezone.utc),
+        )
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_session",
+            AsyncMock(return_value=completed_session),
+        )
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_catalogue_by_id",
+            AsyncMock(return_value=make_catalogue(max_score_per_question=1)),
+        )
+        # options = [{"key":"A"}, {"key":"B"}, {"key":"C"}]
+        # correct_answer = "B" → index 1, response.value=1 → correct
+        options = [{"key": "A"}, {"key": "B"}, {"key": "C"}]
+        responses = [
+            make_response_with_question(
+                1, 1, 1,
+                trait="fluid_intelligence",
+                question_type="qcm",
+                options=options,
+                correct_answer="B",
+            ),
+        ]
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_responses_with_questions",
+            AsyncMock(return_value=responses),
+        )
+        result = await service.get_session_score(db, calibrator_id=1, session_id=1)
+        trait = result.traits[0]
+        assert abs(trait.score - 100.0) < 0.01
+
+    @pytest.mark.asyncio
+    async def test_score_ok_qcm_wrong(self, mocker):
+        """QCM — mauvaise réponse → score=0."""
+        db = AsyncMock()
+        completed_session = make_session(
+            id=1, calibrator_id=1, catalogue_id=1,
+            completed_at=datetime(2026, 3, 2, 10, 0, tzinfo=timezone.utc),
+        )
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_session",
+            AsyncMock(return_value=completed_session),
+        )
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_catalogue_by_id",
+            AsyncMock(return_value=make_catalogue(max_score_per_question=1)),
+        )
+        options = [{"key": "A"}, {"key": "B"}, {"key": "C"}]
+        responses = [
+            make_response_with_question(
+                1, 2, 1,
+                trait="fluid_intelligence",
+                question_type="qcm",
+                options=options,
+                correct_answer="B",  # index=1, réponse=2 → faux
+            ),
+        ]
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_responses_with_questions",
+            AsyncMock(return_value=responses),
+        )
+        result = await service.get_session_score(db, calibrator_id=1, session_id=1)
+        trait = result.traits[0]
+        assert abs(trait.score - 0.0) < 0.01
+
+    @pytest.mark.asyncio
+    async def test_score_session_not_found_raises_404(self, mocker):
+        db = AsyncMock()
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_session",
+            AsyncMock(return_value=None),
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await service.get_session_score(db, calibrator_id=1, session_id=99)
+        assert exc_info.value.status_code == 404
+        assert exc_info.value.detail["code"] == "SESSION_NOT_FOUND"
+
+    @pytest.mark.asyncio
+    async def test_score_wrong_calibrator_raises_403(self, mocker):
+        db = AsyncMock()
+        # session appartient au calibrateur 99, pas 1
+        session = make_session(calibrator_id=99, completed_at=datetime(2026, 3, 2, tzinfo=timezone.utc))
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_session",
+            AsyncMock(return_value=session),
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await service.get_session_score(db, calibrator_id=1, session_id=1)
+        assert exc_info.value.status_code == 403
+        assert exc_info.value.detail["code"] == "SESSION_FORBIDDEN"
+
+    @pytest.mark.asyncio
+    async def test_score_session_not_completed_raises_400(self, mocker):
+        db = AsyncMock()
+        session = make_session(calibrator_id=1, completed_at=None)
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_session",
+            AsyncMock(return_value=session),
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            await service.get_session_score(db, calibrator_id=1, session_id=1)
+        assert exc_info.value.status_code == 400
+        assert exc_info.value.detail["code"] == "SESSION_NOT_COMPLETED"
+
+    @pytest.mark.asyncio
+    async def test_score_overall_is_mean_of_traits(self, mocker):
+        """overall_score = moyenne des trait scores."""
+        db = AsyncMock()
+        completed_session = make_session(
+            id=1, calibrator_id=1, catalogue_id=1,
+            completed_at=datetime(2026, 3, 2, 10, 0, tzinfo=timezone.utc),
+        )
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_session",
+            AsyncMock(return_value=completed_session),
+        )
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_catalogue_by_id",
+            AsyncMock(return_value=make_catalogue(max_score_per_question=5)),
+        )
+        # trait1 (agreeableness): value=5 → 100%
+        # trait2 (neuroticism): value=0 → 0%
+        # overall = 50%
+        responses = [
+            make_response_with_question(1, 5, 1, trait="agreeableness"),
+            make_response_with_question(2, 0, 2, trait="neuroticism"),
+        ]
+        mocker.patch(
+            "app.modules.calibration.service.repo.get_responses_with_questions",
+            AsyncMock(return_value=responses),
+        )
+        result = await service.get_session_score(db, calibrator_id=1, session_id=1)
+        assert len(result.traits) == 2
+        assert abs(result.overall_score - 50.0) < 0.01

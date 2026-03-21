@@ -37,6 +37,14 @@ def upgrade() -> None:
         sa.Column("cohort",          sa.String(100),  nullable=True),
         sa.Column("is_active",       sa.Boolean,      nullable=False, server_default=sa.text("true")),
         sa.Column("created_at",      sa.DateTime(timezone=True), server_default=sa.func.now()),
+        # Démographiques — analyse DIF (Differential Item Functioning)
+        sa.Column("gender",          sa.String(50),   nullable=True),
+        sa.Column("birth_year",      sa.Integer,      nullable=True),
+        sa.Column("education_level", sa.String(50),   nullable=True),
+        sa.Column("native_language", sa.String(50),   nullable=True),
+        sa.Column("years_at_sea",    sa.Integer,      nullable=True),
+        sa.Column("maritime_role",   sa.String(100),  nullable=True),
+        sa.Column("nationality",     sa.String(100),  nullable=True),
     )
     op.create_index("ix_calib_users_id",    "calib_users", ["id"],    unique=False)
     op.create_index("ix_calib_users_email", "calib_users", ["email"], unique=True)

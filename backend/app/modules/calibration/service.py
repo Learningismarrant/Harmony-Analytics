@@ -16,15 +16,47 @@ from app.modules.calibration.schemas import (
     CalibratorRegisterIn,
     CalibratorLoginIn,
     CalibratorTokenOut,
+    CalibratorDemographicsIn,
+    CalibratorMeOut,
     CatalogueInfoOut,
     QuestionOut,
     StartSessionIn,
     SessionOut,
     SubmitResponsesIn,
     SubmitResponsesOut,
+    TraitScoreOut,
+    SessionScoreOut,
 )
 
 repo = CalibrationRepository()
+
+# Labels lisibles pour chaque trait psychométrique.
+# Utilisés dans SessionScoreOut pour faciliter l'affichage frontend.
+TRAIT_LABELS: dict[str, str] = {
+    # Big Five / IPIP
+    "openness": "Ouverture",
+    "conscientiousness": "Conscience",
+    "extraversion": "Extraversion",
+    "agreeableness": "Agréabilité",
+    "neuroticism": "Neuroticisme",
+    # GCA / Raven
+    "fluid_intelligence": "Intelligence Fluide",
+    "abstract_reasoning": "Raisonnement Abstrait",
+    "spatial_reasoning": "Raisonnement Spatial",
+    "numerical_reasoning": "Raisonnement Numérique",
+    "verbal_reasoning": "Raisonnement Verbal",
+    # Sécurité / Safety
+    "safety_awareness": "Conscience Sécurité",
+    "risk_tolerance": "Tolérance au Risque",
+    # Leadership / LMX
+    "leadership": "Leadership",
+    "teamwork": "Travail en Équipe",
+    "communication": "Communication",
+    # Valeurs
+    "integrity": "Intégrité",
+    "adaptability": "Adaptabilité",
+    "resilience": "Résilience",
+}
 
 
 def _build_token(calibrator_id: int, name: str) -> CalibratorTokenOut:
@@ -70,6 +102,42 @@ class CalibrationService:
             cohort=data.cohort,
         )
         return _build_token(calibrator.id, calibrator.name)
+
+    async def get_me(
+        self, db: AsyncSession, calibrator_id: int
+    ) -> CalibratorMeOut:
+        """Retourne le profil du calibrateur courant. 404 si introuvable."""
+        calibrator = await repo.get_calibrator_by_id(db, calibrator_id)
+        if not calibrator:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": True,
+                    "message": "Calibrateur introuvable.",
+                    "code": "CALIBRATOR_NOT_FOUND",
+                },
+            )
+        return CalibratorMeOut.model_validate(calibrator)
+
+    async def update_demographics(
+        self,
+        db: AsyncSession,
+        calibrator_id: int,
+        data: CalibratorDemographicsIn,
+    ) -> CalibratorMeOut:
+        """Met à jour les données démographiques. 404 si calibrateur introuvable."""
+        calibrator = await repo.get_calibrator_by_id(db, calibrator_id)
+        if not calibrator:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": True,
+                    "message": "Calibrateur introuvable.",
+                    "code": "CALIBRATOR_NOT_FOUND",
+                },
+            )
+        updated = await repo.update_demographics(db, calibrator, data)
+        return CalibratorMeOut.model_validate(updated)
 
     async def login(
         self, db: AsyncSession, data: CalibratorLoginIn
@@ -242,4 +310,140 @@ class CalibrationService:
             session_id=session_id,
             n_responses=n_saved,
             completed=completed,
+        )
+
+    # ── Score CTT ─────────────────────────────────────────────────────────────
+
+    async def get_session_score(
+        self,
+        db: AsyncSession,
+        calibrator_id: int,
+        session_id: int,
+    ) -> SessionScoreOut:
+        """
+        Calcule le score CTT d'une session complétée.
+
+        Règles :
+        - 404 si session introuvable.
+        - 403 si la session n'appartient pas au calibrateur.
+        - 400 (SESSION_NOT_COMPLETED) si session.completed_at is None.
+
+        Scoring :
+        - Likert : grouper par trait, reverse si question.reverse
+          (score = max_val - value), moyenne brute par trait, normaliser → 0-100.
+        - QCM/raven : correct si response.value == index(correct_answer in options[].key).
+        - overall_score = moyenne des trait scores normalisés.
+        """
+        session = await repo.get_session(db, session_id)
+        if not session:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail={
+                    "error": True,
+                    "message": "Session introuvable.",
+                    "code": "SESSION_NOT_FOUND",
+                },
+            )
+
+        if session.calibrator_id != calibrator_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": True,
+                    "message": "Cette session ne vous appartient pas.",
+                    "code": "SESSION_FORBIDDEN",
+                },
+            )
+
+        if session.completed_at is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": True,
+                    "message": "La session n'est pas encore terminée.",
+                    "code": "SESSION_NOT_COMPLETED",
+                },
+            )
+
+        catalogue = await repo.get_catalogue_by_id(db, session.catalogue_id)
+        max_val: int = catalogue.max_score_per_question if catalogue else 5
+
+        responses = await repo.get_responses_with_questions(db, session_id)
+
+        # Grouper les réponses par trait
+        trait_values: dict[str, list[float]] = {}
+        for resp in responses:
+            question = resp.question
+            if question is None:
+                continue
+
+            trait = question.trait or "unknown"
+            q_type = question.question_type or "likert"
+
+            if q_type in ("qcm", "raven"):
+                # Score binaire : 1 si bonne réponse, 0 sinon
+                correct_key = question.correct_answer
+                options = question.options or []
+                correct_index: int | None = None
+                for idx, opt in enumerate(options):
+                    key = opt.get("key") if isinstance(opt, dict) else None
+                    if key == correct_key:
+                        correct_index = idx
+                        break
+                score = 1.0 if (correct_index is not None and resp.value == correct_index) else 0.0
+            else:
+                # Likert — reverse scoring si nécessaire
+                raw = float(resp.value)
+                if question.reverse:
+                    raw = float(max_val) - raw
+                score = raw
+
+            if trait not in trait_values:
+                trait_values[trait] = []
+            trait_values[trait].append(score)
+
+        trait_scores: list[TraitScoreOut] = []
+        for trait, values in trait_values.items():
+            if not values:
+                continue
+            raw_mean = sum(values) / len(values)
+            # Normalisation 0-100 :
+            # - Likert : max_val est le plafond (ex: 5 pour échelle 1-5, ou 7 pour 1-7)
+            # - QCM/raven : max déjà 1.0 → multiplier par 100
+            # On utilise max_val pour les deux (QCM retourne 0 ou 1, max_val=1 possible)
+            # Pour QCM/raven le max théorique est 1.0
+            q_type_first = None
+            for resp in responses:
+                if resp.question and resp.question.trait == trait:
+                    q_type_first = resp.question.question_type
+                    break
+            if q_type_first in ("qcm", "raven"):
+                normalized = round(raw_mean * 100.0, 2)
+            else:
+                normalized = round((raw_mean / max_val) * 100.0, 2) if max_val > 0 else 0.0
+            normalized = max(0.0, min(100.0, normalized))
+
+            label = TRAIT_LABELS.get(trait, trait.replace("_", " ").title())
+            trait_scores.append(
+                TraitScoreOut(
+                    trait=trait,
+                    label=label,
+                    raw_mean=round(raw_mean, 4),
+                    score=normalized,
+                    n_items=len(values),
+                )
+            )
+
+        overall = (
+            round(sum(t.score for t in trait_scores) / len(trait_scores), 2)
+            if trait_scores
+            else 0.0
+        )
+
+        return SessionScoreOut(
+            session_id=session_id,
+            catalogue_id=session.catalogue_id,
+            overall_score=overall,
+            traits=trait_scores,
+            n_responses=len(responses),
         )

@@ -7,6 +7,8 @@ Couverture :
     POST /calibration/auth/login    → 200 succès, 401 mauvais mot de passe
     GET  /calibration/catalogues    → 401 sans auth, 200 avec auth
     GET  /calibration/catalogues/{id}/questions → 200 succès
+    GET  /calibration/me            → 200 succès, 401 sans auth
+    PATCH /calibration/me           → 200 succès, 422 payload invalide
     POST /calibration/sessions      → 201 succès
     GET  /calibration/sessions      → 200 liste
     POST /calibration/sessions/{id}/responses → 201 succès, 403 mauvaise session
@@ -26,10 +28,13 @@ from app.core.database import get_db
 from app.modules.calibration.deps import get_current_calibrator
 from app.modules.calibration.schemas import (
     CalibratorTokenOut,
+    CalibratorMeOut,
     CatalogueInfoOut,
     QuestionOut,
     SessionOut,
     SubmitResponsesOut,
+    TraitScoreOut,
+    SessionScoreOut,
 )
 
 pytestmark = pytest.mark.router
@@ -87,6 +92,25 @@ def _mock_calibrator() -> SimpleNamespace:
         name="Alice",
         is_active=True,
     )
+
+
+def _me_out(**kwargs) -> CalibratorMeOut:
+    defaults = dict(
+        id=1,
+        email="alice@test.com",
+        name="Alice",
+        cohort="ENSM 2026",
+        gender=None,
+        birth_year=None,
+        education_level=None,
+        native_language=None,
+        years_at_sea=None,
+        maritime_role=None,
+        nationality=None,
+        created_at=datetime(2026, 1, 1),
+    )
+    defaults.update(kwargs)
+    return CalibratorMeOut(**defaults)
 
 
 # ── Fixture client non authentifié ────────────────────────────────────────────
@@ -362,4 +386,165 @@ class TestSubmitResponsesEndpoint:
             "/calibration/sessions/1/responses",
             json={"responses": []},
         )
+        assert resp.status_code == 422
+
+
+# ── GET /calibration/me ───────────────────────────────────────────────────────
+
+class TestGetMeEndpoint:
+    @pytest.mark.asyncio
+    async def test_get_me_unauthorized_returns_401_or_403(self, client):
+        resp = await client.get("/calibration/me")
+        assert resp.status_code in (401, 403)
+
+    @pytest.mark.asyncio
+    async def test_get_me_success(self, calib_client, mocker):
+        mocker.patch(
+            "app.modules.calibration.router.service.get_me",
+            AsyncMock(return_value=_me_out(birth_year=1990, years_at_sea=3)),
+        )
+        resp = await calib_client.get("/calibration/me")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["id"] == 1
+        assert data["name"] == "Alice"
+        assert data["birth_year"] == 1990
+        assert data["years_at_sea"] == 3
+
+
+# ── PATCH /calibration/me ────────────────────────────────────────────────────
+
+class TestUpdateDemographicsEndpoint:
+    @pytest.mark.asyncio
+    async def test_update_demographics_success(self, calib_client, mocker):
+        mocker.patch(
+            "app.modules.calibration.router.service.update_demographics",
+            AsyncMock(
+                return_value=_me_out(gender="female", birth_year=1992, maritime_role="officer")
+            ),
+        )
+        resp = await calib_client.patch(
+            "/calibration/me",
+            json={"gender": "female", "birth_year": 1992, "maritime_role": "officer"},
+        )
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["gender"] == "female"
+        assert data["birth_year"] == 1992
+        assert data["maritime_role"] == "officer"
+
+    @pytest.mark.asyncio
+    async def test_update_demographics_invalid_gender_returns_422(self, calib_client):
+        resp = await calib_client.patch(
+            "/calibration/me",
+            json={"gender": "unknown_value"},
+        )
+        assert resp.status_code == 422
+
+    @pytest.mark.asyncio
+    async def test_update_demographics_invalid_birth_year_returns_422(self, calib_client):
+        """birth_year hors plage [1940, 2010] → 422."""
+        resp = await calib_client.patch(
+            "/calibration/me",
+            json={"birth_year": 1800},
+        )
+        assert resp.status_code == 422
+
+
+# ── GET /calibration/sessions/{id}/score ─────────────────────────────────────
+
+def _session_score_out() -> SessionScoreOut:
+    return SessionScoreOut(
+        session_id=1,
+        catalogue_id=1,
+        overall_score=72.5,
+        traits=[
+            TraitScoreOut(
+                trait="agreeableness",
+                label="Agréabilité",
+                raw_mean=3.625,
+                score=72.5,
+                n_items=8,
+            )
+        ],
+        n_responses=8,
+    )
+
+
+class TestGetScoreEndpoint:
+    @pytest.mark.asyncio
+    async def test_get_score_success(self, calib_client, mocker):
+        """Session complétée → 200 avec le score CTT."""
+        mocker.patch(
+            "app.modules.calibration.router.service.get_session_score",
+            AsyncMock(return_value=_session_score_out()),
+        )
+        resp = await calib_client.get("/calibration/sessions/1/score")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["session_id"] == 1
+        assert data["overall_score"] == 72.5
+        assert len(data["traits"]) == 1
+        assert data["traits"][0]["trait"] == "agreeableness"
+        assert data["n_responses"] == 8
+
+    @pytest.mark.asyncio
+    async def test_get_score_unauthorized_returns_401_or_403(self, client):
+        """Sans token → 401/403."""
+        resp = await client.get("/calibration/sessions/1/score")
+        assert resp.status_code in (401, 403)
+
+    @pytest.mark.asyncio
+    async def test_get_score_session_not_found_returns_404(self, calib_client, mocker):
+        mocker.patch(
+            "app.modules.calibration.router.service.get_session_score",
+            AsyncMock(
+                side_effect=HTTPException(
+                    status_code=404,
+                    detail={"error": True, "message": "Session introuvable.", "code": "SESSION_NOT_FOUND"},
+                )
+            ),
+        )
+        resp = await calib_client.get("/calibration/sessions/99/score")
+        assert resp.status_code == 404
+        assert resp.json()["detail"]["code"] == "SESSION_NOT_FOUND"
+
+    @pytest.mark.asyncio
+    async def test_get_score_wrong_calibrator_returns_403(self, calib_client, mocker):
+        mocker.patch(
+            "app.modules.calibration.router.service.get_session_score",
+            AsyncMock(
+                side_effect=HTTPException(
+                    status_code=403,
+                    detail={"error": True, "message": "Session tierce.", "code": "SESSION_FORBIDDEN"},
+                )
+            ),
+        )
+        resp = await calib_client.get("/calibration/sessions/5/score")
+        assert resp.status_code == 403
+        assert resp.json()["detail"]["code"] == "SESSION_FORBIDDEN"
+
+    @pytest.mark.asyncio
+    async def test_get_score_not_completed_returns_400(self, calib_client, mocker):
+        mocker.patch(
+            "app.modules.calibration.router.service.get_session_score",
+            AsyncMock(
+                side_effect=HTTPException(
+                    status_code=400,
+                    detail={
+                        "error": True,
+                        "message": "La session n'est pas encore terminée.",
+                        "code": "SESSION_NOT_COMPLETED",
+                    },
+                )
+            ),
+        )
+        resp = await calib_client.get("/calibration/sessions/2/score")
+        assert resp.status_code == 400
+        assert resp.json()["detail"]["code"] == "SESSION_NOT_COMPLETED"
+
+    @pytest.mark.asyncio
+    async def test_get_score_invalid_session_id_returns_422(self, calib_client):
+        """session_id=0 est hors plage (gt=0) → 422."""
+        resp = await calib_client.get("/calibration/sessions/0/score")
         assert resp.status_code == 422

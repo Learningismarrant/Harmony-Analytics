@@ -3,7 +3,7 @@ import { useEffect } from "react";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { restoreSession } from "@/features/auth/lib";
+import { restoreSession, restoreCalibSession } from "@/features/auth/lib";
 import { useAuthStore } from "@/features/auth/store";
 
 
@@ -22,7 +22,7 @@ const queryClient = new QueryClient({
 });
 
 export default function RootLayout() {
-  const { setAuthenticated, setRestoringSession } = useAuthStore();
+  const { setAuthenticated, setRestoringSession, login } = useAuthStore();
 
   useEffect(() => {
     // Timeout de sécurité : si SecureStore ou le réseau hang,
@@ -33,9 +33,26 @@ export default function RootLayout() {
     }, 4000);
 
     restoreSession()
-      .then((ok) => {
-        setAuthenticated(ok);
-        setRestoringSession(false);
+      .then(async (ok) => {
+        if (ok) {
+          setAuthenticated(ok);
+          setRestoringSession(false);
+          return;
+        }
+        // Si pas de session candidate/client, tenter session calibrateur
+        const calib = await restoreCalibSession();
+        if (calib.ok) {
+          await login({
+            accessToken: "", // déjà setAccessToken dans restoreCalibSession
+            role: "calibrator",
+            crewProfileId: null,
+            calibratorId: calib.calibratorId,
+            name: calib.name,
+          });
+        } else {
+          setAuthenticated(false);
+          setRestoringSession(false);
+        }
       })
       .catch(() => {
         setAuthenticated(false);
@@ -60,6 +77,8 @@ export default function RootLayout() {
         <Stack.Screen name="index" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
         <Stack.Screen name="(candidate)" options={{ headerShown: false }} />
+        <Stack.Screen name="(calibrator-auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="(calibrator)" options={{ headerShown: false }} />
       </Stack>
     </QueryClientProvider>
   );

@@ -7,18 +7,15 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
-  Image,
 } from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
-import { authApi } from "@harmony/api";
+import { calibrationApi } from "@harmony/api";
 import { useAuthStore } from "@/features/auth/store";
-import { saveRefreshToken } from "@/features/auth/lib";
-import { AuthFooter } from "@/features/auth/AuthFooter";
-import { AuthHeader } from "@/features/auth/AuthHeader";
-import type { UserRole } from "@harmony/types";
+import { saveCalibToken } from "@/features/auth/lib";
+import { setAccessToken } from "@harmony/api";
 
-export default function LoginScreen() {
+export default function CalibratorLoginScreen() {
   const router = useRouter();
   const login = useAuthStore((s) => s.login);
 
@@ -28,28 +25,30 @@ export default function LoginScreen() {
 
   async function handleLogin() {
     if (!email || !password) {
-      Alert.alert("Error", "Please enter your email and password.");
+      Alert.alert("Erreur", "Veuillez saisir votre email et mot de passe.");
       return;
     }
 
     setLoading(true);
     try {
-      const token = await authApi.login(email.trim().toLowerCase(), password);
+      const token = await calibrationApi.login(email.trim().toLowerCase(), password);
 
-      await saveRefreshToken(token.refresh_token);
+      await saveCalibToken(token.access_token);
+      setAccessToken(token.access_token);
 
       await login({
         accessToken: token.access_token,
-        role: token.role as UserRole,
-        crewProfileId: token.profile_id,
-        name: email,
+        role: "calibrator",
+        crewProfileId: null,
+        calibratorId: token.calibrator_id,
+        name: token.name,
       });
 
-      router.replace("/(candidate)/profile");
+      router.replace("/(calibrator)/catalogues");
     } catch {
       Alert.alert(
-        "Login failed",
-        "Invalid email or password. Please try again.",
+        "Connexion échouée",
+        "Email ou mot de passe invalide. Veuillez réessayer.",
       );
     } finally {
       setLoading(false);
@@ -62,10 +61,17 @@ export default function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
     >
       <View className="flex-1 justify-center px-6">
-        {/* Logo */}
+        {/* Header */}
         <View className="items-center mb-10">
-          
-          <AuthHeader title="HARMONY" subtitle="Yachting Assessment Center" />
+          <Text className="text-teak text-2xl font-black tracking-widest mb-1">
+            RADIANT
+          </Text>
+          <Text className="text-ice text-sm font-semibold tracking-wider">
+            Espace calibrateur
+          </Text>
+          <Text className="text-muted text-xs text-center mt-2 leading-5">
+            Accès réservé aux participants des études d'étalonnage
+          </Text>
         </View>
 
         {/* Form */}
@@ -75,9 +81,8 @@ export default function LoginScreen() {
               Email
             </Text>
             <TextInput
-              className="bg-bg-elevated mb-2 border border-bg-border rounded-xl px-4 py-4
-                         text-text-primary text-base"
-              placeholder="your@email.com"
+              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-4 text-text-primary text-base"
+              placeholder="votre@email.com"
               placeholderTextColor="#8FA3B8"
               keyboardType="email-address"
               autoCapitalize="none"
@@ -89,11 +94,10 @@ export default function LoginScreen() {
 
           <View>
             <Text className="text-muted text-xs mb-2 tracking-widest uppercase">
-              Password
+              Mot de passe
             </Text>
             <TextInput
-              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-4
-                         text-text-primary text-base"
+              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-4 text-text-primary text-base"
               placeholder="••••••••"
               placeholderTextColor="#8FA3B8"
               secureTextEntry
@@ -105,44 +109,34 @@ export default function LoginScreen() {
           <TouchableOpacity
             onPress={handleLogin}
             disabled={loading}
-            className="bg-brand-primary rounded-xl py-4 items-center mt-8"
+            className="bg-teak rounded-xl py-4 items-center mt-8"
             style={{ opacity: loading ? 0.6 : 1 }}
           >
             {loading ? (
               <ActivityIndicator color="#0D1B2A" />
             ) : (
               <Text className="text-bg-primary font-semibold text-base tracking-widest uppercase">
-                Sign in
+                Se connecter
               </Text>
             )}
           </TouchableOpacity>
 
           {/* Register link */}
           <View className="flex-row justify-center mt-2">
-            <Text className="text-muted text-sm">No account yet? </Text>
-            <TouchableOpacity onPress={() => router.replace("/(auth)/register")}>
-              <Text className="text-brand-secondary text-sm font-medium">
-                Create one
-              </Text>
+            <Text className="text-muted text-sm">Pas encore de compte ? </Text>
+            <TouchableOpacity onPress={() => router.push("/(calibrator-auth)/register")}>
+              <Text className="text-teak text-sm font-medium">S'inscrire</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Calibrator access */}
-          <View className="flex-row justify-center mt-4 pt-4 border-t border-bg-border">
-            <TouchableOpacity
-              onPress={() => router.push("/(calibrator-auth)/login")}
-              className="items-center"
-            >
-              <Text className="text-muted text-xs">
-                Participant à une étude de calibration ?{" "}
-                <Text className="text-teak font-medium">Accès calibrateur →</Text>
-              </Text>
+          {/* Back to candidate login */}
+          <View className="flex-row justify-center mt-2">
+            <TouchableOpacity onPress={() => router.replace("/(auth)/login")}>
+              <Text className="text-muted text-xs">← Retour connexion candidat</Text>
             </TouchableOpacity>
           </View>
         </View>
       </View>
-
-      <AuthFooter />
     </KeyboardAvoidingView>
   );
 }

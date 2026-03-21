@@ -8,7 +8,9 @@ import { useAuthStore } from "@/features/auth/store";
  * le splash automatiquement dès que ce composant est rendu).
  */
 export default function Index() {
-  const { isAuthenticated, isRestoringSession } = useAuthStore();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isRestoringSession = useAuthStore((s) => s.isRestoringSession);
+  const role = useAuthStore((s) => s.role);
 
   if (isRestoringSession) {
     return (
@@ -23,6 +25,10 @@ export default function Index() {
         <ActivityIndicator size="large" color="#4A90B8" />
       </View>
     );
+  }
+
+  if (isAuthenticated && role === "calibrator") {
+    return <Redirect href="/(calibrator)/catalogues" />;
   }
 
   if (isAuthenticated) return <Redirect href="/(candidate)/profile" />;

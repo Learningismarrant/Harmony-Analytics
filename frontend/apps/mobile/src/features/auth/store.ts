@@ -8,6 +8,7 @@ interface AuthState {
   isRestoringSession: boolean;
   role: UserRole | null;
   crewProfileId: number | null;
+  calibratorId: number | null;
   name: string | null;
 
   login: (params: {
@@ -15,6 +16,7 @@ interface AuthState {
     refreshToken?: string;
     role: UserRole;
     crewProfileId: number | null;
+    calibratorId?: number | null;
     name: string;
   }) => Promise<void>;
   logout: () => Promise<void>;
@@ -27,14 +29,15 @@ export const useAuthStore = create<AuthState>()((set) => ({
   isRestoringSession: true, // true on first render — loading splash until session check
   role: null,
   crewProfileId: null,
+  calibratorId: null,
   name: null,
 
-  login: async ({ accessToken, refreshToken, role, crewProfileId, name }) => {
+  login: async ({ accessToken, refreshToken, role, crewProfileId, calibratorId = null, name }) => {
     setAccessToken(accessToken);
     if (refreshToken) {
       await saveRefreshToken(refreshToken);
     }
-    set({ isAuthenticated: true, role, crewProfileId, name, isRestoringSession: false });
+    set({ isAuthenticated: true, role, crewProfileId, calibratorId, name, isRestoringSession: false });
   },
 
   logout: async () => {
@@ -44,6 +47,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
       isAuthenticated: false,
       role: null,
       crewProfileId: null,
+      calibratorId: null,
       name: null,
       isRestoringSession: false,
     });

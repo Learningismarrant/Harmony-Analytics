@@ -8,7 +8,7 @@ Aucune dépendance vers les schémas de production.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -32,6 +32,51 @@ class CalibratorTokenOut(BaseModel):
     token_type: str = "bearer"
     calibrator_id: int
     name: str
+
+
+# ── Démographiques ────────────────────────────────────────────────────────────
+# Collectés séparément (PATCH /calibration/me) pour ne pas surcharger l'inscription.
+# Ces données permettent l'analyse DIF (Differential Item Functioning) :
+# vérifier qu'aucun item n'avantage systématiquement un groupe démographique.
+
+class CalibratorDemographicsIn(BaseModel):
+    gender: Literal["male", "female", "non_binary", "prefer_not_to_say"] | None = None
+    birth_year: int | None = Field(
+        default=None, ge=1940, le=2010,
+        description="Année de naissance (pas l'âge — stable dans le temps)"
+    )
+    education_level: Literal[
+        "below_bac", "bac", "bac_plus_2", "bac_plus_3", "bac_plus_5", "phd"
+    ] | None = None
+    native_language: Literal["french", "english", "other"] | None = Field(
+        default=None,
+        description="Langue maternelle — critique pour items en anglais (HEXACO-60, ICAR)"
+    )
+    years_at_sea: int | None = Field(
+        default=None, ge=0, le=60,
+        description="Années d'expérience maritime (0 = aucune)"
+    )
+    maritime_role: Literal[
+        "captain", "officer", "bosun", "deckhand", "steward", "engineer", "other", "none"
+    ] | None = None
+    nationality: str | None = Field(default=None, max_length=100)
+
+
+class CalibratorMeOut(BaseModel):
+    id: int
+    email: str
+    name: str
+    cohort: str | None = None
+    gender: str | None = None
+    birth_year: int | None = None
+    education_level: str | None = None
+    native_language: str | None = None
+    years_at_sea: int | None = None
+    maritime_role: str | None = None
+    nationality: str | None = None
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ── Catalogues ────────────────────────────────────────────────────────────────
@@ -99,3 +144,21 @@ class SubmitResponsesOut(BaseModel):
     session_id: int
     n_responses: int
     completed: bool
+
+
+# ── Score CTT ─────────────────────────────────────────────────────────────────
+
+class TraitScoreOut(BaseModel):
+    trait: str
+    label: str
+    raw_mean: float = Field(..., description="Moyenne brute non normalisée")
+    score: float = Field(..., ge=0.0, le=100.0, description="Score normalisé 0-100")
+    n_items: int
+
+
+class SessionScoreOut(BaseModel):
+    session_id: int
+    catalogue_id: int
+    overall_score: float = Field(..., ge=0.0, le=100.0)
+    traits: list[TraitScoreOut]
+    n_responses: int
