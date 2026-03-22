@@ -22,8 +22,13 @@ interface QCMQuestionProps {
   onSelect: (index: number) => void;
 }
 
+interface RawOption { key?: string; text?: string }
+
 function QCMQuestion({ question, selectedIndex, onSelect }: QCMQuestionProps) {
-  const options = Array.isArray(question.options) ? (question.options as string[]) : [];
+  const raw = Array.isArray(question.options) ? question.options : [];
+  const options = (raw as RawOption[]).map((o) =>
+    typeof o === "object" && o !== null ? (o.text ?? String(o)) : String(o),
+  );
   const labels = ["A", "B", "C", "D", "E", "F"];
 
   return (
@@ -178,7 +183,11 @@ export default function CalibSessionScreen() {
             test_id: 0,
             text: question.text,
             question_type: question.question_type,
-            options: Array.isArray(question.options) ? (question.options as string[]) : null,
+            options: Array.isArray(question.options)
+              ? (question.options as RawOption[]).map((o) =>
+                  typeof o === "object" && o !== null ? (o.text ?? String(o)) : String(o),
+                )
+              : null,
             trait: question.trait,
           }}
           selectedValue={responses[question.id] !== undefined ? String(responses[question.id]) : undefined}
