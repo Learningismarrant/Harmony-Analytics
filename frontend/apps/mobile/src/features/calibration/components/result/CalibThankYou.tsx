@@ -3,21 +3,18 @@ import { Ionicons } from "@expo/vector-icons";
 
 interface Props {
   name: string | null;
-  catalogueName: string;
-  testType: string;
+  catalogueName: string | null | undefined;
+  testType: string | null | undefined;
   disclaimer: string;
 }
 
-function getContextualMessage(catalogueName: string, testType: string): string {
-  if (catalogueName.toLowerCase().includes("hexaco")) {
+function getContextualMessage(catalogueName: string | null | undefined, testType: string | null | undefined): string {
+  const name = (catalogueName ?? "").toLowerCase();
+  const type = (testType ?? "").toLowerCase();
+  if (name.includes("hexaco") || name.includes("big five") || name.includes("hbf")) {
     return "Ton profil de personnalité contribue à calibrer notre détection de l'intégrité en milieu maritime.";
   }
-  if (
-    testType.toLowerCase().includes("qcm") ||
-    catalogueName.toLowerCase().includes("gca") ||
-    catalogueName.toLowerCase().includes("hmr") ||
-    catalogueName.toLowerCase().includes("icar")
-  ) {
+  if (type.includes("qcm") || type.includes("raven") || name.includes("gca") || name.includes("hmr") || name.includes("icar")) {
     return "Tes réponses aident à étalonner notre mesure de l'aptitude cognitive.";
   }
   return "Ta participation contribue à rendre la sélection maritime plus équitable et scientifiquement rigoureuse.";

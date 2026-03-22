@@ -159,6 +159,10 @@ class TraitScoreOut(BaseModel):
 class SessionScoreOut(BaseModel):
     session_id: int
     catalogue_id: int
+    catalogue_name: str
+    test_type: str
     overall_score: float = Field(..., ge=0.0, le=100.0)
     traits: list[TraitScoreOut]
     n_responses: int
+    completed: bool = True
+    disclaimer: str = "Résultat indicatif — normes non établies sur l'ensemble des calibrateurs."

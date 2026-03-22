@@ -457,6 +457,8 @@ def _session_score_out() -> SessionScoreOut:
     return SessionScoreOut(
         session_id=1,
         catalogue_id=1,
+        catalogue_name="LMX-7",
+        test_type="likert",
         overall_score=72.5,
         traits=[
             TraitScoreOut(

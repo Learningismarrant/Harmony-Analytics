@@ -443,7 +443,10 @@ class CalibrationService:
         return SessionScoreOut(
             session_id=session_id,
             catalogue_id=session.catalogue_id,
+            catalogue_name=catalogue.name if catalogue else "",
+            test_type=catalogue.test_type if catalogue else "likert",
             overall_score=overall,
             traits=trait_scores,
             n_responses=len(responses),
+            completed=session.completed_at is not None,
         )
