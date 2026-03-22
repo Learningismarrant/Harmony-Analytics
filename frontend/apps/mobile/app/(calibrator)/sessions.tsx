@@ -9,7 +9,7 @@ export default function SessionsScreen() {
 
   const { data: sessions, isLoading: isLoadingSessions } = useQuery({
     queryKey: calibrationQueryKeys.sessions(),
-    queryFn: () => calibrationApi.getMySessions(),
+    queryFn: () => calibrationApi.getSessions(),
   });
 
   const { data: catalogues, isLoading: isLoadingCatalogues } = useQuery({

@@ -5,11 +5,13 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { calibrationApi, calibrationQueryKeys } from "@harmony/api";
 import type { CalibSessionOut, CalibQuestionOut } from "@harmony/types";
 
-export function useCalibPassation(catalogueId: number) {
+export function useCalibPassation(catalogueId: number, initialSessionId?: number) {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [session, setSession] = useState<CalibSessionOut | null>(null);
+  const [session, setSession] = useState<CalibSessionOut | null>(
+    initialSessionId ? ({ id: initialSessionId, catalogue_id: catalogueId } as CalibSessionOut) : null,
+  );
   const [currentIndex, setCurrentIndex] = useState(0);
   const [responses, setResponses] = useState<Record<number, number>>({});
   const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now());
@@ -52,9 +54,9 @@ export function useCalibPassation(catalogueId: number) {
     },
   });
 
-  // Lancer la session au mount si pas encore créée
+  // Lancer la session au mount si pas encore créée (skip si initialSessionId fourni)
   useEffect(() => {
-    if (catalogueId > 0 && session === null && !startSessionMutation.isPending) {
+    if (catalogueId > 0 && session === null && !initialSessionId && !startSessionMutation.isPending) {
       startSessionMutation.mutate();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -66,15 +68,12 @@ export function useCalibPassation(catalogueId: number) {
       if (!session) throw new Error("Pas de session active");
       const responseList = Object.entries(responses).map(([qId, val]) => ({
         question_id: parseInt(qId, 10),
-        valeur_choisie: String(val),
+        value: val,
         seconds_spent: timeSpent[parseInt(qId, 10)] ?? 0,
       }));
-      return calibrationApi.submitSession({
-        session_id: session.id,
-        responses: responseList,
-      });
+      return calibrationApi.submitResponses(session.id, { responses: responseList });
     },
-    onSuccess: (result) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: calibrationQueryKeys.sessions() });
       setIsSubmitted(true);
       if (session) {

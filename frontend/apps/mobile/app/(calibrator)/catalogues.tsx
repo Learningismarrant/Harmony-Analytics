@@ -16,7 +16,7 @@ export default function CataloguesScreen() {
 
   const { data: sessions, isLoading: isLoadingSessions } = useQuery({
     queryKey: calibrationQueryKeys.sessions(),
-    queryFn: () => calibrationApi.getMySessions(),
+    queryFn: () => calibrationApi.getSessions(),
   });
 
   const startSessionMutation = useMutation({

@@ -43,11 +43,11 @@ export const calibrationApi = {
     post<CalibSessionOut>("/calibration/sessions", { catalogue_id: catalogueId }),
 
   /** Toutes les sessions du calibrateur connecté */
-  getMySessions: () => get<CalibSessionOut[]>("/calibration/sessions/me"),
+  getSessions: () => get<CalibSessionOut[]>("/calibration/sessions"),
 
   /** Soumettre toutes les réponses d'une session */
-  submitSession: (body: CalibSubmitIn) =>
-    post<CalibSubmitOut>("/calibration/sessions/submit", body),
+  submitResponses: (sessionId: number, body: CalibSubmitIn) =>
+    post<CalibSubmitOut>(`/calibration/sessions/${sessionId}/responses`, body),
 
   /** Score d'une session terminée */
   getSessionScore: (sessionId: number) =>

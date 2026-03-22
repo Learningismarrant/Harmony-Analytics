@@ -677,12 +677,11 @@ export interface CalibSessionOut {
 
 export interface CalibResponseItemIn {
   question_id: number;
-  valeur_choisie: string;
-  seconds_spent: number;
+  value: number;
+  seconds_spent?: number | null;
 }
 
 export interface CalibSubmitIn {
-  session_id: number;
   responses: CalibResponseItemIn[];
 }
 

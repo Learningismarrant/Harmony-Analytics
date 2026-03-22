@@ -130,7 +130,7 @@ export default function CalibSessionScreen() {
     goPrev,
     handleSubmit,
     submitMutation,
-  } = useCalibPassation(Number(catalogueId));
+  } = useCalibPassation(Number(catalogueId), Number(sessionId));
 
   if (isLoading || !session) {
     return (
@@ -231,7 +231,7 @@ export default function CalibSessionScreen() {
       {/* Question */}
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{ paddingBottom: 24, flexGrow: 1, justifyContent: "center" }}
         showsVerticalScrollIndicator={false}
       >
         <QuestionCard

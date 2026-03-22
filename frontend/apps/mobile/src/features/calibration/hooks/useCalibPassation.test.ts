@@ -7,14 +7,14 @@ import { useCalibPassation } from "./useCalibPassation";
 
 const mockStartSession = jest.fn();
 const mockGetQuestions = jest.fn();
-const mockSubmitSession = jest.fn();
+const mockSubmitResponses = jest.fn();
 const mockRouterReplace = jest.fn();
 
 jest.mock("@harmony/api", () => ({
   calibrationApi: {
     startSession: (...args: unknown[]) => mockStartSession(...args),
     getQuestions: (...args: unknown[]) => mockGetQuestions(...args),
-    submitSession: (...args: unknown[]) => mockSubmitSession(...args),
+    submitResponses: (...args: unknown[]) => mockSubmitResponses(...args),
   },
   calibrationQueryKeys: {
     questions: (id: number) => ["calibration", "questions", id],
@@ -29,19 +29,18 @@ const SESSION = {
   id: 1,
   calibrator_id: 1,
   catalogue_id: 1,
-  status: "in_progress" as const,
   started_at: "2026-03-21T10:00:00Z",
   completed_at: null,
-  response_count: 0,
 };
 
 const QUESTIONS = [
-  { id: 1, catalogue_id: 1, order_index: 1, text: "Q1", question_type: "likert", trait: "A", options: null },
-  { id: 2, catalogue_id: 1, order_index: 2, text: "Q2", question_type: "likert", trait: "A", options: null },
-  { id: 3, catalogue_id: 1, order_index: 3, text: "Q3", question_type: "likert", trait: "B", options: null },
+  { id: 1, order: 1, text: "Q1", question_type: "likert", trait: "A", options: null, reverse: false },
+  { id: 2, order: 2, text: "Q2", question_type: "likert", trait: "A", options: null, reverse: false },
+  { id: 3, order: 3, text: "Q3", question_type: "likert", trait: "B", options: null, reverse: false },
 ];
 
-function makeWrapper() {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function makeWrapper(): any {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -53,12 +52,12 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockStartSession.mockResolvedValue(SESSION);
   mockGetQuestions.mockResolvedValue(QUESTIONS);
-  mockSubmitSession.mockResolvedValue({ session_id: 1, status: "completed", score: null, message: "OK" });
+  mockSubmitResponses.mockResolvedValue({ session_id: 1, n_responses: 3, completed: true });
   jest.mocked(useRouter).mockReturnValue({
     replace: mockRouterReplace,
     push: jest.fn(),
     back: jest.fn(),
-  } as ReturnType<typeof useRouter>);
+  } as unknown as ReturnType<typeof useRouter>);
   jest.mocked(useFocusEffect).mockImplementation((cb) => { cb(); });
 });
 
@@ -79,6 +78,12 @@ describe("useCalibPassation — initialisation", () => {
   it("appelle startSession au mount", async () => {
     renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
     await waitFor(() => expect(mockStartSession).toHaveBeenCalledWith(1));
+  });
+
+  it("ne crée pas de session si initialSessionId fourni", async () => {
+    renderHook(() => useCalibPassation(1, 42), { wrapper: makeWrapper() });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockStartSession).not.toHaveBeenCalled();
   });
 });
 
@@ -196,7 +201,7 @@ describe("useCalibPassation — submit", () => {
     });
 
     await act(async () => result.current.handleSubmit());
-    await waitFor(() => expect(mockSubmitSession).toHaveBeenCalled());
+    await waitFor(() => expect(mockSubmitResponses).toHaveBeenCalled());
   });
 
   it("navigue vers le résultat après succès de soumission", async () => {
@@ -234,7 +239,6 @@ describe("useCalibPassation — BackHandler (Android)", () => {
     const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    // showInstructions = true par défaut
     const blocked = capturedHandler?.();
     expect(blocked).toBe(false);
   });
