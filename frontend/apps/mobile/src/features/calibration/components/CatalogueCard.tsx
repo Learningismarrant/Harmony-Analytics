@@ -9,10 +9,11 @@ interface CatalogueCardProps {
 }
 
 export function CatalogueCard({ catalogue, session, onPress }: CatalogueCardProps) {
-  const isCompleted = session?.status === "completed";
-  const isInProgress = session?.status === "in_progress";
+  const isCompleted = session !== null && session.completed_at !== null;
+  const isInProgress = session !== null && session.completed_at === null;
 
-  const accentColor = catalogue.is_etalon ? "#A67C52" : "#5B8DB8";
+  const isEtalon = catalogue.status === "ETALON";
+  const accentColor = isEtalon ? "#A67C52" : "#5B8DB8";
 
   function renderCTA() {
     if (isCompleted) {
@@ -93,7 +94,7 @@ export function CatalogueCard({ catalogue, session, onPress }: CatalogueCardProp
               }}
             >
               <Text style={{ color: accentColor, fontSize: 9, fontWeight: "800", letterSpacing: 0.5 }}>
-                {catalogue.is_etalon ? "ÉTALON" : "ALPHA"}
+                {isEtalon ? "ÉTALON" : "ALPHA"}
               </Text>
             </View>
           </View>
@@ -138,19 +139,11 @@ export function CatalogueCard({ catalogue, session, onPress }: CatalogueCardProp
             paddingTop: 11,
           }}
         >
-          {/* Duration */}
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginRight: 14 }}>
-            <Ionicons name="time-outline" size={11} color="#64748B" />
-            <Text style={{ color: "#64748B", fontSize: 10, fontWeight: "700", letterSpacing: 0.5 }}>
-              ~{catalogue.estimated_minutes} MIN
-            </Text>
-          </View>
-
           {/* Question count */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
             <Ionicons name="help-circle-outline" size={11} color="#64748B" />
             <Text style={{ color: "#64748B", fontSize: 10, fontWeight: "700", letterSpacing: 0.5 }}>
-              {catalogue.question_count} QUESTIONS
+              {catalogue.n_questions} QUESTIONS
             </Text>
           </View>
 

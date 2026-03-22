@@ -10,6 +10,8 @@ export default function SessionsScreen() {
   const { data: sessions, isLoading: isLoadingSessions } = useQuery({
     queryKey: calibrationQueryKeys.sessions(),
     queryFn: () => calibrationApi.getSessions(),
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   const { data: catalogues, isLoading: isLoadingCatalogues } = useQuery({

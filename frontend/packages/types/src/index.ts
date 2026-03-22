@@ -648,11 +648,10 @@ export interface CalibCatalogueOut {
   id: number;
   name: string;
   description: string;
-  instructions: string | null;
   test_type: string;
-  question_count: number;
-  estimated_minutes: number;
-  is_etalon: boolean;
+  n_questions: number;
+  status: string;   // "ETALON" | "ALPHA"
+  license: string;
 }
 
 export interface CalibQuestionOut {

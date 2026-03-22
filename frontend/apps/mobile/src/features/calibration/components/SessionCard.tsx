@@ -18,7 +18,7 @@ function formatDate(iso: string): string {
 }
 
 export function SessionCard({ session, catalogueName, onViewResult }: SessionCardProps) {
-  const isCompleted = session.status === "completed";
+  const isCompleted = session.completed_at !== null;
   const statusColor = isCompleted ? "#2E8A5C" : "#9A7030";
   const statusLabel = isCompleted ? "Complété" : "En cours";
 
@@ -71,12 +71,6 @@ export function SessionCard({ session, catalogueName, onViewResult }: SessionCar
           </Text>
         </View>
       )}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 12 }}>
-        <Ionicons name="document-text-outline" size={11} color="#64748B" />
-        <Text style={{ color: "#64748B", fontSize: 11 }}>
-          {session.response_count} réponse(s) enregistrée(s)
-        </Text>
-      </View>
 
       {/* Action */}
       {isCompleted && (
