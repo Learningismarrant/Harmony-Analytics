@@ -19,14 +19,18 @@ export function useCalibPassation(catalogueId: number, initialSessionId?: number
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showInstructions, setShowInstructions] = useState(true);
 
-  // Reset complet si catalogueId change
+  // Reset complet si catalogueId change — ne pas reset la session si initialSessionId fourni
+  // (le useState a déjà initialisé la session, le useEffect ne doit pas l'écraser au mount)
   useEffect(() => {
     setCurrentIndex(0);
     setResponses({});
     setTimeSpent({});
     setIsSubmitted(false);
     setShowInstructions(true);
-    setSession(null);
+    if (!initialSessionId) {
+      setSession(null);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalogueId]);
 
   // Reset le timer quand on change de question
