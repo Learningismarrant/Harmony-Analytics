@@ -7,7 +7,7 @@ import {
   Platform,
   Alert,
   ActivityIndicator,
-  Image,
+  ImageBackground,
 } from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
@@ -57,92 +57,97 @@ export default function LoginScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-bg-primary"
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    <ImageBackground
+      source={require("../../assets/images/Background1.png")}
+      style={{ flex: 1 }}
+      resizeMode="cover"
     >
-      <View className="flex-1 justify-center px-6">
-        {/* Logo */}
-        <View className="items-center mb-10">
-          
-          <AuthHeader title="HARMONY" subtitle="Yachting Assessment Center" />
-        </View>
+      <View style={{ flex: 1, backgroundColor: "rgba(7,9,15,0.65)" }}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
+          <View className="flex-1 justify-center px-6">
+            {/* Logo */}
+            <View className="items-center mb-10">
+              <AuthHeader title="HARMONY" subtitle="Yachting Assessment Center" />
+            </View>
 
-        {/* Form */}
-        <View className="space-y-6">
-          <View>
-            <Text className="text-muted text-xs mb-2 tracking-widest uppercase">
-              Email
-            </Text>
-            <TextInput
-              className="bg-bg-elevated mb-2 border border-bg-border rounded-xl px-4 py-4
-                         text-text-primary text-base"
-              placeholder="your@email.com"
-              placeholderTextColor="#8FA3B8"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              value={email}
-              onChangeText={setEmail}
-            />
+            {/* Form */}
+            <View className="space-y-6">
+              <View>
+                <Text className="text-muted text-xs mb-2 tracking-widest uppercase">
+                  Email
+                </Text>
+                <TextInput
+                  className="bg-bg-elevated mb-2 border border-bg-border rounded-xl px-4 py-4 text-text-primary text-base"
+                  placeholder="your@email.com"
+                  placeholderTextColor="#8FA3B8"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  value={email}
+                  onChangeText={setEmail}
+                />
+              </View>
+
+              <View>
+                <Text className="text-muted text-xs mb-2 tracking-widest uppercase">
+                  Password
+                </Text>
+                <TextInput
+                  className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-4 text-text-primary text-base"
+                  placeholder="••••••••"
+                  placeholderTextColor="#8FA3B8"
+                  secureTextEntry
+                  value={password}
+                  onChangeText={setPassword}
+                />
+              </View>
+
+              <TouchableOpacity
+                onPress={handleLogin}
+                disabled={loading}
+                className="bg-brand-primary rounded-xl py-4 items-center mt-8"
+                style={{ opacity: loading ? 0.6 : 1 }}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#0D1B2A" />
+                ) : (
+                  <Text className="text-bg-primary font-semibold text-base tracking-widest uppercase">
+                    Sign in
+                  </Text>
+                )}
+              </TouchableOpacity>
+
+              {/* Register link */}
+              <View className="flex-row justify-center mt-2">
+                <Text className="text-muted text-sm">No account yet? </Text>
+                <TouchableOpacity onPress={() => router.replace("/(auth)/register")}>
+                  <Text className="text-brand-secondary text-sm font-medium">
+                    Create one
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Calibrator access */}
+              <View className="flex-row justify-center mt-4 pt-4 border-t border-bg-border">
+                <TouchableOpacity
+                  onPress={() => router.push("/(calibrator-auth)/login")}
+                  className="items-center"
+                >
+                  <Text className="text-muted text-xs">
+                    Participant à une étude de calibration ?{" "}
+                    <Text className="text-teak font-medium">Accès calibrateur →</Text>
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
 
-          <View>
-            <Text className="text-muted text-xs mb-2 tracking-widest uppercase">
-              Password
-            </Text>
-            <TextInput
-              className="bg-bg-elevated border border-bg-border rounded-xl px-4 py-4
-                         text-text-primary text-base"
-              placeholder="••••••••"
-              placeholderTextColor="#8FA3B8"
-              secureTextEntry
-              value={password}
-              onChangeText={setPassword}
-            />
-          </View>
-
-          <TouchableOpacity
-            onPress={handleLogin}
-            disabled={loading}
-            className="bg-brand-primary rounded-xl py-4 items-center mt-8"
-            style={{ opacity: loading ? 0.6 : 1 }}
-          >
-            {loading ? (
-              <ActivityIndicator color="#0D1B2A" />
-            ) : (
-              <Text className="text-bg-primary font-semibold text-base tracking-widest uppercase">
-                Sign in
-              </Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Register link */}
-          <View className="flex-row justify-center mt-2">
-            <Text className="text-muted text-sm">No account yet? </Text>
-            <TouchableOpacity onPress={() => router.replace("/(auth)/register")}>
-              <Text className="text-brand-secondary text-sm font-medium">
-                Create one
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Calibrator access */}
-          <View className="flex-row justify-center mt-4 pt-4 border-t border-bg-border">
-            <TouchableOpacity
-              onPress={() => router.push("/(calibrator-auth)/login")}
-              className="items-center"
-            >
-              <Text className="text-muted text-xs">
-                Participant à une étude de calibration ?{" "}
-                <Text className="text-teak font-medium">Accès calibrateur →</Text>
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+          <AuthFooter />
+        </KeyboardAvoidingView>
       </View>
-
-      <AuthFooter />
-    </KeyboardAvoidingView>
+    </ImageBackground>
   );
 }

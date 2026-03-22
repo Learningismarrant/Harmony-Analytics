@@ -8,7 +8,7 @@ import {
   Alert,
   ScrollView,
   ActivityIndicator,
-  Image,
+  ImageBackground,
 } from "react-native";
 import { useState } from "react";
 import { useRouter } from "expo-router";
@@ -98,10 +98,16 @@ export default function RegisterScreen() {
   }
 
   return (
-    <KeyboardAvoidingView
-      className="flex-1 bg-bg-primary"
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+    <ImageBackground
+      source={require("../../assets/images/Background1.png")}
+      style={{ flex: 1 }}
+      resizeMode="cover"
     >
+      <View style={{ flex: 1, backgroundColor: "rgba(7,9,15,0.65)" }}>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
       <ScrollView
         contentContainerStyle={{ padding: 24, paddingBottom: 40 }}
         keyboardShouldPersistTaps="handled"
@@ -238,6 +244,8 @@ export default function RegisterScreen() {
         </View>
       </ScrollView>
       <AuthFooter />
-    </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </View>
+    </ImageBackground>
   );
 }
