@@ -298,11 +298,16 @@ class CalibrationService:
 
         n_saved = await repo.save_responses(db, session_id, data.responses)
 
-        # Auto-complétion : compare les réponses totales au nombre de questions
+        # La passation soumet toutes les réponses en un seul appel → complétion systématique.
+        # Fallback count-based si le catalogue est disponible (cohérence data).
         catalogue = await repo.get_catalogue_by_id(db, session.catalogue_id)
         total_responses = await repo.count_responses_for_session(db, session_id)
+        should_complete = (
+            catalogue is None  # catalogue introuvable (ex: après re-seed) → on fait confiance au submit
+            or total_responses >= catalogue.n_questions
+        )
         completed = False
-        if catalogue and total_responses >= catalogue.n_questions:
+        if should_complete:
             await repo.complete_session(db, session)
             completed = True
 
