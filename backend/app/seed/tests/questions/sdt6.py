@@ -22,6 +22,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select
 
 from app.shared.models import TestCatalogue, Question
+from app.shared.models.Assessment import CatalogueDomain
 
 _CATALOGUE_NAME = "SDT-6 Motivation Maritime"
 
@@ -153,6 +154,7 @@ async def seed_sdt6(db: AsyncSession) -> TestCatalogue:
         is_active=True,
         status="ALPHA",
         license="RADIANT_PROPRIETARY",
+        domain=CatalogueDomain.motivation,
         validation_notes=(
             "⚠️ INSTRUMENT ALPHA — Items custom originaux Radiant Analytics (2026). "
             "Wording distinct du MWMS Gagné (2015). Ancrage théorique : Deci & Ryan (2000). "

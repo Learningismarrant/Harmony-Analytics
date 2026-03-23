@@ -60,6 +60,7 @@ def _catalogue_out() -> CatalogueInfoOut:
         n_questions=50,
         status="ALPHA",
         license="PUBLIC_DOMAIN",
+        domain="personality",
     )
 
 

@@ -12,6 +12,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
+from app.shared.models.Assessment import CatalogueDomain
+
 
 # ── Auth calibrateur ───────────────────────────────────────────────────────────
 
@@ -89,6 +91,7 @@ class CatalogueInfoOut(BaseModel):
     n_questions: int
     status: str
     license: str
+    domain: CatalogueDomain
 
     model_config = ConfigDict(from_attributes=True)
 

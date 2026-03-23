@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select
 
 from app.shared.models import TestCatalogue, Question
+from app.shared.models.Assessment import CatalogueDomain
 
 _CATALOGUE_NAME = "GCA Séries Numériques"
 
@@ -248,6 +249,7 @@ async def seed_gca_series(db: AsyncSession) -> TestCatalogue:
         is_active=True,
         status="ALPHA",
         license="RADIANT_PROPRIETARY",
+        domain=CatalogueDomain.cognitive,
         validation_notes=(
             "⚠️ INSTRUMENT ALPHA — Items custom originaux Radiant Analytics (2026). "
             "Non dérivés d'instruments propriétaires tiers. "

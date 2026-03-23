@@ -69,6 +69,7 @@ def make_catalogue(**kwargs) -> SimpleNamespace:
         "n_questions": 50,
         "status": "ALPHA",
         "license": "PUBLIC_DOMAIN",
+        "domain": "personality",
         "is_active": True,
     }
     defaults.update(kwargs)

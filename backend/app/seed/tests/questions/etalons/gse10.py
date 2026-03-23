@@ -29,6 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select
 
 from app.shared.models import TestCatalogue, Question
+from app.shared.models.Assessment import CatalogueDomain
 
 GSE10_QUESTIONS = [
     # ── General Self-Efficacy — 10 items ──────────────────────────────────────
@@ -108,6 +109,7 @@ async def seed_gse10(db: AsyncSession) -> TestCatalogue:
         is_active=True,
         status="ETALON",
         license="FREE_RESEARCH_USE",
+        domain=CatalogueDomain.physical,
         validation_notes=(
             "GSE-10 — Schwarzer, R., & Jerusalem, M. (1995). Generalized Self-Efficacy scale. "
             "In J. Weinman, S. Wright, & M. Johnston (Eds.), "

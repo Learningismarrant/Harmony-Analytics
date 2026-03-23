@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select
 
 from app.shared.models import TestCatalogue, Question
+from app.shared.models.Assessment import CatalogueDomain
 
 # ---------------------------------------------------------------------------
 # Banque de 24 matrices
@@ -1024,6 +1025,7 @@ async def seed_hmr24(db: AsyncSession) -> TestCatalogue:
         is_active=True,
         status="ALPHA",
         license="CUSTOM_ALPHA",
+        domain=CatalogueDomain.cognitive,
         validation_notes=(
             "⚠️ INSTRUMENT ALPHA NON ÉTALONNÉ — PROTOTYPAGE UNIQUEMENT. "
             "Harmony Matrix Reasoning Test — 24 matrices visuospatiales construites ad hoc. "

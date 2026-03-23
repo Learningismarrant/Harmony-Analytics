@@ -36,6 +36,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select
 
 from app.shared.models import TestCatalogue, Question
+from app.shared.models.Assessment import CatalogueDomain
 
 ICAR16_QUESTIONS = [
     # ── Letter-Number Series Reasoning (icar_lnsr) — 4 items ─────────────────
@@ -181,6 +182,7 @@ async def seed_icar16(db: AsyncSession) -> TestCatalogue:
         is_active=True,
         status="ETALON",
         license="ICAR_PUBLIC_DOMAIN",
+        domain=CatalogueDomain.cognitive,
         validation_notes=(
             "ICAR-16 — Condon, D.M., & Revelle, W. (2014). "
             "The International Cognitive Ability Resource: Development and initial validation "

@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select
 
 from app.shared.models import TestCatalogue, Question
+from app.shared.models.Assessment import CatalogueDomain
 
 LMX7_QUESTIONS = [
     # ── Mutual Understanding (items 1–3) ──────────────────────────────────────
@@ -115,6 +116,7 @@ async def seed_lmx7(db: AsyncSession) -> TestCatalogue:
         is_active=True,
         status="ETALON",
         license="COPYRIGHT_RESEARCH_ONLY",
+        domain=CatalogueDomain.person_team,
         validation_notes=(
             "LMX-7 — Graen, G.B., & Uhl-Bien, M. (1995). "
             "Relationship-based approach to leadership: Development of leader-member exchange "

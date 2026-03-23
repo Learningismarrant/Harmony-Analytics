@@ -12,10 +12,22 @@ TestCatalogue → Questions → TestResult
                      "global_score": 68.1
                    }
 """
-from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, JSON, Text, ForeignKey
+import enum
+
+from sqlalchemy import Column, Integer, String, Boolean, Float, DateTime, JSON, Text, ForeignKey, Enum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
+
+
+class CatalogueDomain(str, enum.Enum):
+    personality  = "personality"
+    cognitive    = "cognitive"
+    motivation   = "motivation"
+    person_job   = "person_job"
+    person_org   = "person_org"
+    person_team  = "person_team"
+    physical     = "physical"
 
 
 class TestCatalogue(Base):
@@ -39,6 +51,12 @@ class TestCatalogue(Base):
     validation_notes   = Column(Text, nullable=True)
     # Définition des modules : [{"index": 0, "name": "...", "n_items": 24, ...}]
     modules_config     = Column(JSON, nullable=True)
+    # Domaine psychométrique du catalogue
+    domain             = Column(
+        Enum(CatalogueDomain, name="cataloguedomain"),
+        nullable=False,
+        server_default=CatalogueDomain.personality.value,
+    )
 
     questions = relationship("Question",   back_populates="test", cascade="all, delete-orphan")
     results   = relationship("TestResult", back_populates="test")

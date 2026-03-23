@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select
 
 from app.shared.models import TestCatalogue, Question
+from app.shared.models.Assessment import CatalogueDomain
 
 HEXACO60_QUESTIONS = [
     # ── Honesty-Humility (H) — 10 items ──────────────────────────────────────
@@ -212,6 +213,7 @@ async def seed_hexaco60(db: AsyncSession) -> TestCatalogue:
         is_active=True,
         status="ETALON",
         license="IPIP_PUBLIC_DOMAIN",
+        domain=CatalogueDomain.personality,
         validation_notes=(
             "IPIP-HEXACO-60 — Ashton, M.C., Lee, K., & Goldberg, L.R. (2007). "
             "The IPIP-HEXACO scales: An alternative, public-domain measure of the personality "

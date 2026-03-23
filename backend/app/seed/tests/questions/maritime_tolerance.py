@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select
 
 from app.shared.models import TestCatalogue, Question
+from app.shared.models.Assessment import CatalogueDomain
 
 _CATALOGUE_NAME = "Tolérance ICE Physique"
 
@@ -122,6 +123,7 @@ async def seed_maritime_tolerance(db: AsyncSession) -> TestCatalogue:
         is_active=True,
         status="ALPHA",
         license="RADIANT_PROPRIETARY",
+        domain=CatalogueDomain.physical,
         validation_notes=(
             "⚠️ INSTRUMENT ALPHA — Items custom originaux Radiant Analytics (2026). "
             "Construct : self-efficacy (Bandura 1997) — ancre standardisée obligatoire. "

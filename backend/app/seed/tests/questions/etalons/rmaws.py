@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import delete, select
 
 from app.shared.models import TestCatalogue, Question
+from app.shared.models.Assessment import CatalogueDomain
 
 RMAWS_QUESTIONS = [
     # ── Extrinsic Social ──────────────────────────────────────────────────────
@@ -87,6 +88,7 @@ async def seed_rmaws(db: AsyncSession) -> TestCatalogue:
         is_active=True,
         status="ETALON",
         license="COPYRIGHT_RESEARCH_ONLY",
+        domain=CatalogueDomain.motivation,
         validation_notes=(
             "⚠️ R-MAWS (Gagné et al. 2010) — Copyright CSDT. Usage autorisé R&D interne uniquement. "
             "Ne pas déployer en production commerciale sans accord de licence. "

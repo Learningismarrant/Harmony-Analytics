@@ -70,6 +70,15 @@ export type QuestionType = "likert" | "qcm" | "multiple_choice" | "raven" | stri
 
 export type NiveauScore = "Faible" | "Moyen" | "Élevé";
 
+export type CatalogueDomain =
+  | "personality"
+  | "cognitive"
+  | "motivation"
+  | "person_job"
+  | "person_org"
+  | "person_team"
+  | "physical";
+
 // ── Auth ─────────────────────────────────────────────────────────────────────
 
 export interface TokenOut {
@@ -652,6 +661,7 @@ export interface CalibCatalogueOut {
   n_questions: number;
   status: string;   // "ETALON" | "ALPHA"
   license: string;
+  domain?: CatalogueDomain;
 }
 
 export interface CalibQuestionOut {
