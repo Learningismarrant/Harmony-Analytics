@@ -23,25 +23,37 @@ const DOMAINS: CatalogueDomain[] = [
   "person_job",
 ];
 
-// Angles in degrees from top (north), clockwise
+// Angles in degrees from top (north), clockwise — equally spaced (360/7 ≈ 51.4°)
 const DOMAIN_ANGLES: Record<CatalogueDomain, number> = {
-  cognitive:   -90,
-  personality: -40,
-  motivation:   25,
-  person_team:  85,
-  physical:    140,
-  person_org:  -155,
-  person_job:  -120,
+  cognitive:    -90,
+  personality:  -38.6,
+  motivation:    12.9,
+  person_team:   64.3,
+  physical:     115.7,
+  person_org:   167.1,
+  person_job:  -141.4,
 };
 
+// Full question labels — used in DomainSheet header
 export const DOMAIN_LABELS: Record<CatalogueDomain, string> = {
   personality:  "Qui suis-je ?",
-  cognitive:    "En suis-je\ncapable ?",
+  cognitive:    "En suis-je capable ?",
   motivation:   "Le ferai-je ?",
-  person_job:   "Ce que je cherche\ndans un poste ?",
-  person_org:   "Ce que je cherche\ndans ce yacht ?",
-  person_team:  "Ce que je cherche\ndans mon équipe ?",
-  physical:     "Suis-je\nphysiquement apte ?",
+  person_job:   "Qu'est-ce que je cherche dans un poste ?",
+  person_org:   "Qu'est-ce que je cherche dans ce yacht ?",
+  person_team:  "Qu'est-ce que je cherche dans mon équipe ?",
+  physical:     "Suis-je physiquement apte ?",
+};
+
+// Short labels — used in legend
+export const DOMAIN_SHORT_LABELS: Record<CatalogueDomain, string> = {
+  personality:  "Qui suis-je ?",
+  cognitive:    "En suis-je capable ?",
+  motivation:   "Le ferai-je ?",
+  person_job:   "Mon poste idéal",
+  person_org:   "Mon yacht idéal",
+  person_team:  "Mon équipe idéale",
+  physical:     "Ma condition physique",
 };
 
 export const DOMAIN_ICONS: Record<CatalogueDomain, keyof typeof Ionicons.glyphMap> = {
@@ -203,21 +215,6 @@ export function ConstellationMap({
       : `rgba(${rgb},0.75)`;
   }
 
-  // ── Texte label opacity ───────────────────────────────────────────────────────
-  function labelColor(domain: CatalogueDomain): string {
-    const { total, completed } = getDomainProgress(domain);
-    if (total === 0 || completed === 0) return "rgba(255,255,255,0.22)";
-    return completed === total ? "#F1F4F8" : "rgba(255,255,255,0.55)";
-  }
-
-  // ── Calcul du décalage du label ───────────────────────────────────────────────
-  // Le label est positionné au-dessus ou en dessous de l'étoile selon l'angle
-  function labelOffset(domain: CatalogueDomain): { labelAbove: boolean } {
-    const angle = DOMAIN_ANGLES[domain];
-    // Au-dessus si l'étoile est dans la moitié haute (angle entre -180 et 0)
-    return { labelAbove: angle < -10 || angle > 160 };
-  }
-
   const globalPctDisplay =
     totalCatalogues > 0
       ? `${Math.round(globalPct * 100)}%`
@@ -293,8 +290,7 @@ export function ConstellationMap({
             strokeWidth={3}
             strokeDasharray={`${ringDash} ${ringGap}`}
             strokeLinecap="round"
-            rotation={-90}
-            origin={`${CX},${CY}`}
+            transform={`rotate(-90, ${CX}, ${CY})`}
           />
         )}
 
@@ -383,70 +379,27 @@ export function ConstellationMap({
         </Text>
       </View>
 
-      {/* ── Icônes + labels des étoiles ───────────────────────────────────────── */}
+      {/* ── Icônes des étoiles (zone tappable) ───────────────────────────────── */}
       {DOMAINS.map((domain) => {
         const pos = starPosition(domain);
-        const { labelAbove } = labelOffset(domain);
         const color = iconColor(domain);
-        const lColor = labelColor(domain);
-        const label = DOMAIN_LABELS[domain];
-        const labelLines = label.split("\n");
-
-        // Décalage du label (au-dessus ou en dessous)
-        const labelTopOffset = labelAbove
-          ? pos.y - STAR_RADIUS - 6 - labelLines.length * 10
-          : pos.y + STAR_RADIUS + 8;
-
         return (
-          <React.Fragment key={`overlay-${domain}`}>
-            {/* Zone tappable centrée sur l'étoile */}
-            <TouchableOpacity
-              style={{
-                position: "absolute",
-                left: pos.x - STAR_RADIUS,
-                top: pos.y - STAR_RADIUS,
-                width: STAR_RADIUS * 2,
-                height: STAR_RADIUS * 2,
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-              onPress={() => onDomainPress(domain)}
-              activeOpacity={0.7}
-            >
-              <Ionicons
-                name={DOMAIN_ICONS[domain]}
-                size={16}
-                color={color}
-              />
-            </TouchableOpacity>
-
-            {/* Label texte */}
-            <View
-              style={{
-                position: "absolute",
-                left: pos.x - 48,
-                top: labelTopOffset,
-                width: 96,
-                alignItems: "center",
-              }}
-              pointerEvents="none"
-            >
-              {labelLines.map((line, i) => (
-                <Text
-                  key={i}
-                  style={{
-                    color: lColor,
-                    fontSize: 8,
-                    textAlign: "center",
-                    lineHeight: 10,
-                    fontWeight: "500",
-                  }}
-                >
-                  {line}
-                </Text>
-              ))}
-            </View>
-          </React.Fragment>
+          <TouchableOpacity
+            key={`overlay-${domain}`}
+            style={{
+              position: "absolute",
+              left: pos.x - STAR_RADIUS,
+              top: pos.y - STAR_RADIUS,
+              width: STAR_RADIUS * 2,
+              height: STAR_RADIUS * 2,
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            onPress={() => onDomainPress(domain)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name={DOMAIN_ICONS[domain]} size={16} color={color} />
+          </TouchableOpacity>
         );
       })}
     </View>
