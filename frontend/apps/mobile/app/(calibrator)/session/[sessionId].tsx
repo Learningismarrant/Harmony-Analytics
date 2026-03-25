@@ -193,7 +193,13 @@ export default function CalibSessionScreen() {
 
   // Render question input selon le type
   function renderQuestionInput() {
-    if (question.question_type === "likert") {
+    if (question.question_type === "likert" || question.question_type === "likert_7") {
+      const numPoints = question.question_type === "likert_7" ? 7 : 5;
+      const resolvedOptions: string[] | null = Array.isArray(question.options)
+        ? (question.options as RawOption[]).map((o) =>
+            typeof o === "object" && o !== null ? (o.text ?? String(o)) : String(o),
+          )
+        : Array.from({ length: numPoints }, (_, i) => String(i + 1));
       return (
         <LikertQuestion
           question={{
@@ -201,11 +207,7 @@ export default function CalibSessionScreen() {
             test_id: 0,
             text: question.text,
             question_type: question.question_type,
-            options: Array.isArray(question.options)
-              ? (question.options as RawOption[]).map((o) =>
-                  typeof o === "object" && o !== null ? (o.text ?? String(o)) : String(o),
-                )
-              : null,
+            options: resolvedOptions,
             trait: question.trait,
           }}
           selectedValue={responses[question.id] !== undefined ? String(responses[question.id]) : undefined}
@@ -287,7 +289,7 @@ export default function CalibSessionScreen() {
           <NavButton
             label={submitMutation.isPending ? "ENVOI..." : "TERMINER"}
             onPress={handleSubmit}
-            disabled={submitMutation.isPending}
+            disabled={submitMutation.isPending || isSubmitted}
             variant="primary"
           />
         ) : (

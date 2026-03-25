@@ -104,7 +104,7 @@ class QuestionOut(BaseModel):
     text: str
     question_type: str
     trait: str | None = None
-    options: list[Any] | None = None
+    options: list[Any] | dict[str, Any] | None = None
     reverse: bool
 
     model_config = ConfigDict(from_attributes=True)

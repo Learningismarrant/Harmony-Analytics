@@ -61,6 +61,7 @@ export default function CataloguesScreen() {
   }
 
   function handlePress(catalogue: CalibCatalogueOut) {
+    if (startSessionMutation.isPending) return;
     const session = getSession(catalogue.id);
     if (session !== null && session.completed_at !== null) {
       router.push(`/(calibrator)/session/result/${session.id}`);
