@@ -313,7 +313,8 @@ class TestStartSession:
 
 class TestSubmitResponses:
     @pytest.mark.asyncio
-    async def test_submit_ok_not_completed(self, mocker):
+    async def test_submit_always_completes(self, mocker):
+        """Le submit complète systématiquement la session (le frontend contrôle le timing)."""
         db = AsyncMock()
         session = make_session(id=1, calibrator_id=1, catalogue_id=1)
         mocker.patch(
@@ -325,19 +326,15 @@ class TestSubmitResponses:
             AsyncMock(return_value=10),
         )
         mocker.patch(
-            "app.modules.calibration.service.repo.get_catalogue_by_id",
-            AsyncMock(return_value=make_catalogue(n_questions=50)),
-        )
-        mocker.patch(
-            "app.modules.calibration.service.repo.count_responses_for_session",
-            AsyncMock(return_value=10),   # 10 < 50 → pas complétée
+            "app.modules.calibration.service.repo.complete_session",
+            AsyncMock(return_value=session),
         )
         payload = SubmitResponsesIn(
             responses=[ResponseItemIn(question_id=i + 1, value=3) for i in range(10)]
         )
         result = await service.submit_responses(db, calibrator_id=1, session_id=1, data=payload)
         assert result.n_responses == 10
-        assert result.completed is False
+        assert result.completed is True
 
     @pytest.mark.asyncio
     async def test_submit_auto_completes(self, mocker):
