@@ -1,5 +1,8 @@
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator } from "react-native";
+import { useEffect } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
+import { useQuery } from "@tanstack/react-query";
+import { calibrationApi, calibrationQueryKeys } from "@harmony/api";
 import { useCalibPassation } from "@/features/calibration/hooks/useCalibPassation";
 import { AssessmentHeader } from "@/features/assessment/components/session/AssessmentHeader";
 import { AssessmentFooter } from "@/features/assessment/components/session/AssessmentFooter";
@@ -120,6 +123,21 @@ function NavButton({ label, onPress, disabled = false, variant = "secondary" }: 
 export default function CalibSessionScreen() {
   const { sessionId, catalogueId } = useLocalSearchParams<{ sessionId: string; catalogueId: string }>();
   const router = useRouter();
+
+  // Vérification au montage : si la session est déjà complète, rediriger vers les résultats
+  const { data: sessions } = useQuery({
+    queryKey: calibrationQueryKeys.sessions(),
+    queryFn: () => calibrationApi.getSessions(),
+    staleTime: 0,
+  });
+
+  useEffect(() => {
+    if (!sessions || !sessionId) return;
+    const existing = sessions.find((s) => s.id === Number(sessionId));
+    if (existing && existing.completed_at !== null) {
+      router.replace(`/(calibrator)/session/result/${sessionId}` as never);
+    }
+  }, [sessions, sessionId, router]);
 
   const {
     session,

@@ -84,7 +84,14 @@ export function useCalibPassation(catalogueId: number, initialSessionId?: number
         router.replace(`/(calibrator)/session/result/${session.id}` as never);
       }
     },
-    onError: () => {
+    onError: (error: unknown) => {
+      // 409 = session déjà complète → rediriger vers les résultats plutôt qu'afficher une erreur
+      const status = (error as { response?: { status?: number } })?.response?.status;
+      if (status === 409 && session) {
+        queryClient.invalidateQueries({ queryKey: calibrationQueryKeys.sessions() });
+        router.replace(`/(calibrator)/session/result/${session.id}` as never);
+        return;
+      }
       Alert.alert("Erreur", "Échec de l'envoi. Veuillez réessayer.");
     },
   });
