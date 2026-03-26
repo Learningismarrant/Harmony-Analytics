@@ -15,7 +15,7 @@ les FKs sont déclarées dans les migrations, pas dans les modèles.
 
 from .User        import User, CrewProfile, EmployerProfile, UserDocument
 from .Yacht       import Yacht, CrewAssignment
-from .Assessment  import TestCatalogue, Question, TestResult, TestSession, TestResponse, UserTypeEnum
+from .Assessment  import TestCatalogue, Question, TestResult, TestSession, TestResponse
 from .Campaign    import Campaign, CampaignCandidate
 from .Pulse       import DailyPulse
 from .Survey      import Survey, SurveyResponse, RecruitmentEvent, ModelVersion, JobWeightConfig
@@ -32,7 +32,6 @@ __all__ = [
     "TestResult",
     "TestSession",
     "TestResponse",
-    "UserTypeEnum",
     # Recruitment
     "Campaign",
     "CampaignCandidate",

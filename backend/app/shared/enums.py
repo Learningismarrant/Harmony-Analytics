@@ -9,9 +9,10 @@ Importé par les modèles, schemas, services et engine.
 from enum import Enum
 
 class UserRole(str, Enum):
-    CANDIDATE = "candidate"
-    CLIENT    = "client"    
-    ADMIN     = "admin"
+    CANDIDATE  = "candidate"
+    CLIENT     = "client"
+    ADMIN      = "admin"
+    CALIBRATOR = "calibrator"
 
 
 class YachtPosition(str, Enum):

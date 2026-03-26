@@ -25,11 +25,7 @@ from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
-
-
-class UserTypeEnum(str, enum.Enum):
-    candidate  = "candidate"
-    calibrator = "calibrator"
+from app.shared.enums import UserRole
 
 
 class CatalogueDomain(str, enum.Enum):
@@ -106,7 +102,7 @@ class TestResult(Base):
     crew_profile_id = Column(Integer, ForeignKey("crew_profiles.id"),  nullable=True, index=True)
     calibrator_id   = Column(Integer, ForeignKey("calib_users.id"),    nullable=True)
     session_id      = Column(Integer, ForeignKey("test_sessions.id"),  nullable=True)
-    user_type       = Column(SQLEnum(UserTypeEnum, name="usertypeenum"), nullable=False, server_default="candidate")
+    user_type       = Column(SQLEnum(UserRole, name="userrole", create_type=False), nullable=False, server_default="candidate")
     test_id         = Column(Integer, ForeignKey("test_catalogues.id"), nullable=False, index=True)
     global_score    = Column(Float,   nullable=False)
     scores          = Column(JSON,    nullable=False)   # {traits, reliability, meta, global_score}
