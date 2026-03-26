@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, StyleSheet, Dimensions, Text as RNText } from 'react-native';
 import Svg, { Polygon, Line, Circle, Text as SvgText, G } from 'react-native-svg';
-import { Colors } from '../constants/Colors';
+import { Colors } from '../../constants/Colors'
 import { RadarPoint } from '@harmony/types';
 
 const { width } = Dimensions.get('window');

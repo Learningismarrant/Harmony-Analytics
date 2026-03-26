@@ -74,7 +74,7 @@ export default function CalibratorRegisterScreen() {
       style={{ flex: 1 }}
       resizeMode="cover"
     >
-      <View style={{ flex: 1, backgroundColor: "rgba(7,9,15,0.65)" }}>
+      <View style={{ flex: 1 }}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === "ios" ? "padding" : "height"}
