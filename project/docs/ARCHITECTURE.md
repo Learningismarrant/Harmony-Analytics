@@ -166,8 +166,8 @@ React Three Fiber + D3-force physics. SSR désactivé via `next/dynamic`. Z-axis
 1. **Les réponses individuelles sont sacrées.** Sans elles : pas d'alpha de Cronbach, pas d'analyse DIF, pas de détection de straightlining, pas de recalcul après correction d'un bug engine. Le JSON agrégé dans une colonne `scores` n'est pas suffisant.
 2. **Session server-side obligatoire.** Toute passation crée une session en base avant la première question. Cela permet la reprise après crash et garantit la traçabilité complète.
 3. **Une seule paire de tables** pour candidats et calibrateurs (`test_sessions` + `test_responses`). Le discriminateur `user_type` sépare les deux populations au niveau des requêtes, pas au niveau du schéma.
-4. **`valeur_choisie: str` partout.** Un entier est trop restrictif pour couvrir Likert ("4"), QCM ("B"), et les futures extensions. Toutes les valeurs transitent en string.
-5. **`catalogue_id` dénormalisé dans `test_responses`.** La requête analytique fondamentale est "toutes les réponses à la question X pour le catalogue Y". Sans cette dénormalisation, chaque analyse nécessite un JOIN supplémentaire. `catalogue_id` étant immuable après création de session, il n'y a aucun risque de désynchronisation.
+4. **`response_value: str` partout.** Un entier est trop restrictif pour couvrir Likert ("4"), QCM ("B"), et les futures extensions. Toutes les valeurs transitent en string. Le nom `response_value` est intentionnellement anglophone pour être lisible par une équipe internationale.
+5. **`catalogue_id` dénormalisé dans `test_responses`.** La requête analytique fondamentale est "toutes les réponses à la question X pour le catalogue Y". Sans cette dénormalisation, chaque analyse nécessite un JOIN supplémentaire. `catalogue_id` étant immuable après création de session, il n'y a aucun risque de désynchronisation. Il est toujours dérivé server-side — jamais accepté du client.
 6. **`seconds_spent` persiste par item.** Prérequis pour détecter les réponses aléatoires (< 1s) et les patterns de distraction (> 60s). Nullable pour compatibilité legacy.
 
 ### Schéma cible
@@ -180,8 +180,9 @@ test_sessions
   crew_profile_id   FK → crew_profiles    NULLABLE  ┐ XOR strict :
   calibrator_id     FK → calib_users      NULLABLE  ┘ exactement l'un des deux
   started_at        TIMESTAMPTZ           DEFAULT NOW()
-  completed_at      TIMESTAMPTZ           NULLABLE   -- NULL = en cours
-  device_info       JSON                  NULLABLE   -- platform, os_version, app_version
+  completed_at      TIMESTAMPTZ           NULLABLE    -- NULL = en cours
+  device_info       JSON                  NULLABLE    -- platform, os_version, app_version
+                                                      -- schéma strict, jamais free-form
 
   INDEX(crew_profile_id, catalogue_id)
   INDEX(calibrator_id,   catalogue_id)
@@ -193,10 +194,11 @@ test_sessions
 test_responses
   id                SERIAL PK
   session_id        FK → test_sessions    NOT NULL  ON DELETE CASCADE
-  catalogue_id      FK → test_catalogues  NOT NULL  -- dénormalisé pour analytics
+  catalogue_id      FK → test_catalogues  NOT NULL  -- dénormalisé, toujours dérivé server-side
   question_id       FK → questions        NOT NULL  ON DELETE CASCADE
-  valeur_choisie    VARCHAR(50)           NOT NULL   -- "4" | "B" | "strongly_agree"
+  response_value    VARCHAR(50)           NOT NULL   -- "4" | "B" | "strongly_agree"
   seconds_spent     FLOAT                 NULLABLE
+    CHECK(seconds_spent IS NULL OR (seconds_spent >= 0 AND seconds_spent <= 3600))
 
   INDEX(session_id)
   INDEX(catalogue_id, question_id)   -- requête analytics principale (DIF, alpha)
@@ -205,7 +207,7 @@ test_responses
 -- Résultats calculés (candidats ET calibrateurs, discriminés par user_type)
 test_results
   id                SERIAL PK
-  user_type         VARCHAR(20)           NOT NULL   -- "candidate" | "calibrator"
+  user_type         user_type_enum        NOT NULL   -- ENUM PG : 'candidate' | 'calibrator'
   crew_profile_id   FK → crew_profiles    NULLABLE  ┐ XOR strict
   calibrator_id     FK → calib_users      NULLABLE  ┘
   session_id        FK → test_sessions    NULLABLE   -- NULL = données legacy pré-migration
@@ -253,15 +255,104 @@ questions       — items (partagé candidats + calibrateurs)
 calib_users     — auth isolée intentionnellement (pas de contamination avec users commerciaux)
 ```
 
+### Règles UX de passation (non-négociables)
+
+Ces règles s'appliquent à tous les hooks de passation (`useTakeTest`, `useCalibPassation`, et tout futur hook) et à leurs écrans associés.
+
+1. **Répondre avant d'avancer.** Le bouton "Suivant" est désactivé tant que la question courante n'a pas de réponse. L'utilisateur ne peut pas naviguer en avant sur une question vide — seulement en arrière.
+2. **Toutes les questions répondues avant submit.** Le bouton "Terminer" / "Soumettre" est désactivé si `unanswered > 0`. Pas d'alerte de confirmation partielle — le submit est simplement bloqué. L'UI indique le nombre de questions restantes.
+3. **Navigation libre en arrière.** L'utilisateur peut revenir sur ses réponses précédentes librement et les modifier.
+4. **Protection anti-double submit.** Le bouton "Terminer" est désactivé dès le premier appui (`isPending || isSubmitted`). Pas de deuxième envoi possible.
+5. **Protection retour Android.** `BackHandler` intercepte le retour matériel pendant une session active et affiche une confirmation avant de quitter (avec perte de la session en cours).
+
+```typescript
+// Pattern à respecter dans tout hook de passation
+const canGoNext = responses[currentQuestion.id] !== undefined;
+const canSubmit = questions.every(q => responses[q.id] !== undefined);
+
+// Bouton Suivant
+<Button disabled={!canGoNext} onPress={goNext} />
+
+// Bouton Terminer
+<Button
+  disabled={!canSubmit || submitMutation.isPending || isSubmitted}
+  onPress={handleSubmit}
+/>
+```
+
+### Sécurité — Règles obligatoires pour les endpoints de passation
+
+#### 🔴 Validation des question_id (critique)
+
+Avant tout `save_responses`, le service **doit** vérifier que chaque `question_id` soumis appartient au catalogue de la session. Sans ça, un client malveillant peut injecter des réponses pour des questions d'un autre catalogue et corrompre les normes.
+
+```python
+# Pattern obligatoire dans submit_responses
+valid_ids = await repo.get_question_ids_for_catalogue(db, session.catalogue_id)
+invalid = [r.question_id for r in data.responses if r.question_id not in valid_ids]
+if invalid:
+    raise HTTPException(400, {"error": True, "code": "INVALID_QUESTION_IDS",
+                               "message": f"question_ids invalides : {invalid}"})
+```
+
+#### 🔴 `user_type` comme enum PostgreSQL (critique)
+
+Ne jamais stocker `user_type` comme VARCHAR libre. Utiliser un `ENUM` PostgreSQL ou une contrainte `CHECK(user_type IN ('candidate', 'calibrator'))`. Une valeur arbitraire en base est un vecteur d'escalade de privilèges.
+
+#### 🟠 `catalogue_id` toujours dérivé server-side
+
+Dans `test_responses`, `catalogue_id` est dénormalisé pour les analytics. Il doit toujours être rempli par le service depuis `session.catalogue_id` — jamais lu depuis le payload client. Si le client envoie un `catalogue_id`, il est ignoré.
+
+#### 🟠 Validation de `seconds_spent`
+
+`seconds_spent` doit être validé au niveau Pydantic : `0 <= seconds_spent <= 3600`. Une valeur négative ou supérieure à 1h est soit une manipulation, soit un bug — les deux doivent être rejetés avec HTTP 400.
+
+#### 🟠 Vérification de propriété sur session_id (IDOR)
+
+Tout endpoint qui prend un `session_id` en paramètre doit vérifier que la session appartient bien à l'utilisateur authentifié. Cette vérification est obligatoire même si l'endpoint semble "en lecture seule".
+
+```python
+session = await repo.get_session(db, session_id)
+if session.calibrator_id != current_user.id:  # ou crew_profile_id
+    raise HTTPException(403, {"code": "SESSION_FORBIDDEN"})
+```
+
+#### 🟡 `device_info` — schéma strict, pas de free-form JSON
+
+`device_info` doit respecter un schéma Pydantic fixe avant persistance :
+
+```python
+class DeviceInfo(BaseModel):
+    platform: Literal["ios", "android", "web"]
+    os_version: str = Field(max_length=20)
+    app_version: str = Field(max_length=20)
+    screen_size: str | None = Field(None, max_length=20)
+```
+
+Tout champ hors schéma est rejeté. Ne jamais persister de JSON free-form provenant du client.
+
+#### 🟡 RGPD — Droit à l'oubli sur `calib_users`
+
+`calib_users` stocke des données démographiques sensibles (genre, année de naissance, nationalité). Il faut une voie d'anonymisation conforme au RGPD : `DELETE /calibration/me` remplace les champs PII par `NULL` sans supprimer les réponses (qui sont des données de norming anonymisées après dissociation).
+
+```python
+# Anonymisation — ne jamais DELETE la ligne, les réponses restent pour les normes
+await repo.anonymize_calibrator(db, calibrator_id)
+# → email = f"deleted_{id}@radiant.invalid"
+# → name = "Participant anonymisé"
+# → gender, birth_year, nationality, native_language = NULL
+```
+
 ### Ce que ce schéma remplace
 
 | Ancien | Nouveau | Raison |
 |--------|---------|--------|
 | `calib_sessions` | `test_sessions` | Unification candidat/calibrateur |
-| `calib_responses` (value: int) | `test_responses` (valeur_choisie: str) | Type unifié, dénorm catalogue_id |
-| `test_results` (crew_profile_id NOT NULL) | `test_results` (user_type + XOR FK) | Couverture calibrateur |
-| Scoring inline dans CalibrationService | `engine.psychometrics.scoring` | Respect 3-layer |
-| Assessment sans persistance des réponses | `test_responses` | Perte de données inacceptable |
+| `calib_responses` (`value: int`) | `test_responses` (`response_value: str`) | Type unifié, dénorm `catalogue_id`, nom anglophone |
+| `valeur_choisie` partout | `response_value` | Lisibilité équipe internationale |
+| `test_results` (`crew_profile_id NOT NULL`) | `test_results` (`user_type` enum + XOR FK) | Couverture calibrateur, type safe |
+| Scoring inline dans `CalibrationService` | `engine.psychometrics.scoring` | Respect architecture 3-layer |
+| Assessment sans persistance des réponses | `test_responses` | Perte de données psychométriques inacceptable |
 
 ### Scalabilité
 
@@ -275,10 +366,13 @@ Volume estimé à plein régime :
 ### Règles non-négociables pour les implémentations futures
 
 - Ne jamais créer un endpoint de soumission qui ne persiste pas les réponses individuelles
-- Ne jamais stocker `value: int` — toujours `valeur_choisie: str`
-- Ne jamais scorer avant d'avoir persisté les réponses (ordre : save → score → result)
+- Ne jamais stocker `value: int` — toujours `response_value: str`
+- Ne jamais accepter `catalogue_id` depuis le client dans `test_responses` — toujours dérivé server-side
+- Toujours valider que chaque `question_id` soumis appartient au catalogue de la session
+- Ne jamais scorer avant d'avoir persisté les réponses (ordre obligatoire : save → score → result)
 - Ne jamais laisser un résultat `test_results` sans `session_id` (sauf données legacy migrées)
 - Le scoring reste dans `engine/psychometrics/scoring/` — jamais dans un service
+- Nommage anglophone obligatoire pour toutes les colonnes, endpoints et variables partagées
 
 ---
 
