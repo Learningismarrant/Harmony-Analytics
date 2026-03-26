@@ -2,6 +2,9 @@
 """
 Accès DB pour le module calibration.
 SQL pur — zéro logique métier.
+
+v2 : utilise TestSession et TestResponse (tables unifiées candidats + calibrateurs)
+     au lieu de CalibSession et CalibResponse (supprimées).
 """
 from __future__ import annotations
 
@@ -12,8 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import joinedload
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.shared.models import TestCatalogue, Question
-from app.shared.models.Calibration import CalibratorUser, CalibSession, CalibResponse
+from app.shared.models import TestCatalogue, Question, TestSession, TestResponse
+from app.shared.models.Calibration import CalibratorUser
 from app.modules.calibration.schemas import ResponseItemIn, CalibratorDemographicsIn
 
 
@@ -96,35 +99,44 @@ class CalibrationRepository:
         )
         return list(r.scalars().all())
 
-    # ── CalibSession ──────────────────────────────────────────────────────────
+    async def get_question_ids_for_catalogue(
+        self, db: AsyncSession, catalogue_id: int
+    ) -> set[int]:
+        """Retourne l'ensemble des question.id valides pour ce catalogue."""
+        r = await db.execute(
+            select(Question.id).where(Question.test_id == catalogue_id)
+        )
+        return set(r.scalars().all())
+
+    # ── TestSession (remplace CalibSession) ──────────────────────────────────
 
     async def get_session(
         self, db: AsyncSession, session_id: int
-    ) -> Optional[CalibSession]:
+    ) -> Optional[TestSession]:
         r = await db.execute(
-            select(CalibSession).where(CalibSession.id == session_id)
+            select(TestSession).where(TestSession.id == session_id)
         )
         return r.scalar_one_or_none()
 
     async def get_session_for_calibrator(
         self, db: AsyncSession, calibrator_id: int, catalogue_id: int
-    ) -> Optional[CalibSession]:
+    ) -> Optional[TestSession]:
         """Retourne la session existante pour ce couple (calibrateur, catalogue)."""
         r = await db.execute(
-            select(CalibSession).where(
-                CalibSession.calibrator_id == calibrator_id,
-                CalibSession.catalogue_id == catalogue_id,
+            select(TestSession).where(
+                TestSession.calibrator_id == calibrator_id,
+                TestSession.catalogue_id == catalogue_id,
             )
         )
         return r.scalar_one_or_none()
 
     async def list_sessions_for_calibrator(
         self, db: AsyncSession, calibrator_id: int
-    ) -> list[CalibSession]:
+    ) -> list[TestSession]:
         r = await db.execute(
-            select(CalibSession)
-            .where(CalibSession.calibrator_id == calibrator_id)
-            .order_by(CalibSession.started_at.desc())
+            select(TestSession)
+            .where(TestSession.calibrator_id == calibrator_id)
+            .order_by(TestSession.started_at.desc())
         )
         return list(r.scalars().all())
 
@@ -134,10 +146,11 @@ class CalibrationRepository:
         calibrator_id: int,
         catalogue_id: int,
         device_info: Optional[dict],
-    ) -> CalibSession:
-        obj = CalibSession(
+    ) -> TestSession:
+        obj = TestSession(
             calibrator_id=calibrator_id,
             catalogue_id=catalogue_id,
+            crew_profile_id=None,
             device_info=device_info,
         )
         db.add(obj)
@@ -146,28 +159,34 @@ class CalibrationRepository:
         return obj
 
     async def complete_session(
-        self, db: AsyncSession, session: CalibSession
-    ) -> CalibSession:
+        self, db: AsyncSession, session: TestSession
+    ) -> TestSession:
         """Marque la session comme terminée (set completed_at = maintenant)."""
         session.completed_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(session)
         return session
 
-    # ── CalibResponse ─────────────────────────────────────────────────────────
+    # ── TestResponse (remplace CalibResponse) ─────────────────────────────────
 
     async def save_responses(
         self,
         db: AsyncSession,
         session_id: int,
+        catalogue_id: int,
         responses: list[ResponseItemIn],
     ) -> int:
-        """Insère toutes les réponses en bulk. Retourne le nombre sauvegardé."""
+        """
+        Insère toutes les réponses en bulk.
+        catalogue_id est toujours dérivé server-side depuis la session — jamais du client.
+        Retourne le nombre de réponses sauvegardées.
+        """
         objects = [
-            CalibResponse(
+            TestResponse(
                 session_id=session_id,
+                catalogue_id=catalogue_id,
                 question_id=r.question_id,
-                value=r.value,
+                response_value=str(r.response_value),
                 seconds_spent=r.seconds_spent,
             )
             for r in responses
@@ -181,17 +200,17 @@ class CalibrationRepository:
         self, db: AsyncSession, session_id: int
     ) -> int:
         r = await db.execute(
-            select(CalibResponse).where(CalibResponse.session_id == session_id)
+            select(TestResponse).where(TestResponse.session_id == session_id)
         )
         return len(r.scalars().all())
 
     async def get_responses_with_questions(
         self, db: AsyncSession, session_id: int
-    ) -> list[CalibResponse]:
+    ) -> list[TestResponse]:
         """Retourne toutes les réponses d'une session avec leurs questions chargées."""
         r = await db.execute(
-            select(CalibResponse)
-            .options(joinedload(CalibResponse.question))
-            .where(CalibResponse.session_id == session_id)
+            select(TestResponse)
+            .options(joinedload(TestResponse.question))
+            .where(TestResponse.session_id == session_id)
         )
         return list(r.scalars().all())

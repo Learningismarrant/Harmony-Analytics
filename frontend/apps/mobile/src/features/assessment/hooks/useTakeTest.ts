@@ -99,6 +99,11 @@ export function useTakeTest(testId: number) {
     }, [showInstructions, isSubmitted, submitMutation.isPending, router]),
   );
 
+  const currentQuestionId = questions?.[currentIndex]?.id;
+  const canGoNext = currentQuestionId !== undefined && responses[currentQuestionId] !== undefined;
+  const canSubmit = questions !== undefined && questions.length > 0 &&
+    questions.every((q) => responses[q.id] !== undefined);
+
   function selectAnswer(questionId: number, value: string) {
     // ── SÉCURITÉ 3 : Guard données ────────────────────────────────────────
     if (!questions || questions.length === 0) return;
@@ -109,6 +114,7 @@ export function useTakeTest(testId: number) {
   }
 
   function goNext() {
+    if (!canGoNext) return;
     if (questions && currentIndex < questions.length - 1) {
       setCurrentIndex((i) => i + 1);
     }
@@ -131,19 +137,16 @@ export function useTakeTest(testId: number) {
   }
 
   function handleSubmit() {
-    const unanswered = questions?.filter((q) => !responses[q.id]).length ?? 0;
-    if (unanswered > 0) {
+    if (!canSubmit) {
+      const unanswered = questions?.filter((q) => responses[q.id] === undefined).length ?? 0;
       Alert.alert(
         "Test incomplet",
-        `${unanswered} question(s) sans réponse. Soumettre quand même ?`,
-        [
-          { text: "Revoir", style: "cancel" },
-          { text: "Soumettre", onPress: () => submitMutation.mutate() },
-        ],
+        `${unanswered} question(s) sans réponse. Veuillez répondre à toutes les questions avant de soumettre.`,
+        [{ text: "OK" }],
       );
-    } else {
-      submitMutation.mutate();
+      return;
     }
+    submitMutation.mutate();
   }
 
   return {
@@ -155,6 +158,8 @@ export function useTakeTest(testId: number) {
     setShowInstructions,
     currentIndex,
     responses,
+    canGoNext,
+    canSubmit,
     submitMutation,
     selectAnswer,
     selectAndAdvance,

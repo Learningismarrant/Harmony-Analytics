@@ -80,6 +80,7 @@ describe("useTakeTest — navigation", () => {
   it("goNext advances the index", async () => {
     const { result } = renderHook(() => useTakeTest(1), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
+    act(() => result.current.selectAnswer(10, "3")); // répondre avant d'avancer
     act(() => result.current.goNext());
     expect(result.current.currentIndex).toBe(1);
   });
@@ -87,9 +88,12 @@ describe("useTakeTest — navigation", () => {
   it("goNext does nothing on the last question", async () => {
     const { result } = renderHook(() => useTakeTest(1), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    act(() => result.current.goNext());
-    act(() => result.current.goNext());
-    act(() => result.current.goNext());
+    act(() => result.current.selectAnswer(10, "3"));
+    act(() => result.current.goNext()); // index 1
+    act(() => result.current.selectAnswer(20, "3"));
+    act(() => result.current.goNext()); // index 2
+    act(() => result.current.selectAnswer(30, "3"));
+    act(() => result.current.goNext()); // stops at 2
     expect(result.current.currentIndex).toBe(2);
   });
 
@@ -103,6 +107,7 @@ describe("useTakeTest — navigation", () => {
   it("goPrev goes back after goNext", async () => {
     const { result } = renderHook(() => useTakeTest(1), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
+    act(() => result.current.selectAnswer(10, "3"));
     act(() => result.current.goNext());
     act(() => result.current.goPrev());
     expect(result.current.currentIndex).toBe(0);
@@ -143,8 +148,10 @@ describe("useTakeTest — answers", () => {
   it("selectAndAdvance does not advance past the last question", async () => {
     const { result } = renderHook(() => useTakeTest(1), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
-    act(() => result.current.goNext());
-    act(() => result.current.goNext()); // index = 2 (last)
+    act(() => result.current.selectAnswer(10, "3"));
+    act(() => result.current.goNext()); // index 1
+    act(() => result.current.selectAnswer(20, "3"));
+    act(() => result.current.goNext()); // index 2 (last)
     act(() => result.current.selectAndAdvance(30, "right"));
     expect(result.current.currentIndex).toBe(2);
   });
@@ -188,6 +195,7 @@ describe("useTakeTest — reset on testId change", () => {
     );
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
+    act(() => result.current.selectAnswer(10, "3")); // répondre avant d'avancer
     act(() => result.current.goNext());
     act(() => result.current.selectAnswer(20, "4"));
     act(() => result.current.setShowInstructions(false));

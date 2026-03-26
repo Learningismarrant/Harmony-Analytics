@@ -26,6 +26,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from fastapi import BackgroundTasks
 
 from app.modules.assessment.service import AssessmentService
+from app.modules.assessment.schemas import ResponseIn
 from tests.conftest import (
     make_crew_profile, make_test_catalogue, make_question, make_test_result
 )
@@ -36,7 +37,7 @@ service = AssessmentService()
 
 
 def _make_responses(n: int = 5) -> list:
-    return [{"question_id": i + 1, "value": 3, "time_seconds": 8} for i in range(n)]
+    return [ResponseIn(question_id=i + 1, valeur_choisie="3", seconds_spent=8.0) for i in range(n)]
 
 
 def _make_questions_map(n: int = 5) -> dict:
@@ -96,6 +97,9 @@ class TestSubmitAndScore:
 
         mocker.patch("app.modules.assessment.service.repo.get_test_info", AsyncMock(return_value=test_info))
         mocker.patch("app.modules.assessment.service.repo.get_questions_by_test", AsyncMock(return_value=questions))
+        mocker.patch("app.modules.assessment.service.repo.get_question_ids_for_catalogue", AsyncMock(return_value={1, 2, 3}))
+        mocker.patch("app.modules.assessment.service.repo.create_session", AsyncMock(return_value=SimpleNamespace(id=1, catalogue_id=1, completed_at=None)))
+        mocker.patch("app.modules.assessment.service.repo.save_responses", AsyncMock(return_value=3))
         mocker.patch("app.modules.assessment.service.repo.save_result", AsyncMock(return_value=saved))
         mocker.patch("app.modules.assessment.service.repo.get_results_by_crew", AsyncMock(return_value=[saved]))
         mocker.patch("app.modules.assessment.service.repo.update_crew_snapshot", AsyncMock())
@@ -128,6 +132,9 @@ class TestSubmitAndScore:
 
         mocker.patch("app.modules.assessment.service.repo.get_test_info", AsyncMock(return_value=test_info))
         mocker.patch("app.modules.assessment.service.repo.get_questions_by_test", AsyncMock(return_value=questions))
+        mocker.patch("app.modules.assessment.service.repo.get_question_ids_for_catalogue", AsyncMock(return_value={1, 2}))
+        mocker.patch("app.modules.assessment.service.repo.create_session", AsyncMock(return_value=SimpleNamespace(id=1, catalogue_id=1, completed_at=None)))
+        mocker.patch("app.modules.assessment.service.repo.save_responses", AsyncMock(return_value=2))
         mocker.patch("app.modules.assessment.service.repo.save_result", AsyncMock(return_value=saved))
         mocker.patch("app.modules.assessment.service.repo.get_results_by_crew", AsyncMock(return_value=[]))
         mocker.patch("app.modules.assessment.service.repo.update_crew_snapshot", AsyncMock())

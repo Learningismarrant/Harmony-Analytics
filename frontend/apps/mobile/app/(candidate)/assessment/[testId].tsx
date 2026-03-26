@@ -27,6 +27,7 @@ export default function TakeTestScreen() {
     setShowInstructions,
     currentIndex,
     responses,
+    canSubmit,
     submitMutation,
     selectAndAdvance,
     handleSubmit,
@@ -131,7 +132,7 @@ export default function TakeTestScreen() {
             <View className="px-5 pb-8 pt-2">
               <TouchableOpacity
                 onPress={handleSubmit}
-                disabled={submitMutation.isPending}
+                disabled={submitMutation.isPending || !canSubmit}
                 className="bg-teak rounded-xl py-4 items-center"
                 activeOpacity={0.85}
               >

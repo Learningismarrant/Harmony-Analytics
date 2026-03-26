@@ -686,7 +686,7 @@ export interface CalibSessionOut {
 
 export interface CalibResponseItemIn {
   question_id: number;
-  value: number;
+  response_value: string;
   seconds_spent?: number | null;
 }
 
@@ -696,14 +696,14 @@ export interface CalibSubmitIn {
 
 export interface CalibSubmitOut {
   session_id: number;
-  status: "completed";
-  score: number | null;
-  message: string;
+  n_responses: number;
+  completed: boolean;
 }
 
 export interface CalibTraitScoreOut {
   trait: string;
   label: string;
+  raw_mean: number;
   score: number;
   n_items: number;
 }
@@ -713,9 +713,11 @@ export interface CalibSessionScoreOut {
   catalogue_id: number;
   catalogue_name: string;
   test_type: string;
-  global_score: number | null;
+  overall_score: number;
   traits: CalibTraitScoreOut[];
-  completed_at: string;
+  n_responses: number;
+  completed: boolean;
+  disclaimer: string;
 }
 
 // ── API response wrappers ─────────────────────────────────────────────────────

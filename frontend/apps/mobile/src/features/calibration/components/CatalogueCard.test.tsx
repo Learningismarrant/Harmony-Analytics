@@ -7,11 +7,10 @@ const CATALOGUE: CalibCatalogueOut = {
   id: 1,
   name: "IPIP-50",
   description: "Mesure de personnalité Big Five.",
-  instructions: null,
   test_type: "likert",
-  question_count: 50,
-  estimated_minutes: 15,
-  is_etalon: false,
+  n_questions: 50,
+  status: "ALPHA",
+  license: "IPIP",
 };
 
 const SESSION_IN_PROGRESS: CalibSessionOut = {
@@ -21,7 +20,6 @@ const SESSION_IN_PROGRESS: CalibSessionOut = {
   status: "in_progress",
   started_at: "2026-03-21T10:00:00Z",
   completed_at: null,
-  response_count: 12,
 };
 
 const SESSION_COMPLETED: CalibSessionOut = {
@@ -31,7 +29,6 @@ const SESSION_COMPLETED: CalibSessionOut = {
   status: "completed",
   started_at: "2026-03-21T10:00:00Z",
   completed_at: "2026-03-21T10:20:00Z",
-  response_count: 50,
 };
 
 describe("CatalogueCard — renders catalogue name", () => {
@@ -49,12 +46,11 @@ describe("CatalogueCard — renders catalogue name", () => {
     expect(getByText("Mesure de personnalité Big Five.")).toBeTruthy();
   });
 
-  it("affiche le nombre de questions et la durée estimée", () => {
+  it("affiche le nombre de questions", () => {
     const { getByText } = render(
       <CatalogueCard catalogue={CATALOGUE} session={null} onPress={jest.fn()} />,
     );
     expect(getByText("50 QUESTIONS")).toBeTruthy();
-    expect(getByText("~15 MIN")).toBeTruthy();
   });
 });
 
@@ -109,8 +105,8 @@ describe("CatalogueCard — shows Complété badge when session completed", () =
 });
 
 describe("CatalogueCard — badge étalon", () => {
-  it("affiche le badge ÉTALON si is_etalon=true", () => {
-    const etalon = { ...CATALOGUE, is_etalon: true };
+  it("affiche le badge ÉTALON si status=ETALON", () => {
+    const etalon = { ...CATALOGUE, status: "ETALON" };
     const { getByText } = render(
       <CatalogueCard catalogue={etalon} session={null} onPress={jest.fn()} />,
     );

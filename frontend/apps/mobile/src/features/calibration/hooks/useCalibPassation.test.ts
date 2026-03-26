@@ -118,6 +118,7 @@ describe("useCalibPassation — navigation", () => {
     const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
+    act(() => result.current.selectAnswer(1, 3)); // répondre à Q1 avant d'avancer
     act(() => result.current.goNext());
     expect(result.current.currentIndex).toBe(1);
   });
@@ -126,6 +127,7 @@ describe("useCalibPassation — navigation", () => {
     const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
+    act(() => result.current.selectAnswer(1, 3));
     act(() => result.current.goNext());
     act(() => result.current.goPrev());
     expect(result.current.currentIndex).toBe(0);
@@ -135,8 +137,11 @@ describe("useCalibPassation — navigation", () => {
     const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    act(() => result.current.goNext());
-    act(() => result.current.goNext());
+    act(() => result.current.selectAnswer(1, 3));
+    act(() => result.current.goNext()); // index 1
+    act(() => result.current.selectAnswer(2, 3));
+    act(() => result.current.goNext()); // index 2
+    act(() => result.current.selectAnswer(3, 3));
     act(() => result.current.goNext()); // pas au-delà de 2
     expect(result.current.currentIndex).toBe(2);
   });
@@ -158,6 +163,7 @@ describe("useCalibPassation — reset sur changement catalogueId", () => {
     );
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
+    act(() => result.current.selectAnswer(1, 3)); // répondre avant d'avancer
     act(() => result.current.goNext());
     act(() => result.current.selectAnswer(2, 4));
     act(() => result.current.setShowInstructions(false));

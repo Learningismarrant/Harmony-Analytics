@@ -8,7 +8,8 @@ Changements v2 :
 - propagation background utilise crew_profile_id
 """
 import logging
-from fastapi import BackgroundTasks
+from datetime import datetime, timezone
+from fastapi import BackgroundTasks, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import List, Optional, Dict
 
@@ -54,11 +55,14 @@ class AssessmentService:
     ) -> Dict:
         """
         Pipeline complet :
-        1. Validation + hydratation test
-        2. Calcul pur (engine — zéro DB)
-        3. Sauvegarde TestResult via crew_profile_id
-        4. Refresh psychometric_snapshot sur CrewProfile (synchrone)
-        5. Propagation vessel + fleet (background)
+        1. Validation réponses + hydratation test
+        2. Validation des question_id (appartenance au catalogue)
+        3. Création TestSession server-side
+        4. Persistance des réponses individuelles (TestResponse)
+        5. Calcul pur (engine — zéro DB)
+        6. Sauvegarde TestResult lié à la session
+        7. Refresh psychometric_snapshot sur CrewProfile (synchrone)
+        8. Propagation vessel + fleet (background)
         """
         if not responses:
             raise ValueError("Aucune réponse fournie.")
@@ -67,10 +71,33 @@ class AssessmentService:
         if not test_info:
             raise ValueError("Test introuvable.")
 
+        # ── Validation des question_id ────────────────────────
+        valid_ids = await repo.get_question_ids_for_catalogue(db, test_id)
+        invalid = [r.question_id for r in responses if r.question_id not in valid_ids]
+        if invalid:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "error": True,
+                    "code": "INVALID_QUESTION_IDS",
+                    "message": f"Question IDs do not belong to this catalogue: {invalid}",
+                },
+            )
+
+        # ── Créer la session AVANT le scoring ─────────────────
+        session = await repo.create_session(db, crew.id, test_id)
+
+        # ── Persister les réponses individuelles ──────────────
+        await repo.save_responses(db, session.id, test_id, responses)
+
+        # ── Marquer la session comme terminée ─────────────────
+        session.completed_at = datetime.now(timezone.utc)
+        await db.commit()
+
+        # ── Calcul pur (engine) ───────────────────────────────
         questions = await repo.get_questions_by_test(db, test_id)
         questions_map = {q.id: q for q in questions}
 
-        # ── Calcul pur (engine) ───────────────────────────────
         result = calculate_scores(
             responses=responses,
             questions_map=questions_map,
@@ -78,13 +105,15 @@ class AssessmentService:
             max_score_per_question=test_info.max_score_per_question,
         )
 
-        # ── Sauvegarde via crew_profile_id ────────────────────
+        # ── Sauvegarde TestResult lié à la session ────────────
         saved = await repo.save_result(
             db,
-            crew_profile_id=crew.id,    # v2
+            crew_profile_id=crew.id,
             test_id=test_id,
             scores=result,
             global_score=result["global_score"],
+            session_id=session.id,
+            user_type="candidate",
         )
 
         # ── Refresh snapshot (synchrone) ──────────────────────

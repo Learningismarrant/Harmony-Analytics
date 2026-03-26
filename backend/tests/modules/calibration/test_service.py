@@ -330,7 +330,7 @@ class TestSubmitResponses:
             AsyncMock(return_value=session),
         )
         payload = SubmitResponsesIn(
-            responses=[ResponseItemIn(question_id=i + 1, value=3) for i in range(10)]
+            responses=[ResponseItemIn(question_id=i + 1, response_value="3") for i in range(10)]
         )
         result = await service.submit_responses(db, calibrator_id=1, session_id=1, data=payload)
         assert result.n_responses == 10
@@ -361,7 +361,7 @@ class TestSubmitResponses:
             AsyncMock(return_value=make_session(completed_at=datetime.now(timezone.utc))),
         )
         payload = SubmitResponsesIn(
-            responses=[ResponseItemIn(question_id=i + 1, value=3) for i in range(50)]
+            responses=[ResponseItemIn(question_id=i + 1, response_value="3") for i in range(50)]
         )
         result = await service.submit_responses(db, calibrator_id=1, session_id=1, data=payload)
         assert result.completed is True
@@ -376,7 +376,7 @@ class TestSubmitResponses:
             AsyncMock(return_value=session),
         )
         payload = SubmitResponsesIn(
-            responses=[ResponseItemIn(question_id=1, value=3)]
+            responses=[ResponseItemIn(question_id=1, response_value="3")]
         )
         with pytest.raises(HTTPException) as exc_info:
             await service.submit_responses(db, calibrator_id=1, session_id=1, data=payload)
@@ -395,7 +395,7 @@ class TestSubmitResponses:
             AsyncMock(return_value=session),
         )
         payload = SubmitResponsesIn(
-            responses=[ResponseItemIn(question_id=1, value=3)]
+            responses=[ResponseItemIn(question_id=1, response_value="3")]
         )
         with pytest.raises(HTTPException) as exc_info:
             await service.submit_responses(db, calibrator_id=1, session_id=1, data=payload)
@@ -485,7 +485,9 @@ def make_response_with_question(
     options: list | None = None,
     correct_answer: str | None = None,
 ) -> SimpleNamespace:
-    """Crée une CalibResponse simulée avec sa question embedded."""
+    """Crée une TestResponse simulée avec sa question embedded.
+    value (int) est converti en response_value (str) pour refléter le nouveau schéma.
+    """
     question = SimpleNamespace(
         id=question_id,
         trait=trait,
@@ -498,7 +500,7 @@ def make_response_with_question(
         id=resp_id,
         session_id=1,
         question_id=question_id,
-        value=value,
+        response_value=str(value),   # v2 : str au lieu de int
         question=question,
     )
 

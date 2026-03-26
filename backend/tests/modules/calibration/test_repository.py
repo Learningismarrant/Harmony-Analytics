@@ -23,7 +23,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from app.modules.calibration.repository import CalibrationRepository
 from app.modules.calibration.schemas import ResponseItemIn
-from app.shared.models.Calibration import CalibratorUser, CalibSession, CalibResponse
+from app.shared.models.Calibration import CalibratorUser
+from app.shared.models.Assessment import TestSession, TestResponse
 
 pytestmark = pytest.mark.service  # pas de marqueur "db" — tests unitaires via mock
 
@@ -117,7 +118,7 @@ class TestCreateSession:
         )
         db.refresh = AsyncMock(side_effect=lambda obj: setattr(obj, "id", 1))
 
-        with patch("app.modules.calibration.repository.CalibSession") as MockClass:
+        with patch("app.modules.calibration.repository.TestSession") as MockClass:
             MockClass.return_value = session_obj
             result = await repo.create_session(
                 db,
@@ -141,13 +142,13 @@ class TestSaveResponses:
         db.commit = AsyncMock()
 
         responses = [
-            ResponseItemIn(question_id=i + 1, value=3, seconds_spent=5.0)
+            ResponseItemIn(question_id=i + 1, response_value="3", seconds_spent=5.0)
             for i in range(5)
         ]
 
-        with patch("app.modules.calibration.repository.CalibResponse") as MockClass:
+        with patch("app.modules.calibration.repository.TestResponse") as MockClass:
             MockClass.side_effect = lambda **kwargs: SimpleNamespace(**kwargs)
-            count = await repo.save_responses(db, session_id=1, responses=responses)
+            count = await repo.save_responses(db, session_id=1, catalogue_id=1, responses=responses)
 
         assert count == 5
         assert db.add.call_count == 5

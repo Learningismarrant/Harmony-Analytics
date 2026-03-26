@@ -148,6 +148,8 @@ export default function CalibSessionScreen() {
     isSubmitted,
     showInstructions,
     setShowInstructions,
+    canGoNext,
+    canSubmit,
     selectAnswer,
     goNext,
     goPrev,
@@ -289,11 +291,11 @@ export default function CalibSessionScreen() {
           <NavButton
             label={submitMutation.isPending ? "ENVOI..." : "TERMINER"}
             onPress={handleSubmit}
-            disabled={submitMutation.isPending || isSubmitted}
+            disabled={submitMutation.isPending || isSubmitted || !canSubmit}
             variant="primary"
           />
         ) : (
-          <NavButton label="SUIV." onPress={goNext} variant="secondary" />
+          <NavButton label="SUIV." onPress={goNext} disabled={!canGoNext} variant="secondary" />
         )}
       </View>
 

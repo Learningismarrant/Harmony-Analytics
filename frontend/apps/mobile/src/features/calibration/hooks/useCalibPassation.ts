@@ -72,7 +72,7 @@ export function useCalibPassation(catalogueId: number, initialSessionId?: number
       if (!session) throw new Error("Pas de session active");
       const responseList = Object.entries(responses).map(([qId, val]) => ({
         question_id: parseInt(qId, 10),
-        value: val,
+        response_value: String(val),
         seconds_spent: timeSpent[parseInt(qId, 10)] ?? 0,
       }));
       return calibrationApi.submitResponses(session.id, { responses: responseList });
@@ -124,6 +124,11 @@ export function useCalibPassation(catalogueId: number, initialSessionId?: number
     }, [showInstructions, isSubmitted, submitMutation.isPending, router]),
   );
 
+  const currentQuestionId = questions?.[currentIndex]?.id;
+  const canGoNext = currentQuestionId !== undefined && responses[currentQuestionId] !== undefined;
+  const canSubmit = questions !== undefined && questions.length > 0 &&
+    questions.every((q: CalibQuestionOut) => responses[q.id] !== undefined);
+
   function selectAnswer(questionId: number, value: number) {
     if (!questions || questions.length === 0) return;
 
@@ -133,6 +138,7 @@ export function useCalibPassation(catalogueId: number, initialSessionId?: number
   }
 
   function goNext() {
+    if (!canGoNext) return;
     if (questions && currentIndex < questions.length - 1) {
       setCurrentIndex((i) => i + 1);
     }
@@ -145,19 +151,16 @@ export function useCalibPassation(catalogueId: number, initialSessionId?: number
   }
 
   function handleSubmit() {
-    const unanswered = questions?.filter((q: CalibQuestionOut) => responses[q.id] === undefined).length ?? 0;
-    if (unanswered > 0) {
+    if (!canSubmit) {
+      const unanswered = questions?.filter((q: CalibQuestionOut) => responses[q.id] === undefined).length ?? 0;
       Alert.alert(
         "Test incomplet",
-        `${unanswered} question(s) sans réponse. Soumettre quand même ?`,
-        [
-          { text: "Revoir", style: "cancel" },
-          { text: "Soumettre", onPress: () => submitMutation.mutate() },
-        ],
+        `${unanswered} question(s) sans réponse. Veuillez répondre à toutes les questions avant de soumettre.`,
+        [{ text: "OK" }],
       );
-    } else {
-      submitMutation.mutate();
+      return;
     }
+    submitMutation.mutate();
   }
 
   return {
@@ -169,6 +172,8 @@ export function useCalibPassation(catalogueId: number, initialSessionId?: number
     isSubmitted,
     showInstructions,
     setShowInstructions,
+    canGoNext,
+    canSubmit,
     selectAnswer,
     goNext,
     goPrev,

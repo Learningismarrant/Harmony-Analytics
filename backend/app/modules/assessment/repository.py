@@ -16,7 +16,10 @@ from sqlalchemy.orm import selectinload
 from typing import List, Optional, Dict, Any
 from datetime import datetime, timezone
 
-from app.shared.models import TestCatalogue, Question, TestResult, User, CrewProfile, Yacht, CrewAssignment, Campaign, CampaignCandidate
+from app.shared.models import (
+    TestCatalogue, Question, TestResult, TestSession, TestResponse,
+    User, CrewProfile, Yacht, CrewAssignment, Campaign, CampaignCandidate,
+)
 
 class AssessmentRepository:
 
@@ -36,6 +39,59 @@ class AssessmentRepository:
         )
         return r.scalars().all()
 
+    # ── Sessions de passation ─────────────────────────────────
+
+    async def create_session(
+        self, db: AsyncSession, crew_profile_id: int, catalogue_id: int
+    ) -> TestSession:
+        """Crée une session de passation pour un candidat (crew_profile)."""
+        session = TestSession(
+            crew_profile_id=crew_profile_id,
+            catalogue_id=catalogue_id,
+            calibrator_id=None,
+        )
+        db.add(session)
+        await db.commit()
+        await db.refresh(session)
+        return session
+
+    async def save_responses(
+        self,
+        db: AsyncSession,
+        session_id: int,
+        catalogue_id: int,
+        responses: list,
+    ) -> int:
+        """
+        Persiste les réponses individuelles en bulk.
+        responses = list de ResponseIn (question_id, valeur_choisie, seconds_spent)
+        catalogue_id est toujours dérivé server-side — jamais accepté du client.
+        Retourne le nombre de réponses sauvegardées.
+        """
+        objects = [
+            TestResponse(
+                session_id=session_id,
+                catalogue_id=catalogue_id,
+                question_id=r.question_id,
+                response_value=str(r.valeur_choisie),
+                seconds_spent=r.seconds_spent,
+            )
+            for r in responses
+        ]
+        for obj in objects:
+            db.add(obj)
+        await db.commit()
+        return len(objects)
+
+    async def get_question_ids_for_catalogue(
+        self, db: AsyncSession, catalogue_id: int
+    ) -> set[int]:
+        """Retourne l'ensemble des question.id valides pour ce catalogue."""
+        r = await db.execute(
+            select(Question.id).where(Question.test_id == catalogue_id)
+        )
+        return set(r.scalars().all())
+
     # ── Résultats ─────────────────────────────────────────────
 
     async def save_result(
@@ -45,12 +101,16 @@ class AssessmentRepository:
         test_id: int,
         scores: Dict[str, Any],
         global_score: float,
+        session_id: Optional[int] = None,
+        user_type: str = "candidate",
     ) -> TestResult:
         db_obj = TestResult(
             crew_profile_id=crew_profile_id,
             test_id=test_id,
             scores=scores,
             global_score=global_score,
+            session_id=session_id,
+            user_type=user_type,
         )
         db.add(db_obj)
         await db.commit()

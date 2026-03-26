@@ -296,7 +296,7 @@ class CalibrationService:
                 },
             )
 
-        n_saved = await repo.save_responses(db, session_id, data.responses)
+        n_saved = await repo.save_responses(db, session_id, session.catalogue_id, data.responses)
 
         # Le frontend soumet toutes les réponses en un seul appel en fin de passation.
         # On complète systématiquement — le frontend contrôle le timing du submit.
@@ -379,6 +379,7 @@ class CalibrationService:
 
             if q_type in ("qcm", "raven"):
                 # Score binaire : 1 si bonne réponse, 0 sinon
+                # response_value est un str — on compare à l'index (int) ou à la clé directement
                 correct_key = question.correct_answer
                 options = question.options or []
                 correct_index: int | None = None
@@ -387,10 +388,19 @@ class CalibrationService:
                     if key == correct_key:
                         correct_index = idx
                         break
-                score = 1.0 if (correct_index is not None and resp.value == correct_index) else 0.0
+                # Tenter de convertir response_value en int pour la comparaison d'index
+                try:
+                    resp_as_int = int(resp.response_value)
+                except (ValueError, TypeError):
+                    resp_as_int = None
+                score = 1.0 if (correct_index is not None and resp_as_int == correct_index) else 0.0
             else:
                 # Likert — reverse scoring si nécessaire
-                raw = float(resp.value)
+                # response_value est un str représentant un nombre
+                try:
+                    raw = float(resp.response_value)
+                except (ValueError, TypeError):
+                    raw = 0.0
                 if question.reverse:
                     raw = float(max_val) - raw
                 score = raw

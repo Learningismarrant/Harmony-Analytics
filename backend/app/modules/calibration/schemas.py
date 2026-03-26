@@ -134,9 +134,9 @@ class SessionListOut(BaseModel):
 # ── Réponses ──────────────────────────────────────────────────────────────────
 
 class ResponseItemIn(BaseModel):
-    question_id: int = Field(..., gt=0)
-    value: int = Field(..., ge=0, le=10)        # 0-10 couvre Likert 1-7 et QCM binaire
-    seconds_spent: float | None = Field(default=None, ge=0.0, le=3600.0)
+    question_id:    int   = Field(..., gt=0)
+    response_value: str   = Field(..., min_length=1, max_length=50)   # "4" | "B" | "left" | etc.
+    seconds_spent:  float | None = Field(default=None, ge=0.0, le=3600.0)
 
 
 class SubmitResponsesIn(BaseModel):

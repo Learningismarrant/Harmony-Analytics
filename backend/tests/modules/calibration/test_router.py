@@ -348,7 +348,7 @@ class TestSubmitResponsesEndpoint:
             "/calibration/sessions/1/responses",
             json={
                 "responses": [
-                    {"question_id": i + 1, "value": 3} for i in range(5)
+                    {"question_id": i + 1, "response_value": "3"} for i in range(5)
                 ]
             },
         )
@@ -368,16 +368,16 @@ class TestSubmitResponsesEndpoint:
         )
         resp = await calib_client.post(
             "/calibration/sessions/99/responses",
-            json={"responses": [{"question_id": 1, "value": 3}]},
+            json={"responses": [{"question_id": 1, "response_value": "3"}]},
         )
         assert resp.status_code == 403
 
     @pytest.mark.asyncio
     async def test_submit_responses_invalid_value_returns_422(self, calib_client):
-        """value=15 dépasse le max autorisé (10)."""
+        """response_value vide (min_length=1) → 422."""
         resp = await calib_client.post(
             "/calibration/sessions/1/responses",
-            json={"responses": [{"question_id": 1, "value": 15}]},
+            json={"responses": [{"question_id": 1, "response_value": ""}]},
         )
         assert resp.status_code == 422
 
