@@ -15,7 +15,14 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { calibrationApi, calibrationQueryKeys } from "@harmony/api";
 import type { CalibratorDemographicsIn } from "@harmony/types";
-import { NATIONALITIES, YEARS_AT_SEA_OPTIONS } from "@harmony/types";
+import {
+  NATIONALITIES,
+  YEARS_AT_SEA_OPTIONS,
+  GENDER_OPTIONS,
+  EDUCATION_OPTIONS,
+  LANGUAGE_OPTIONS,
+  MARITIME_ROLE_OPTIONS,
+} from "@harmony/types";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -25,44 +32,6 @@ interface OptionItem {
   value: string;
   label: string;
 }
-
-const GENDER_OPTIONS: OptionItem[] = [
-  { value: "male", label: "Homme" },
-  { value: "female", label: "Femme" },
-  { value: "non_binary", label: "Non-binaire" },
-  { value: "prefer_not_to_say", label: "Préfère ne pas répondre" },
-];
-
-const EDUCATION_OPTIONS: OptionItem[] = [
-  { value: "below_bac", label: "< Bac" },
-  { value: "bac", label: "Bac" },
-  { value: "bac_plus_2", label: "Bac+2" },
-  { value: "bac_plus_3", label: "Bac+3" },
-  { value: "bac_plus_5", label: "Bac+5" },
-  { value: "phd", label: "Doctorat" },
-];
-
-const LANGUAGE_OPTIONS: OptionItem[] = [
-  { value: "french",     label: "Français"  },
-  { value: "english",    label: "Anglais"   },
-  { value: "spanish",    label: "Espagnol"  },
-  { value: "portuguese", label: "Portugais" },
-  { value: "arabic",     label: "Arabe"     },
-  { value: "mandarin",   label: "Chinois"   },
-  { value: "russian",    label: "Russe"     },
-  { value: "other",      label: "Autre"     },
-];
-
-const MARITIME_ROLE_OPTIONS: OptionItem[] = [
-  { value: "captain", label: "Capitaine" },
-  { value: "officer", label: "Officier" },
-  { value: "bosun", label: "Bosco" },
-  { value: "deckhand", label: "Matelot" },
-  { value: "steward", label: "Steward/ess" },
-  { value: "engineer", label: "Ingénieur" },
-  { value: "other", label: "Autre" },
-  { value: "none", label: "Aucun" },
-];
 
 const STEP_TITLES: Record<1 | 2 | 3, string> = {
   1: "Qui êtes-vous ?",
@@ -78,7 +47,7 @@ const YEARS: number[] = Array.from({ length: 61 }, (_, i) => 1950 + i);
 // ── Sous-composants ───────────────────────────────────────────────────────────
 
 interface RadioGroupProps {
-  options: OptionItem[];
+  options: readonly OptionItem[];
   selected: string;
   onSelect: (value: string) => void;
   wrap?: boolean;
@@ -531,14 +500,13 @@ function StepIndicator({ current }: StepIndicatorProps) {
 
 interface ProfileSummaryProps {
   me: {
-    birth_date?: string;
-    birth_year?: number;
+    birth_date?: string | null;
     gender?: string | null;
     education_level?: string | null;
-    years_experience?: number | null;
+    years_at_sea?: number | null;
     nationality?: string | null;
-    occupation?: string | null;
-    cohort?: string | null;
+    native_language?: string | null;
+    maritime_role?: string | null;
   } | null | undefined;
 }
 
@@ -551,11 +519,10 @@ function ProfileSummaryCard({ me }: ProfileSummaryProps) {
         return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
       }
     }
-    if (me?.birth_year != null) return String(me.birth_year);
     return "—";
   }
 
-  function findLabel(options: OptionItem[], value: string | null | undefined): string {
+  function findLabel(options: readonly OptionItem[], value: string | null | undefined): string {
     if (!value) return "—";
     return options.find((o) => o.value === value)?.label ?? "—";
   }
@@ -564,10 +531,10 @@ function ProfileSummaryCard({ me }: ProfileSummaryProps) {
     { label: "Date de naissance", value: formatBirthDate() },
     { label: "Genre",             value: findLabel(GENDER_OPTIONS, me?.gender) },
     { label: "Niveau d'études",   value: findLabel(EDUCATION_OPTIONS, me?.education_level) },
-    { label: "Années en mer",     value: me?.years_experience != null ? `${me.years_experience} ans` : "—" },
+    { label: "Années en mer",     value: me?.years_at_sea != null ? `${me.years_at_sea} ans` : "—" },
     { label: "Nationalité",       value: me?.nationality ?? "—" },
-    { label: "Langue",            value: findLabel(LANGUAGE_OPTIONS, me?.occupation) },
-    { label: "Rôle",              value: findLabel(MARITIME_ROLE_OPTIONS, me?.cohort) },
+    { label: "Langue",            value: findLabel(LANGUAGE_OPTIONS, me?.native_language) },
+    { label: "Rôle",              value: findLabel(MARITIME_ROLE_OPTIONS, me?.maritime_role) },
   ];
 
   return (
@@ -628,22 +595,20 @@ export default function CalibProfileScreen() {
   // Pre-fill from existing data
   useEffect(() => {
     if (me) {
-      if ((me as { birth_date?: string }).birth_date) {
-        const [y, m, d] = ((me as { birth_date?: string }).birth_date as string)
-          .split("-")
-          .map(Number);
+      if (me.birth_date) {
+        const [y, m, d] = me.birth_date.split("-").map(Number);
         setBirthYear(y);
         setBirthMonth(m);
         setBirthDay(d);
-      } else if (me.age) {
-        setBirthYear(new Date().getFullYear() - me.age);
       }
-      if (me.years_experience !== undefined && me.years_experience !== null) {
-        setYearsAtSea(me.years_experience);
+      if (me.years_at_sea !== undefined && me.years_at_sea !== null) {
+        setYearsAtSea(me.years_at_sea);
       }
       if (me.nationality) setNationality(me.nationality);
       if (me.gender) setGender(me.gender);
       if (me.education_level) setEducationLevel(me.education_level);
+      if (me.native_language) setNativeLanguage(me.native_language);
+      if (me.maritime_role) setMaritimeRole(me.maritime_role);
     }
   }, [me]);
 
@@ -660,12 +625,10 @@ export default function CalibProfileScreen() {
     const payload: CalibratorDemographicsIn = {};
 
     if (birthDay && birthMonth && birthYear) {
-      // birth_date stored as ISO string; map age for backend compatibility
-      const age = new Date().getFullYear() - birthYear;
-      if (age > 0 && age < 120) payload.age = age;
+      payload.birth_date = `${birthYear}-${String(birthMonth).padStart(2, "0")}-${String(birthDay).padStart(2, "0")}`;
     }
 
-    if (yearsAtSea !== null) payload.years_experience = yearsAtSea;
+    if (yearsAtSea !== null) payload.years_at_sea = yearsAtSea;
 
     const resolvedNationality =
       nationality === "Autre" ? nationalityOther.trim() : nationality.trim();
@@ -676,9 +639,9 @@ export default function CalibProfileScreen() {
 
     const resolvedLanguage =
       nativeLanguage === "other" ? languageOther.trim() : nativeLanguage;
-    if (resolvedLanguage) payload.occupation = resolvedLanguage; // mapped to occupation as native_language proxy
+    if (resolvedLanguage) payload.native_language = resolvedLanguage;
 
-    if (maritimeRole) payload.cohort = maritimeRole; // mapped to cohort as maritime_role proxy
+    if (maritimeRole) payload.maritime_role = maritimeRole;
 
     return payload;
   }
