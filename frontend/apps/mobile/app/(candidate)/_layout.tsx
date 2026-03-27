@@ -138,6 +138,10 @@ export default function CandidateLayout() {
       <Tabs.Screen name="assessment/result"   options={{ href: null, headerShown: false }} />
       <Tabs.Screen name="survey/[surveyId]"   options={{ href: null, headerShown: false }} />
       <Tabs.Screen name="training/[moduleId]" options={{ href: null, headerShown: false }} />
+      {/* Profile sub-screens (managed by profile/_layout Stack) */}
+      <Tabs.Screen name="profile/tests"      options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="profile/experience" options={{ href: null, headerShown: false }} />
+      <Tabs.Screen name="profile/documents"  options={{ href: null, headerShown: false }} />
     </Tabs>
   );
 }
