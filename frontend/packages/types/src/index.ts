@@ -1,3 +1,17 @@
+import type {
+  UserRole,
+  YachtPosition,
+  AvailabilityStatus,
+  CampaignStatus,
+  ApplicationStatus,
+  SurveyTriggerType,
+  DepartureReason,
+  TestType,
+  QuestionType,
+  NiveauScore,
+  CatalogueDomain,
+} from "./enums";
+
 /**
  * @harmony/types
  *
@@ -5,79 +19,6 @@
  * Single source of truth — generated from app/shared/enums.py
  * and all modules/{module}/schemas.py files.
  */
-
-// ── Enums ────────────────────────────────────────────────────────────────────
-
-export type UserRole = "candidate" | "client" | "admin" | "calibrator";
-
-export type YachtPosition =
-  // Deck
-  | "Captain"
-  | "First Mate"
-  | "Second Officer"
-  | "Bosun"
-  | "Deckhand"
-  // Engine
-  | "Chief Engineer"
-  | "2nd Engineer"
-  | "3rd Engineer"
-  | "ETO"
-  // Interior
-  | "Chief Stewardess"
-  | "Stewardess"
-  | "Butler"
-  // Galley
-  | "Chef"
-  | "Sous Chef"
-  // Wellness & Safety
-  | "Dive Instructor"
-  | "Medic";
-
-export type YachtTypeAlpha =
-  | "sailing_cruiser"
-  | "sailing_racing"
-  | "motor_cruiser"
-  | "superyacht"
-  | "megayacht"
-  | "expedition"
-  | "charter";
-
-export type AvailabilityStatus = "available" | "on_board" | "unavailable" | "soon";
-
-export type CampaignStatus = "open" | "closed" | "draft";
-
-export type ApplicationStatus = "pending" | "hired" | "rejected" | "joined";
-
-export type SurveyTriggerType =
-  | "post_charter"
-  | "post_season"
-  | "monthly_pulse"
-  | "conflict_event"
-  | "exit_interview";
-
-export type DepartureReason =
-  | "performance"
-  | "team_conflict"
-  | "environment"
-  | "leadership"
-  | "external"
-  | "unknown";
-
-export type TestType = "likert" | "qcm";
-
-/** Type d'une question individuelle (distinct du type de catalogue). */
-export type QuestionType = "likert" | "qcm" | "multiple_choice" | "raven" | string;
-
-export type NiveauScore = "Faible" | "Moyen" | "Élevé";
-
-export type CatalogueDomain =
-  | "personality"
-  | "cognitive"
-  | "motivation"
-  | "person_job"
-  | "person_org"
-  | "person_team"
-  | "physical";
 
 // ── Auth ─────────────────────────────────────────────────────────────────────
 

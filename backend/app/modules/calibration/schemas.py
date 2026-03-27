@@ -59,7 +59,18 @@ class CalibratorDemographicsIn(BaseModel):
         description="Années d'expérience maritime (0 = aucune)"
     )
     maritime_role: Literal[
-        "captain", "officer", "bosun", "deckhand", "steward", "engineer", "other", "none"
+        # Deck
+        "Captain", "First Mate", "Second Officer", "Bosun", "Deckhand",
+        # Engine
+        "Chief Engineer", "2nd Engineer", "3rd Engineer", "ETO",
+        # Interior
+        "Chief Stewardess", "Stewardess", "Butler",
+        # Galley
+        "Chef", "Sous Chef",
+        # Wellness & Safety
+        "Dive Instructor", "Medic",
+        # No maritime background
+        "none",
     ] | None = None
     nationality: str | None = Field(default=None, max_length=100)
 

@@ -21,7 +21,7 @@ import {
   GENDER_OPTIONS,
   EDUCATION_OPTIONS,
   LANGUAGE_OPTIONS,
-  MARITIME_ROLE_OPTIONS,
+  YACHT_POSITION_OPTIONS,
 } from "@harmony/types";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
@@ -534,7 +534,7 @@ function ProfileSummaryCard({ me }: ProfileSummaryProps) {
     { label: "Années en mer",     value: me?.years_at_sea != null ? `${me.years_at_sea} ans` : "—" },
     { label: "Nationalité",       value: me?.nationality ?? "—" },
     { label: "Langue",            value: findLabel(LANGUAGE_OPTIONS, me?.native_language) },
-    { label: "Rôle",              value: findLabel(MARITIME_ROLE_OPTIONS, me?.maritime_role) },
+    { label: "Rôle",              value: findLabel(YACHT_POSITION_OPTIONS, me?.maritime_role) },
   ];
 
   return (
@@ -796,7 +796,7 @@ export default function CalibProfileScreen() {
               <View style={[styles.fieldGroup, { marginBottom: 0 }]}>
                 <SectionLabel label="Rôle maritime (si applicable)" />
                 <RadioGroup
-                  options={MARITIME_ROLE_OPTIONS}
+                  options={YACHT_POSITION_OPTIONS}
                   selected={maritimeRole}
                   onSelect={setMaritimeRole}
                   wrap

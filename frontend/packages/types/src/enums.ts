@@ -1,5 +1,80 @@
 // frontend/packages/types/src/enums.ts
-// UI-facing constants for calibrator forms.
+// TypeScript type aliases (mirrors of backend enums) + UI-facing constants.
+
+// ── Type aliases (mirrors of backend enums) ───────────────────────────────────
+
+export type UserRole = "candidate" | "client" | "admin" | "calibrator";
+
+export type YachtPosition =
+  // Deck
+  | "Captain"
+  | "First Mate"
+  | "Second Officer"
+  | "Bosun"
+  | "Deckhand"
+  // Engine
+  | "Chief Engineer"
+  | "2nd Engineer"
+  | "3rd Engineer"
+  | "ETO"
+  // Interior
+  | "Chief Stewardess"
+  | "Stewardess"
+  | "Butler"
+  // Galley
+  | "Chef"
+  | "Sous Chef"
+  // Wellness & Safety
+  | "Dive Instructor"
+  | "Medic";
+
+export type YachtTypeAlpha =
+  | "sailing_cruiser"
+  | "sailing_racing"
+  | "motor_cruiser"
+  | "superyacht"
+  | "megayacht"
+  | "expedition"
+  | "charter";
+
+export type AvailabilityStatus = "available" | "on_board" | "unavailable" | "soon";
+
+export type CampaignStatus = "open" | "closed" | "draft";
+
+export type ApplicationStatus = "pending" | "hired" | "rejected" | "joined";
+
+export type SurveyTriggerType =
+  | "post_charter"
+  | "post_season"
+  | "monthly_pulse"
+  | "conflict_event"
+  | "exit_interview";
+
+export type DepartureReason =
+  | "performance"
+  | "team_conflict"
+  | "environment"
+  | "leadership"
+  | "external"
+  | "unknown";
+
+export type TestType = "likert" | "qcm";
+
+/** Type d'une question individuelle (distinct du type de catalogue). */
+export type QuestionType = "likert" | "qcm" | "multiple_choice" | "raven" | string;
+
+export type NiveauScore = "Faible" | "Moyen" | "Élevé";
+
+export type CatalogueDomain =
+  | "personality"
+  | "cognitive"
+  | "motivation"
+  | "person_job"
+  | "person_org"
+  | "person_team"
+  | "physical";
+
+// ── UI-facing constants for calibrator forms ──────────────────────────────────
 // These mirror the backend Literal constraints in app/modules/calibration/schemas.py
 
 export const NATIONALITIES = [
@@ -44,17 +119,37 @@ export const EDUCATION_OPTIONS = [
 ] as const;
 export type EducationValue = (typeof EDUCATION_OPTIONS)[number]["value"];
 
-export const MARITIME_ROLE_OPTIONS = [
-  { value: "captain",  label: "Capitaine"   },
-  { value: "officer",  label: "Officier"    },
-  { value: "bosun",    label: "Bosco"       },
-  { value: "deckhand", label: "Matelot"     },
-  { value: "steward",  label: "Steward/ess" },
-  { value: "engineer", label: "Ingénieur"   },
-  { value: "other",    label: "Autre"       },
-  { value: "none",     label: "Aucun"       },
-] as const;
-export type MaritimeRoleValue = (typeof MARITIME_ROLE_OPTIONS)[number]["value"];
+/**
+ * Calibrator maritime position options.
+ * Values = YachtPosition strings (backend DIF groups by department, not individual position).
+ * Departments: Deck | Engine | Interior | Galley | Wellness & Safety
+ */
+export const YACHT_POSITION_OPTIONS: Array<{ value: YachtPosition | "none"; label: string; department: string }> = [
+  // Deck
+  { value: "Captain",        label: "Captain",         department: "Deck" },
+  { value: "First Mate",     label: "First Mate",      department: "Deck" },
+  { value: "Second Officer", label: "Second Officer",  department: "Deck" },
+  { value: "Bosun",          label: "Bosun",           department: "Deck" },
+  { value: "Deckhand",       label: "Deckhand",        department: "Deck" },
+  // Engine
+  { value: "Chief Engineer", label: "Chief Engineer",  department: "Engine" },
+  { value: "2nd Engineer",   label: "2nd Engineer",    department: "Engine" },
+  { value: "3rd Engineer",   label: "3rd Engineer",    department: "Engine" },
+  { value: "ETO",            label: "ETO",             department: "Engine" },
+  // Interior
+  { value: "Chief Stewardess", label: "Chief Stewardess", department: "Interior" },
+  { value: "Stewardess",       label: "Stewardess",       department: "Interior" },
+  { value: "Butler",           label: "Butler",           department: "Interior" },
+  // Galley
+  { value: "Chef",       label: "Chef",      department: "Galley" },
+  { value: "Sous Chef",  label: "Sous Chef", department: "Galley" },
+  // Wellness & Safety
+  { value: "Dive Instructor", label: "Dive Instructor", department: "Wellness" },
+  { value: "Medic",           label: "Medic",           department: "Wellness" },
+  // No maritime background
+  { value: "none", label: "Aucun", department: "" },
+];
+export type MaritimeRoleValue = (typeof YACHT_POSITION_OPTIONS)[number]["value"];
 
 export const YEARS_AT_SEA_OPTIONS: Array<{ value: number; label: string }> = [
   { value: 0,  label: "0 an"    },
