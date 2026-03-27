@@ -15,69 +15,12 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { calibrationApi, calibrationQueryKeys } from "@harmony/api";
 import type { CalibratorDemographicsIn } from "@harmony/types";
+import { NATIONALITIES, LANGUAGE_OPTIONS as LANGUAGE_OPTIONS_RAW, YEARS_AT_SEA_OPTIONS } from "@harmony/types";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
 const BIRTH_YEARS: number[] = Array.from({ length: 61 }, (_, i) => 1950 + i); // 1950–2010
 const YEAR_ITEM_HEIGHT = 48;
-
-const YEARS_AT_SEA_OPTIONS: Array<{ value: number; label: string }> = [
-  { value: 0, label: "0 an" },
-  { value: 1, label: "1 an" },
-  { value: 2, label: "2 ans" },
-  { value: 3, label: "3 ans" },
-  { value: 5, label: "5 ans" },
-  { value: 7, label: "7 ans" },
-  { value: 10, label: "10 ans" },
-  { value: 15, label: "15 ans" },
-  { value: 20, label: "20 ans" },
-  { value: 25, label: "25 ans" },
-  { value: 30, label: "30+ ans" },
-];
-
-const NATIONALITIES = [
-  "Française",
-  "Britannique",
-  "Américaine",
-  "Philippin(e)",
-  "Indonésien(ne)",
-  "Indien(ne)",
-  "Ukrainien(ne)",
-  "Russe",
-  "Grecque",
-  "Italienne",
-  "Espagnole",
-  "Portugaise",
-  "Norvégienne",
-  "Danoise",
-  "Néerlandaise",
-  "Allemande",
-  "Polonaise",
-  "Roumaine",
-  "Croate",
-  "Turque",
-  "Marocaine",
-  "Tunisienne",
-  "Algérienne",
-  "Égyptienne",
-  "Sud-Africaine",
-  "Australienne",
-  "Néo-Zélandaise",
-  "Canadienne",
-  "Brésilienne",
-  "Argentine",
-  "Mexicaine",
-  "Coréenne",
-  "Japonaise",
-  "Chinoise",
-  "Singapourienne",
-  "Autre",
-].sort((a, b) => {
-  // Keep "Autre" at the end
-  if (a === "Autre") return 1;
-  if (b === "Autre") return -1;
-  return a.localeCompare(b, "fr");
-});
 
 interface OptionItem {
   value: string;
@@ -100,16 +43,7 @@ const EDUCATION_OPTIONS: OptionItem[] = [
   { value: "phd", label: "Doctorat" },
 ];
 
-const LANGUAGE_OPTIONS: OptionItem[] = [
-  { value: "Français", label: "Français" },
-  { value: "Anglais", label: "Anglais" },
-  { value: "Espagnol", label: "Espagnol" },
-  { value: "Portugais", label: "Portugais" },
-  { value: "Arabe", label: "Arabe" },
-  { value: "Chinois", label: "Chinois" },
-  { value: "Russe", label: "Russe" },
-  { value: "Autre", label: "Autre" },
-];
+const LANGUAGE_OPTIONS: OptionItem[] = LANGUAGE_OPTIONS_RAW.map((lang) => ({ value: lang, label: lang }));
 
 const MARITIME_ROLE_OPTIONS: OptionItem[] = [
   { value: "captain", label: "Capitaine" },
