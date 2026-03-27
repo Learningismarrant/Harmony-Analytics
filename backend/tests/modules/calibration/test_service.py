@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pytest
 from types import SimpleNamespace
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from unittest.mock import AsyncMock, patch
 
 from fastapi import HTTPException
@@ -49,7 +49,7 @@ def make_calibrator(**kwargs) -> SimpleNamespace:
         "is_active": True,
         "created_at": datetime(2026, 1, 1),
         "gender": None,
-        "birth_year": None,
+        "birth_date": None,
         "education_level": None,
         "native_language": None,
         "years_at_sea": None,
@@ -409,7 +409,7 @@ class TestGetMe:
     @pytest.mark.asyncio
     async def test_get_me_ok(self, mocker):
         db = AsyncMock()
-        calibrator = make_calibrator(id=1, name="Alice", birth_year=1990, years_at_sea=5)
+        calibrator = make_calibrator(id=1, name="Alice", birth_date=date(1990, 6, 15), years_at_sea=5)
         mocker.patch(
             "app.modules.calibration.service.repo.get_calibrator_by_id",
             AsyncMock(return_value=calibrator),
@@ -417,7 +417,7 @@ class TestGetMe:
         result = await service.get_me(db, calibrator_id=1)
         assert result.id == 1
         assert result.name == "Alice"
-        assert result.birth_year == 1990
+        assert result.birth_date == date(1990, 6, 15)
         assert result.years_at_sea == 5
 
     @pytest.mark.asyncio
@@ -444,19 +444,19 @@ class TestUpdateDemographics:
             "app.modules.calibration.service.repo.get_calibrator_by_id",
             AsyncMock(return_value=calibrator),
         )
-        updated = make_calibrator(gender="female", birth_year=1992, maritime_role="officer")
+        updated = make_calibrator(gender="female", birth_date=date(1992, 3, 20), maritime_role="officer")
         mocker.patch(
             "app.modules.calibration.service.repo.update_demographics",
             AsyncMock(return_value=updated),
         )
         payload = CalibratorDemographicsIn(
             gender="female",
-            birth_year=1992,
+            birth_date=date(1992, 3, 20),
             maritime_role="officer",
         )
         result = await service.update_demographics(db, calibrator_id=1, data=payload)
         assert result.gender == "female"
-        assert result.birth_year == 1992
+        assert result.birth_date == date(1992, 3, 20)
         assert result.maritime_role == "officer"
 
     @pytest.mark.asyncio

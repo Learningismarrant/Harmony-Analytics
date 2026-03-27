@@ -12,7 +12,7 @@ CalibratorUser → CalibSession → CalibResponse
 """
 from datetime import datetime, timezone
 from sqlalchemy import (
-    Column, Integer, String, Boolean, Float, DateTime, JSON,
+    Column, Integer, String, Boolean, Float, DateTime, Date, JSON,
     ForeignKey, UniqueConstraint, Index,
 )
 from sqlalchemy.orm import relationship
@@ -42,7 +42,7 @@ class CalibratorUser(Base):
     # Collectés après inscription via PATCH /calibration/me
     # Permettent de détecter les biais d'items (genre, âge, langue, expérience)
     gender          = Column(String(50),  nullable=True)   # "male"|"female"|"non_binary"|"prefer_not_to_say"
-    birth_year      = Column(Integer,     nullable=True)   # ex: 1990 — stable dans le temps (pas l'âge)
+    birth_date      = Column(Date,         nullable=True)   # ex: 1990-06-15 — date de naissance complète
     education_level = Column(String(50),  nullable=True)   # "below_bac"|"bac"|"bac_plus_2"|"bac_plus_3"|"bac_plus_5"|"phd"
     native_language = Column(String(50),  nullable=True)   # "french"|"english"|"other" — critique pour items EN
     years_at_sea    = Column(Integer,     nullable=True)   # 0 = aucune expérience maritime

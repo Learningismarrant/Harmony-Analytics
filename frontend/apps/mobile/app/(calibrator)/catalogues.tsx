@@ -83,7 +83,7 @@ export default function CataloguesScreen() {
         padding: 16,
       }}>
         <Text style={{ color: "#F1F4F8", fontSize: 17, fontWeight: "800", marginBottom: 4 }}>
-          Votre constellation
+          Votre Radiant
         </Text>
         <Text style={{ color: "#64748B", fontSize: 12, lineHeight: 18 }}>
           Explorez les dimensions de votre profil. Tapez une étoile pour découvrir les tests du domaine.

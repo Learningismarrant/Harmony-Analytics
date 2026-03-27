@@ -25,7 +25,12 @@ def upgrade() -> None:
     # 1. Ajouter 'calibrator' au type PG userrole (ADD VALUE est irreversible en PG)
     op.execute("ALTER TYPE userrole ADD VALUE IF NOT EXISTS 'calibrator'")
 
-    # 2. Migrer la colonne user_type : usertypeenum → userrole
+    # 2. Supprimer le server_default typé usertypeenum avant le USING cast
+    op.execute(
+        "ALTER TABLE test_results ALTER COLUMN user_type DROP DEFAULT"
+    )
+
+    # 3. Migrer la colonne user_type : usertypeenum → userrole
     #    USING cast text puis cast vers userrole pour traverser les deux types
     op.execute(
         "ALTER TABLE test_results "
@@ -33,7 +38,13 @@ def upgrade() -> None:
         "USING user_type::text::userrole"
     )
 
-    # 3. Supprimer l'ancien type redondant
+    # 4. Remettre le server_default avec le bon type
+    op.execute(
+        "ALTER TABLE test_results "
+        "ALTER COLUMN user_type SET DEFAULT 'candidate'::userrole"
+    )
+
+    # 5. Supprimer l'ancien type redondant
     op.execute("DROP TYPE IF EXISTS usertypeenum")
 
 

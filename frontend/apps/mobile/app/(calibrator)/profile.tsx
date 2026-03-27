@@ -15,12 +15,11 @@ import {
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { calibrationApi, calibrationQueryKeys } from "@harmony/api";
 import type { CalibratorDemographicsIn } from "@harmony/types";
-import { NATIONALITIES, LANGUAGE_OPTIONS as LANGUAGE_OPTIONS_RAW, YEARS_AT_SEA_OPTIONS } from "@harmony/types";
+import { NATIONALITIES, YEARS_AT_SEA_OPTIONS } from "@harmony/types";
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
-const BIRTH_YEARS: number[] = Array.from({ length: 61 }, (_, i) => 1950 + i); // 1950–2010
-const YEAR_ITEM_HEIGHT = 48;
+const ITEM_HEIGHT = 44;
 
 interface OptionItem {
   value: string;
@@ -43,7 +42,16 @@ const EDUCATION_OPTIONS: OptionItem[] = [
   { value: "phd", label: "Doctorat" },
 ];
 
-const LANGUAGE_OPTIONS: OptionItem[] = LANGUAGE_OPTIONS_RAW.map((lang) => ({ value: lang, label: lang }));
+const LANGUAGE_OPTIONS: OptionItem[] = [
+  { value: "french",     label: "Français"  },
+  { value: "english",    label: "Anglais"   },
+  { value: "spanish",    label: "Espagnol"  },
+  { value: "portuguese", label: "Portugais" },
+  { value: "arabic",     label: "Arabe"     },
+  { value: "mandarin",   label: "Chinois"   },
+  { value: "russian",    label: "Russe"     },
+  { value: "other",      label: "Autre"     },
+];
 
 const MARITIME_ROLE_OPTIONS: OptionItem[] = [
   { value: "captain", label: "Capitaine" },
@@ -61,6 +69,11 @@ const STEP_TITLES: Record<1 | 2 | 3, string> = {
   2: "Votre parcours",
   3: "Contexte maritime",
 };
+
+// Birth date picker constants
+const DAYS: number[] = Array.from({ length: 31 }, (_, i) => i + 1);
+const MONTHS: string[] = ["Jan","Fév","Mar","Avr","Mai","Jun","Jul","Aoû","Sep","Oct","Nov","Déc"];
+const YEARS: number[] = Array.from({ length: 61 }, (_, i) => 1950 + i);
 
 // ── Sous-composants ───────────────────────────────────────────────────────────
 
@@ -145,109 +158,197 @@ function ModalOverlay({
   );
 }
 
-// ── Birth year roulette modal ─────────────────────────────────────────────────
+// ── Birth date button ─────────────────────────────────────────────────────────
 
-interface BirthYearButtonProps {
-  selectedYear: number | null;
+interface BirthDateButtonProps {
+  day: number | null;
+  month: number | null;
+  year: number | null;
   onPress: () => void;
 }
 
-function BirthYearButton({ selectedYear, onPress }: BirthYearButtonProps) {
+function BirthDateButton({ day, month, year, onPress }: BirthDateButtonProps) {
+  const hasAll = day !== null && month !== null && year !== null;
+  const label = hasAll
+    ? `${String(day).padStart(2, "0")}/${String(month).padStart(2, "0")}/${year}`
+    : "Sélectionner";
+
   return (
     <TouchableOpacity onPress={onPress} activeOpacity={0.8} style={styles.pickerButton}>
-      <Text style={selectedYear !== null ? styles.pickerButtonValue : styles.pickerButtonPlaceholder}>
-        {selectedYear !== null ? String(selectedYear) : "Sélectionner"}
+      <Text style={hasAll ? styles.pickerButtonValue : styles.pickerButtonPlaceholder}>
+        {label}
       </Text>
       <Text style={styles.pickerChevron}>›</Text>
     </TouchableOpacity>
   );
 }
 
-interface BirthYearModalProps {
+// ── Birth date modal (3-column drum picker) ───────────────────────────────────
+
+interface BirthDateModalProps {
   visible: boolean;
-  selectedYear: number | null;
+  day: number | null;
+  month: number | null;
+  year: number | null;
   onClose: () => void;
-  onConfirm: (year: number) => void;
+  onConfirm: (day: number, month: number, year: number) => void;
 }
 
-function BirthYearModal({ visible, selectedYear, onClose, onConfirm }: BirthYearModalProps) {
-  const [tempYear, setTempYear] = useState<number>(selectedYear ?? 1985);
-  const flatListRef = useRef<FlatList<number>>(null);
+function BirthDateModal({ visible, day, month, year, onClose, onConfirm }: BirthDateModalProps) {
+  const [pendingDay, setPendingDay] = useState<number>(day ?? 1);
+  const [pendingMonth, setPendingMonth] = useState<number>(month ?? 6);
+  const [pendingYear, setPendingYear] = useState<number>(year ?? 1985);
+
+  const dayRef = useRef<FlatList<number>>(null);
+  const monthRef = useRef<FlatList<string>>(null);
+  const yearRef = useRef<FlatList<number>>(null);
 
   useEffect(() => {
     if (visible) {
-      const initial = selectedYear ?? 1985;
-      setTempYear(initial);
-      const idx = BIRTH_YEARS.indexOf(initial);
-      if (idx !== -1) {
-        setTimeout(() => {
-          flatListRef.current?.scrollToOffset({
-            offset: idx * YEAR_ITEM_HEIGHT,
-            animated: false,
-          });
-        }, 80);
-      }
-    }
-  }, [visible, selectedYear]);
+      const initDay = day ?? 1;
+      const initMonth = month ?? 6;
+      const initYear = year ?? 1985;
+      setPendingDay(initDay);
+      setPendingMonth(initMonth);
+      setPendingYear(initYear);
 
-  function handleMomentumScrollEnd(e: { nativeEvent: { contentOffset: { y: number } } }) {
-    const offsetY = e.nativeEvent.contentOffset.y;
-    const idx = Math.round(offsetY / YEAR_ITEM_HEIGHT);
-    const clamped = Math.max(0, Math.min(idx, BIRTH_YEARS.length - 1));
-    setTempYear(BIRTH_YEARS[clamped]);
-  }
+      const dayIdx = DAYS.indexOf(initDay);
+      const monthIdx = initMonth - 1;
+      const yearIdx = YEARS.indexOf(initYear);
+
+      setTimeout(() => {
+        if (dayIdx !== -1) {
+          dayRef.current?.scrollToOffset({ offset: dayIdx * ITEM_HEIGHT, animated: false });
+        }
+        if (monthIdx !== -1) {
+          monthRef.current?.scrollToOffset({ offset: monthIdx * ITEM_HEIGHT, animated: false });
+        }
+        if (yearIdx !== -1) {
+          yearRef.current?.scrollToOffset({ offset: yearIdx * ITEM_HEIGHT, animated: false });
+        }
+      }, 80);
+    }
+  }, [visible, day, month, year]);
 
   function handleConfirm() {
-    onConfirm(tempYear);
+    onConfirm(pendingDay, pendingMonth, pendingYear);
     onClose();
   }
+
+  function makeScrollHandler<T>(
+    data: T[],
+    setter: (val: T) => void
+  ) {
+    return (e: { nativeEvent: { contentOffset: { y: number } } }) => {
+      const idx = Math.round(e.nativeEvent.contentOffset.y / ITEM_HEIGHT);
+      const clamped = Math.max(0, Math.min(idx, data.length - 1));
+      setter(data[clamped]);
+    };
+  }
+
+  const DRUM_HEIGHT = 220;
+  const paddingV = DRUM_HEIGHT / 2 - ITEM_HEIGHT / 2;
 
   return (
     <ModalOverlay visible={visible} onClose={onClose}>
       <View style={styles.modalCard}>
-        <Text style={styles.modalTitle}>Année de naissance</Text>
+        <Text style={styles.modalTitle}>Date de naissance</Text>
 
-        <View style={styles.rouletteContainer}>
-          {/* Center highlight bar */}
-          <View style={styles.rouletteCenterHighlight} pointerEvents="none" />
+        <View style={[styles.drumRow, { height: DRUM_HEIGHT }]}>
+          {/* Day column */}
+          <View style={styles.drumColumn}>
+            <View style={styles.drumHighlight} pointerEvents="none" />
+            <FlatList
+              ref={dayRef}
+              data={DAYS}
+              keyExtractor={(item) => String(item)}
+              showsVerticalScrollIndicator={false}
+              snapToInterval={ITEM_HEIGHT}
+              decelerationRate="fast"
+              getItemLayout={(_, index) => ({
+                length: ITEM_HEIGHT,
+                offset: ITEM_HEIGHT * index,
+                index,
+              })}
+              onMomentumScrollEnd={makeScrollHandler(DAYS, setPendingDay)}
+              style={styles.drumList}
+              contentContainerStyle={{ paddingVertical: paddingV }}
+              renderItem={({ item }) => {
+                const isCenter = item === pendingDay;
+                return (
+                  <View style={styles.drumItem}>
+                    <Text style={[styles.drumItemText, isCenter && styles.drumItemTextCenter]}>
+                      {String(item).padStart(2, "0")}
+                    </Text>
+                  </View>
+                );
+              }}
+            />
+          </View>
 
-          <FlatList
-            ref={flatListRef}
-            data={BIRTH_YEARS}
-            keyExtractor={(item) => String(item)}
-            showsVerticalScrollIndicator={false}
-            snapToInterval={YEAR_ITEM_HEIGHT}
-            decelerationRate="fast"
-            getItemLayout={(_, index) => ({
-              length: YEAR_ITEM_HEIGHT,
-              offset: YEAR_ITEM_HEIGHT * index,
-              index,
-            })}
-            onMomentumScrollEnd={handleMomentumScrollEnd}
-            style={styles.rouletteList}
-            contentContainerStyle={{ paddingVertical: (300 / 2) - YEAR_ITEM_HEIGHT / 2 - 1 }}
-            renderItem={({ item }) => {
-              const isCenter = item === tempYear;
-              return (
-                <TouchableOpacity
-                  onPress={() => {
-                    setTempYear(item);
-                    const idx = BIRTH_YEARS.indexOf(item);
-                    flatListRef.current?.scrollToOffset({
-                      offset: idx * YEAR_ITEM_HEIGHT,
-                      animated: true,
-                    });
-                  }}
-                  activeOpacity={0.7}
-                  style={[styles.rouletteItem, isCenter && styles.rouletteItemCenter]}
-                >
-                  <Text style={[styles.rouletteItemText, isCenter && styles.rouletteItemTextCenter]}>
-                    {item}
-                  </Text>
-                </TouchableOpacity>
-              );
-            }}
-          />
+          {/* Month column */}
+          <View style={styles.drumColumn}>
+            <View style={styles.drumHighlight} pointerEvents="none" />
+            <FlatList
+              ref={monthRef}
+              data={MONTHS}
+              keyExtractor={(item) => item}
+              showsVerticalScrollIndicator={false}
+              snapToInterval={ITEM_HEIGHT}
+              decelerationRate="fast"
+              getItemLayout={(_, index) => ({
+                length: ITEM_HEIGHT,
+                offset: ITEM_HEIGHT * index,
+                index,
+              })}
+              onMomentumScrollEnd={makeScrollHandler(MONTHS, (label: string) => {
+                setPendingMonth(MONTHS.indexOf(label) + 1);
+              })}
+              style={styles.drumList}
+              contentContainerStyle={{ paddingVertical: paddingV }}
+              renderItem={({ item }) => {
+                const isCenter = MONTHS.indexOf(item) + 1 === pendingMonth;
+                return (
+                  <View style={styles.drumItem}>
+                    <Text style={[styles.drumItemText, isCenter && styles.drumItemTextCenter]}>
+                      {item}
+                    </Text>
+                  </View>
+                );
+              }}
+            />
+          </View>
+
+          {/* Year column */}
+          <View style={styles.drumColumn}>
+            <View style={styles.drumHighlight} pointerEvents="none" />
+            <FlatList
+              ref={yearRef}
+              data={YEARS}
+              keyExtractor={(item) => String(item)}
+              showsVerticalScrollIndicator={false}
+              snapToInterval={ITEM_HEIGHT}
+              decelerationRate="fast"
+              getItemLayout={(_, index) => ({
+                length: ITEM_HEIGHT,
+                offset: ITEM_HEIGHT * index,
+                index,
+              })}
+              onMomentumScrollEnd={makeScrollHandler(YEARS, setPendingYear)}
+              style={styles.drumList}
+              contentContainerStyle={{ paddingVertical: paddingV }}
+              renderItem={({ item }) => {
+                const isCenter = item === pendingYear;
+                return (
+                  <View style={styles.drumItem}>
+                    <Text style={[styles.drumItemText, isCenter && styles.drumItemTextCenter]}>
+                      {item}
+                    </Text>
+                  </View>
+                );
+              }}
+            />
+          </View>
         </View>
 
         <TouchableOpacity onPress={handleConfirm} style={styles.modalConfirmButton} activeOpacity={0.8}>
@@ -426,6 +527,67 @@ function StepIndicator({ current }: StepIndicatorProps) {
   );
 }
 
+// ── Profile summary card ──────────────────────────────────────────────────────
+
+interface ProfileSummaryProps {
+  me: {
+    birth_date?: string;
+    birth_year?: number;
+    gender?: string | null;
+    education_level?: string | null;
+    years_experience?: number | null;
+    nationality?: string | null;
+    occupation?: string | null;
+    cohort?: string | null;
+  } | null | undefined;
+}
+
+function ProfileSummaryCard({ me }: ProfileSummaryProps) {
+  function formatBirthDate(): string {
+    if (me?.birth_date) {
+      const parts = me.birth_date.split("-").map(Number);
+      if (parts.length === 3) {
+        const [y, m, d] = parts;
+        return `${String(d).padStart(2, "0")}/${String(m).padStart(2, "0")}/${y}`;
+      }
+    }
+    if (me?.birth_year != null) return String(me.birth_year);
+    return "—";
+  }
+
+  function findLabel(options: OptionItem[], value: string | null | undefined): string {
+    if (!value) return "—";
+    return options.find((o) => o.value === value)?.label ?? "—";
+  }
+
+  const rows: { label: string; value: string }[] = [
+    { label: "Date de naissance", value: formatBirthDate() },
+    { label: "Genre",             value: findLabel(GENDER_OPTIONS, me?.gender) },
+    { label: "Niveau d'études",   value: findLabel(EDUCATION_OPTIONS, me?.education_level) },
+    { label: "Années en mer",     value: me?.years_experience != null ? `${me.years_experience} ans` : "—" },
+    { label: "Nationalité",       value: me?.nationality ?? "—" },
+    { label: "Langue",            value: findLabel(LANGUAGE_OPTIONS, me?.occupation) },
+    { label: "Rôle",              value: findLabel(MARITIME_ROLE_OPTIONS, me?.cohort) },
+  ];
+
+  return (
+    <View style={styles.summaryCard}>
+      <Text style={styles.summaryHeader}>MON PROFIL</Text>
+      {rows.map(({ label, value }) => {
+        const isEmpty = value === "—";
+        return (
+          <View key={label} style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>{label}</Text>
+            <Text style={[styles.summaryValue, isEmpty && styles.summaryValueEmpty]}>
+              {value}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 // ── Écran principal ───────────────────────────────────────────────────────────
 
 export default function CalibProfileScreen() {
@@ -440,11 +602,13 @@ export default function CalibProfileScreen() {
   const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
 
   // Modal visibility
-  const [showYearModal, setShowYearModal] = useState(false);
+  const [showDateModal, setShowDateModal] = useState(false);
   const [showYearsAtSeaModal, setShowYearsAtSeaModal] = useState(false);
   const [showNationalityModal, setShowNationalityModal] = useState(false);
 
   // Form state — Step 1
+  const [birthDay, setBirthDay] = useState<number | null>(null);
+  const [birthMonth, setBirthMonth] = useState<number | null>(null);
   const [birthYear, setBirthYear] = useState<number | null>(null);
   const [gender, setGender] = useState("");
 
@@ -464,7 +628,16 @@ export default function CalibProfileScreen() {
   // Pre-fill from existing data
   useEffect(() => {
     if (me) {
-      if (me.age) setBirthYear(new Date().getFullYear() - me.age);
+      if ((me as { birth_date?: string }).birth_date) {
+        const [y, m, d] = ((me as { birth_date?: string }).birth_date as string)
+          .split("-")
+          .map(Number);
+        setBirthYear(y);
+        setBirthMonth(m);
+        setBirthDay(d);
+      } else if (me.age) {
+        setBirthYear(new Date().getFullYear() - me.age);
+      }
       if (me.years_experience !== undefined && me.years_experience !== null) {
         setYearsAtSea(me.years_experience);
       }
@@ -484,13 +657,14 @@ export default function CalibProfileScreen() {
   });
 
   function buildPayload(): CalibratorDemographicsIn {
-    const currentYear = new Date().getFullYear();
     const payload: CalibratorDemographicsIn = {};
 
-    if (birthYear !== null) {
-      const age = currentYear - birthYear;
+    if (birthDay && birthMonth && birthYear) {
+      // birth_date stored as ISO string; map age for backend compatibility
+      const age = new Date().getFullYear() - birthYear;
       if (age > 0 && age < 120) payload.age = age;
     }
+
     if (yearsAtSea !== null) payload.years_experience = yearsAtSea;
 
     const resolvedNationality =
@@ -501,7 +675,7 @@ export default function CalibProfileScreen() {
     if (educationLevel) payload.education_level = educationLevel;
 
     const resolvedLanguage =
-      nativeLanguage === "Autre" ? languageOther.trim() : nativeLanguage;
+      nativeLanguage === "other" ? languageOther.trim() : nativeLanguage;
     if (resolvedLanguage) payload.occupation = resolvedLanguage; // mapped to occupation as native_language proxy
 
     if (maritimeRole) payload.cohort = maritimeRole; // mapped to cohort as maritime_role proxy
@@ -563,6 +737,9 @@ export default function CalibProfileScreen() {
           </Text>
         </View>
 
+        {/* Profile summary card */}
+        <ProfileSummaryCard me={me} />
+
         {/* Stepper card */}
         <View style={styles.card}>
           {/* Step indicator */}
@@ -575,10 +752,12 @@ export default function CalibProfileScreen() {
           {currentStep === 1 && (
             <>
               <View style={styles.fieldGroup}>
-                <SectionLabel label="Année de naissance" />
-                <BirthYearButton
-                  selectedYear={birthYear}
-                  onPress={() => setShowYearModal(true)}
+                <SectionLabel label="Date de naissance" />
+                <BirthDateButton
+                  day={birthDay}
+                  month={birthMonth}
+                  year={birthYear}
+                  onPress={() => setShowDateModal(true)}
                 />
               </View>
 
@@ -640,7 +819,7 @@ export default function CalibProfileScreen() {
                   onSelect={setNativeLanguage}
                   wrap
                 />
-                {nativeLanguage === "Autre" && (
+                {nativeLanguage === "other" && (
                   <TextInput
                     style={[styles.textInput, styles.otherInput]}
                     value={languageOther}
@@ -713,11 +892,17 @@ export default function CalibProfileScreen() {
       </ScrollView>
 
       {/* ── Modals (outside ScrollView to avoid z-index issues) ── */}
-      <BirthYearModal
-        visible={showYearModal}
-        selectedYear={birthYear}
-        onClose={() => setShowYearModal(false)}
-        onConfirm={setBirthYear}
+      <BirthDateModal
+        visible={showDateModal}
+        day={birthDay}
+        month={birthMonth}
+        year={birthYear}
+        onClose={() => setShowDateModal(false)}
+        onConfirm={(d, m, y) => {
+          setBirthDay(d);
+          setBirthMonth(m);
+          setBirthYear(y);
+        }}
       />
 
       <YearsAtSeaModal
@@ -796,6 +981,40 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
     fontStyle: "italic",
+  },
+  // Profile summary card
+  summaryCard: {
+    backgroundColor: "#1A2C42",
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#1E3050",
+    padding: 16,
+    marginBottom: 16,
+  },
+  summaryHeader: {
+    color: "#64748B",
+    fontSize: 10,
+    fontWeight: "800",
+    letterSpacing: 1,
+    marginBottom: 12,
+  },
+  summaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 5,
+  },
+  summaryLabel: {
+    color: "#64748B",
+    fontSize: 11,
+  },
+  summaryValue: {
+    color: "#CBD5E1",
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  summaryValueEmpty: {
+    color: "#475569",
   },
   // Step indicator
   stepIndicatorRow: {
@@ -1001,47 +1220,47 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     letterSpacing: 0.5,
   },
-  // Roulette (birth year)
-  rouletteContainer: {
-    height: 300,
-    overflow: "hidden",
+  // Drum picker (birth date)
+  drumRow: {
+    flexDirection: "row",
     borderRadius: 10,
     borderWidth: 1,
     borderColor: "#1E3050",
+    overflow: "hidden",
+  },
+  drumColumn: {
+    flex: 1,
     position: "relative",
   },
-  rouletteCenterHighlight: {
+  drumHighlight: {
     position: "absolute",
     left: 0,
     right: 0,
     top: "50%",
-    marginTop: -YEAR_ITEM_HEIGHT / 2,
-    height: YEAR_ITEM_HEIGHT,
+    marginTop: -ITEM_HEIGHT / 2,
+    height: ITEM_HEIGHT,
     borderTopWidth: 1,
     borderBottomWidth: 1,
     borderColor: "#A67C52",
+    backgroundColor: "rgba(166,124,82,0.15)",
     zIndex: 1,
-    backgroundColor: "#A67C5211",
   },
-  rouletteList: {
+  drumList: {
     flex: 1,
   },
-  rouletteItem: {
-    height: YEAR_ITEM_HEIGHT,
+  drumItem: {
+    height: ITEM_HEIGHT,
     alignItems: "center",
     justifyContent: "center",
   },
-  rouletteItemCenter: {
-    // Extra emphasis handled via text style
-  },
-  rouletteItemText: {
+  drumItemText: {
     color: "#64748B",
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: "500",
   },
-  rouletteItemTextCenter: {
+  drumItemTextCenter: {
     color: "#F1F4F8",
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: "800",
   },
   // List picker (years at sea, nationality)

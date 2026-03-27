@@ -16,7 +16,7 @@ Couverture :
 from __future__ import annotations
 
 import pytest
-from datetime import datetime
+from datetime import date, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -102,7 +102,7 @@ def _me_out(**kwargs) -> CalibratorMeOut:
         name="Alice",
         cohort="ENSM 2026",
         gender=None,
-        birth_year=None,
+        birth_date=None,
         education_level=None,
         native_language=None,
         years_at_sea=None,
@@ -402,14 +402,14 @@ class TestGetMeEndpoint:
     async def test_get_me_success(self, calib_client, mocker):
         mocker.patch(
             "app.modules.calibration.router.service.get_me",
-            AsyncMock(return_value=_me_out(birth_year=1990, years_at_sea=3)),
+            AsyncMock(return_value=_me_out(birth_date=date(1990, 6, 15), years_at_sea=3)),
         )
         resp = await calib_client.get("/calibration/me")
         assert resp.status_code == 200
         data = resp.json()
         assert data["id"] == 1
         assert data["name"] == "Alice"
-        assert data["birth_year"] == 1990
+        assert data["birth_date"] == "1990-06-15"
         assert data["years_at_sea"] == 3
 
 
@@ -421,17 +421,17 @@ class TestUpdateDemographicsEndpoint:
         mocker.patch(
             "app.modules.calibration.router.service.update_demographics",
             AsyncMock(
-                return_value=_me_out(gender="female", birth_year=1992, maritime_role="officer")
+                return_value=_me_out(gender="female", birth_date=date(1992, 3, 20), maritime_role="officer")
             ),
         )
         resp = await calib_client.patch(
             "/calibration/me",
-            json={"gender": "female", "birth_year": 1992, "maritime_role": "officer"},
+            json={"gender": "female", "birth_date": "1992-03-20", "maritime_role": "officer"},
         )
         assert resp.status_code == 200
         data = resp.json()
         assert data["gender"] == "female"
-        assert data["birth_year"] == 1992
+        assert data["birth_date"] == "1992-03-20"
         assert data["maritime_role"] == "officer"
 
     @pytest.mark.asyncio
@@ -443,11 +443,11 @@ class TestUpdateDemographicsEndpoint:
         assert resp.status_code == 422
 
     @pytest.mark.asyncio
-    async def test_update_demographics_invalid_birth_year_returns_422(self, calib_client):
-        """birth_year hors plage [1940, 2010] → 422."""
+    async def test_update_demographics_invalid_birth_date_returns_422(self, calib_client):
+        """birth_date au format invalide → 422."""
         resp = await calib_client.patch(
             "/calibration/me",
-            json={"birth_year": 1800},
+            json={"birth_date": "not-a-date"},
         )
         assert resp.status_code == 422
 

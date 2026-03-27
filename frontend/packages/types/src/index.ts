@@ -635,21 +635,28 @@ export interface CalibratorMeOut {
   email: string;
   cohort: string | null;
   age: number | null;
+  birth_date: string | null;  // ISO date string "YYYY-MM-DD"
+  birth_year?: number | null; // backward compat during transition
   gender: string | null;
   education_level: string | null;
   occupation: string | null;
   years_experience: number | null;
   nationality: string | null;
+  native_language: string | null;
+  maritime_role: string | null;
   created_at: string;
 }
 
 export interface CalibratorDemographicsIn {
   age?: number;
+  birth_date?: string; // ISO date string "YYYY-MM-DD"
   gender?: string;
   education_level?: string;
   occupation?: string;
   years_experience?: number;
   nationality?: string;
+  native_language?: string;
+  maritime_role?: string;
   cohort?: string;
 }
 
