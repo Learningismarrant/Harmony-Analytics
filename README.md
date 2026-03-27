@@ -13,7 +13,8 @@ Les décisions de recrutement maritime reposent encore sur le CV et l'intuition,
 Radiant Analytics fournit :
 
 - **Pour le recruteur :** un pipeline P-E Fit en 7 dimensions (adéquation personne-poste, personne-équipe, personne-environnement, personne-capitaine…) qui classe les candidats par probabilité de succès prédit, visualisé comme une molécule 3D interactive.
-- **Pour le candidat :** un parcours de passation de tests psychométriques sur mobile (Big Five T-IRT, cognition, valeurs, mobilité, tolérance maritime) qui construit son profil et augmente sa visibilité.
+- **Pour le candidat :** un parcours de passation de tests psychométriques sur mobile (Big Five IPIP-50, cognition GCA chronométrée, valeurs, mobilité, tolérance maritime) qui construit son profil et augmente sa visibilité.
+- **Pour le calibrateur :** une application dédiée à l'étalonnage psychométrique — passation des mêmes batteries que les candidats pour constituer la base normative de référence (DIF analysis, N ≥ 200 requis).
 - **Pour l'armateur :** des métriques d'équipage en continu (F_team, TVI, diagnostic Performance × Cohésion) et un système d'alerte précoce sur les risques de départ ou de conflit.
 
 ---
@@ -51,7 +52,7 @@ Harmony/
 |---|---|
 | Monorepo | Turborepo 2 |
 | Web (employeur) | Next.js 15 App Router |
-| Mobile (candidat) | Expo SDK 55 + Expo Router |
+| Mobile (candidat + calibrateur) | Expo SDK 55 + Expo Router (3 rôles : candidat / capitaine / calibrateur) |
 | 3D | React Three Fiber 8 + @react-three/drei |
 | Physique 3D | D3-force 3 |
 | Requêtes serveur | TanStack Query v5 |
@@ -145,13 +146,13 @@ use_cases/
 
 | Instrument | Items | Familles alimentées |
 |---|---|---|
-| CUTTY SARK T-IRT (IPIP-120) | 60 paires forced-choice | DA, PG, PS |
-| RMAWS (résilience) | — | DA (safety barrier) |
-| COGIQ (cognition) | — | DA |
-| HMR-24 (motivation) | 24 Likert | NS, DA |
+| HEXACO-60 (IPIP-50) | 60 Likert | DA, PG, PS (Big Five CTT — alpha v1) |
+| Batterie GCA chronométrée | ~30 items (matrix, analogy, induction, ICAR) | DA |
+| HMR-24 (motivation SDT) | 24 Likert | NS, DA |
 | CES Values (Ravlin & Meglino 1987) | 16 Likert | PO |
 | METS (tolérance maritime) | 15 Likert | Physical Fit |
 | MMFS (mobilité) | 12 Likert | Mobility Fit |
+| LMX-4 (Person-Supervisor) | 4 Likert | PS |
 
 ### Sociogramme
 
@@ -218,7 +219,7 @@ npx expo start
 
 ## Tests
 
-### Backend — 1104 tests, 0 failures
+### Backend — 1170 tests, 0 failures
 
 ```bash
 cd backend
@@ -236,7 +237,7 @@ pytest tests/ -v -m router            # HTTP — httpx AsyncClient
 cd frontend/apps/web && npm test
 ```
 
-### Frontend mobile — 121 tests, 0 failures
+### Frontend mobile — 159 tests, 0 failures
 
 ```bash
 cd frontend/apps/mobile && npm test
@@ -264,7 +265,8 @@ cd frontend/apps/mobile && npm test
 | Sociogramme (P2 dyad) | ✅ Implémenté |
 | use_cases (recruitment, management, training, talent, rps) | ✅ Implémenté |
 | ORM models + Alembic migrations | ✅ Implémenté |
-| 7 catalogues psychométriques seedés (IPIP-120, RMAWS, COGIQ, HMR-24, CES, METS, MMFS) | ✅ Implémenté |
+| 7 catalogues psychométriques seedés (HEXACO-60, GCA, HMR-24, CES, METS, MMFS, LMX-4) | ✅ Implémenté |
+| Module calibration (auth, demographics, catalogues, passation, sessions, DIF) | ✅ Implémenté |
 | Profils SME 16 postes + lookup matriciel (position × yacht_type) | ✅ Implémenté |
 | Suite de tests (1104 tests) | ✅ 0 failure |
 | Endpoints sociogramme (`/crew/{id}/sociogram`) | ⏳ Manquant |
@@ -279,9 +281,10 @@ cd frontend/apps/mobile && npm test
 | Web — auth + layout + dashboard flotte | ✅ Complet |
 | Web — sociogramme 3D + mode simulation | ✅ Complet |
 | Web — matching P-E Fit | ✅ Complet |
-| Mobile — auth + profil candidat | ✅ Complet |
-| Mobile — passation tests (Likert + T-IRT CUTTY SARK) | ✅ Complet |
+| Mobile — auth + ProfileMacroMap candidat (constellation macro + 3 sub-screens) | ✅ Complet |
+| Mobile — passation tests candidat (Likert + Raven matrices) | ✅ Complet |
 | Mobile — training (4 axes, parcours personnalisé) | ✅ Frontend · ⏳ Backend |
+| Mobile — calibrateur v1 alpha (ConstellationMap, passation, profil démographique) | ✅ Complet |
 | Web — register / campagnes / vessel detail | ⏳ À construire |
 | Mobile — survey / pulse / invitations | ⏳ À construire |
 

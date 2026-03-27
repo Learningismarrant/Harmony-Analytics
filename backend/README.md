@@ -35,7 +35,7 @@ backend/app/
 │
 ├── shared/
 │   ├── deps.py            # FastAPI dependencies (UserDep, CrewDep, EmployerDep, AdminDep)
-│   ├── enums.py           # UserRole, YachtPosition (16), YachtTypeAlpha (7), CampaignStatus…
+│   ├── enums.py           # UserRole (candidate/client/admin/calibrator), YachtPosition (17), YachtTypeAlpha (7), CampaignStatus…
 │   ├── limiter.py         # slowapi rate limiter
 │   └── models/            # SQLAlchemy ORM models (shared across modules)
 │       ├── User.py        # User, CrewProfile, EmployerProfile, UserDocument
@@ -53,6 +53,7 @@ backend/app/
 │   ├── recruitment/       # POST /campaigns, GET /matching, /impact, /decide
 │   ├── survey/            # POST /surveys/trigger, GET /results, POST /respond
 │   ├── vessel/            # CRUD /vessels, PATCH /environment
+│   ├── calibration/       # Auth calibrateur, demographics, catalogues, sessions, passation, DIF
 │   └── gateway/           # Aggregated composite endpoints for frontend consumption
 │
 ├── engine/                # Pure computation — zero DB access, fully testable
@@ -158,8 +159,12 @@ Yacht
 Campaign (a hiring position on a Yacht)
   └── CampaignCandidate      application (PENDING / HIRED / REJECTED / JOINED)
 
-TestCatalogue (7 catalogues) → Question → TestResult
-  └── test_type = "tirt" → routes to TirtScoringEngine (CUTTY SARK)
+TestCatalogue (7 catalogues) → Question
+  └── test_type = "likert" | "qcm" | "raven"
+
+test_sessions (unified)    → test_responses
+  ├── crew_profile_id XOR calibrator_id   (même table pour candidats et calibrateurs)
+  └── catalogue_id dénormalisé pour analytics DIF
 
 Survey → SurveyResponse
   └── intent_to_stay (0–100) feeds y_actual in RecruitmentEvent
@@ -256,31 +261,21 @@ health = compute_team_health(crew_snapshots, vessel_params)
 
 ## Scientific Foundations
 
-### T-IRT — Thurstonian Item Response Theory (CUTTY SARK)
+### Instruments alpha v1 — CTT (Classical Test Theory)
 
-**Decision question:** *What are the candidate's true Big Five latent traits, corrected for social desirability and ipsativity bias?*
+Pour l'alpha, tous les instruments utilisent la **CTT** (scores sommatifs / moyennes pondérées) en attendant d'accumuler N ≥ 200 passations calibrateurs pour valider les paramètres IRT.
 
-The CUTTY SARK is a 60-item forced-choice assessment using the IPIP-120 item pool. Each item forces a binary trade-off between statements from different Big Five domains — eliminating acquiescence bias.
+| Instrument | Type | Domaine |
+|---|---|---|
+| HEXACO-60 (IPIP-50) | Likert 5 pts | Big Five → DA, PG, PS |
+| Batterie GCA | QCM chronométré (Raven matrices, analogy, induction, ICAR) | Cognition → DA |
+| HMR-24 | Likert 7 pts | Motivation SDT → NS |
+| CES Values | Likert 5 pts | Valeurs → PO |
+| METS | Likert 5 pts | Tolérance maritime → Physical Fit |
+| MMFS | Likert 5 pts | Mobilité → Mobility Fit |
+| LMX-4 | Likert 7 pts | Relation superviseur → PS |
 
-#### Probit Model
-
-For each pair $l$ opposing item $i$ (left) and item $j$ (right):
-
-$$P(y_l = 1 \mid \theta) = \Phi\!\left(\frac{(\mu_i - \mu_j) + (\lambda^\text{eff}_i \cdot \theta_{d_i} - \lambda^\text{eff}_j \cdot \theta_{d_j})}{\sqrt{\psi_i^2 + \psi_j^2}}\right)$$
-
-Where $\lambda^\text{eff}_i = \lambda_i \times \text{score\_weight}_i$ — reversed items (`score_weight = -1`) contribute negatively to their domain trait.
-
-#### MAP Estimation
-
-$$\theta^* = \arg\max_\theta \left[\sum_{l=1}^{60} \ln P(y_l \mid \theta) - \frac{1}{2}\sum_{k=1}^{5} \theta_k^2\right]$$
-
-$N(0, I)$ prior makes $\theta^*$ directly interpretable as Z-scores. Optimised via BFGS.
-
-**Implementation:** `engine/psychometrics/tirt_scoring.py`
-
-**References:**
-- Brown, A., & Maydeu-Olivares, A. (2011). *Educational and Psychological Measurement*, 71(3), 460–502.
-- Maples, J. L., et al. (2014). *Psychological Assessment*, 26(4), 1116–1138.
+**Roadmap T-IRT :** une fois N ≥ 200 passations calibrateurs disponibles, migration vers Thurstonian IRT (Brown & Maydeu-Olivares, 2011) pour corriger les biais de désirabilité sociale.
 
 ### Sociogram — Dyad Compatibility
 
@@ -400,7 +395,7 @@ Swagger UI: `http://localhost:8000/docs` · Health check: `GET /health`
 ## Running Tests
 
 ```bash
-# Full suite (1104 tests, 0 failures)
+# Full suite (1170 tests, 0 failures)
 pytest tests/ -v
 
 # By layer
@@ -468,9 +463,10 @@ Full schema at `/docs`.
 | Dependency | Role | Returns |
 |------------|------|---------|
 | `UserDep` | Any authenticated | `User` |
-| `CrewDep` | `CANDIDATE` | `CrewProfile` |
-| `EmployerDep` | `CLIENT` or `ADMIN` | `EmployerProfile` |
-| `AdminDep` | `ADMIN` | `User` |
+| `CrewDep` | `candidate` | `CrewProfile` |
+| `EmployerDep` | `client` or `admin` | `EmployerProfile` |
+| `AdminDep` | `admin` | `User` |
+| *(calibration JWT)* | `calibrator` | `CalibratorUser` — token distinct via `/calibration/auth/login` |
 
 ---
 

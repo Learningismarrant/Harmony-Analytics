@@ -63,9 +63,14 @@ Component → useQuery/useMutation → @harmony/api → Axios (avec token Bearer
 
 Miroir TypeScript de l'intégralité des schémas Pydantic du backend. Source unique de vérité pour les types partagés entre web et mobile.
 
-Fichier principal : [`packages/types/src/index.ts`](packages/types/src/index.ts)
+```
+packages/types/src/
+├── index.ts      # Interfaces + re-export de tout (export * from "./enums")
+└── enums.ts      # Types string (UserRole, YachtPosition…) + constantes UI calibrateur
+                  # (YACHT_POSITION_OPTIONS, LANGUAGE_OPTIONS, TRAIT_META, MMFS_TRAITS…)
+```
 
-Types exportés : `UserRole`, `YachtPosition`, `AvailabilityStatus`, `TokenOut`, `UserIdentityOut`, `FullCrewProfileOut`, `TestInfoOut`, `QuestionOut`, `SubmitTestIn`, `TestResultOut`, `YachtOut`, `CampaignOut`, `MatchResultOut`, `SociogramOut`, `SociogramNode`, `SociogramEdge`, `SimulationPreviewOut`, `SurveyOut`, `SurveyResponseIn`, `DashboardOut`, `HarmonyMetrics`, …
+Types exportés : `UserRole`, `YachtPosition` (17 postes), `CatalogueDomain`, `TokenOut`, `CalibratorMeOut`, `CalibCatalogueOut`, `CalibSessionOut`, `CalibTraitScoreOut`, `UserIdentityOut`, `FullCrewProfileOut`, `TestInfoOut`, `QuestionOut`, `RavenMatrixConfig`, `MatchResultOut`, `SociogramOut`, …
 
 ### `@harmony/api`
 
@@ -77,6 +82,7 @@ packages/api/src/
 └── endpoints/
     ├── auth.ts             # login, register, refresh, me, logout
     ├── assessment.ts       # catalogue, questions, submit, results
+    ├── calibration.ts      # auth calibrateur, demographics, catalogues, sessions, passation
     ├── crew.ts             # dashboard, sociogram, assign, pulse
     ├── identity.ts         # profile, update, experiences
     ├── recruitment.ts      # campaigns, matching, simulate, hire, reject
@@ -158,20 +164,34 @@ SociogramCanvas              # Canvas R3F + boucle physique + HUD
 
 Physics engine : [`src/features/sociogram/physics.ts`](apps/web/src/features/sociogram/physics.ts)
 
-### `apps/mobile` — Application candidat
+### `apps/mobile` — Application multi-rôle
 
-**Déploiement :** EAS Build (iOS + Android)
+**Déploiement :** EAS Build (iOS + Android) — 1 app, 3 rôles : `candidate` | `calibrator` | *(captain à venir)*
+
+#### Routes candidat `/(candidate)/`
 
 | Route | Description |
 |---|---|
-| `/(auth)/login` | Authentification candidat |
-| `/(candidate)/profile` | Profil candidat — 4 tabs (identité, soft skills, expériences, documents) |
+| `/(auth)/login` | Authentification (rôle détecté au login) |
+| `/(candidate)/profile/` | **ProfileMacroMap** — constellation macro (profil au centre, 3 étoiles orbitales) |
+| `/(candidate)/profile/tests` | Tests psychométriques — sub-screen (progression + scores lockés) |
+| `/(candidate)/profile/experience` | Expérience maritime — timeline |
+| `/(candidate)/profile/documents` | Documents STCW & certificats |
 | `/(candidate)/assessment` | Catalogue des tests psychométriques |
-| `/(candidate)/assessment/[testId]` | Passation — Likert ou forced-choice T-IRT (CUTTY SARK) |
+| `/(candidate)/assessment/[testId]` | Passation — Likert, QCM ou Raven matrices |
 | `/(candidate)/assessment/result` | Résultat immédiat post-soumission |
 | `/(candidate)/training` | Parcours formation personnalisé — 4 grands axes |
 | `/(candidate)/training/[moduleId]` | Contenu du module (leçon · exercice · checklist · auto-évaluation) |
 | `/(candidate)/applications` | Candidatures en cours *(à compléter)* |
+
+#### Routes calibrateur `/(calibrator)/`
+
+| Route | Description |
+|---|---|
+| `/(calibrator)/catalogues` | ConstellationMap 7 domaines + card instruction |
+| `/(calibrator)/session/[sessionId]` | Passation (instructions → questions → soumission) |
+| `/(calibrator)/session/result/[sessionId]` | "Contribution enregistrée" + liste traits neutres |
+| `/(calibrator)/profile` | Profil démographique 3-step stepper (DIF analysis) |
 
 ---
 
@@ -220,7 +240,7 @@ npm test
 
 cd frontend/apps/mobile
 npm test
-# → 121 tests, 19 suites, 0 failures
+# → 159 tests, 0 failures
 ```
 
 ### Build complet
@@ -366,7 +386,7 @@ CandidatePath         – candidate_id, level, current_module_id, queued_module_
 | Gestion offline mobile | Cache TanStack Query + indicateur de connectivité |
 | Deep linking mobile | Schéma `harmony://` — liens d'invitation campaign, onboarding |
 | Internationalisation | Le projet mélange français et anglais — choisir une langue et uniformiser |
-| Tests mobile | Jest + RNTL (mobile) |
+| Tests mobile calibrateur | Couverture passation, profil, résultats (jest-expo) |
 | Storybook | Documentation des composants partagés |
 
 ### 🟢 Priorité basse (optimisations)
@@ -396,9 +416,10 @@ CandidatePath         – candidate_id, level, current_module_id, queued_module_
 | Web — cockpit `/vessel/[id]` (sociogramme 3D + simulation + matching) | ✅ Complet *(endpoint backend manquant)* |
 | Web — tests Jest + Testing Library | ✅ 126 tests, 0 failures (13 suites) |
 | Mobile — auth (login + SecureStore) | ✅ Complet |
-| Mobile — profil candidat (4 tabs : identité, soft skills, expériences, documents) | ✅ Complet |
-| Mobile — catalogue + passation tests (Likert + T-IRT CUTTY SARK) | ✅ Complet |
+| Mobile — ProfileMacroMap candidat (constellation macro + 3 sub-screens) | ✅ Complet |
+| Mobile — catalogue + passation tests candidat (Likert, QCM, Raven) | ✅ Complet |
 | Mobile — training (4 axes · parcours personnalisé · 4 types de contenu) | ✅ Frontend · ⏳ Backend |
+| Mobile — calibrateur v1 alpha (ConstellationMap, passation 7 domaines, profil DIF) | ✅ Complet |
 | Web — register / campagnes / vessel | ⏳ À construire |
 | Mobile — survey / pulse / invite | ⏳ À construire |
 | Backend — endpoints sociogramme | ⏳ À construire |
