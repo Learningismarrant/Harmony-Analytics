@@ -1,20 +1,13 @@
 import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useQuery } from "@tanstack/react-query";
+import { Ionicons } from "@expo/vector-icons";
 import { calibrationApi, calibrationQueryKeys } from "@harmony/api";
-import { useAuthStore } from "@/features/auth/store";
-import { CalibThankYou } from "@/features/calibration/components/result/CalibThankYou";
-import { CalibTraitBars } from "@/features/calibration/components/result/CalibTraitBars";
-import { CalibRadarChart } from "@/features/calibration/components/result/CalibRadarChart";
-import { CalibScoreRing } from "@/features/calibration/components/result/CalibScoreRing";
-
-const DISCLAIMER =
-  "Ces résultats sont indicatifs et servent uniquement à l'étalonnage de nos instruments psychométriques. Ils ne constituent pas un diagnostic psychologique.";
+import type { CalibTraitScoreOut } from "@harmony/types";
 
 export default function CalibResultScreen() {
   const { sessionId } = useLocalSearchParams<{ sessionId: string }>();
   const router = useRouter();
-  const name = useAuthStore((s) => s.name);
 
   const { data: score, isLoading } = useQuery({
     queryKey: calibrationQueryKeys.sessionScore(Number(sessionId)),
@@ -50,81 +43,61 @@ export default function CalibResultScreen() {
 
   const traits = score.traits ?? [];
 
-  // Choisir la visualisation selon le nombre de traits
-  function renderVisualization() {
-    if (traits.length === 0) return null;
-
-    if (traits.length === 1) {
-      return (
-        <View style={{ alignItems: "center", marginBottom: 20 }}>
-          <CalibScoreRing trait={traits[0]} />
-        </View>
-      );
-    }
-
-    if (traits.length >= 3) {
-      return (
-        <View style={{ marginBottom: 20 }}>
-          <Text
-            style={{
-              color: "#64748B",
-              fontSize: 10,
-              fontWeight: "800",
-              letterSpacing: 1,
-              textAlign: "center",
-              marginBottom: 12,
-            }}
-          >
-            PROFIL PAR TRAIT
-          </Text>
-          <CalibRadarChart traits={traits} />
-        </View>
-      );
-    }
-
-    // 2 traits : barres
-    return (
-      <View
-        style={{
-          backgroundColor: "#1A2C42",
-          borderRadius: 12,
-          borderWidth: 1,
-          borderColor: "#1E3050",
-          padding: 20,
-          marginBottom: 20,
-        }}
-      >
-        <Text
-          style={{
-            color: "#64748B",
-            fontSize: 10,
-            fontWeight: "800",
-            letterSpacing: 1,
-            marginBottom: 16,
-          }}
-        >
-          SCORES PAR TRAIT
-        </Text>
-        <CalibTraitBars traits={traits} />
-      </View>
-    );
-  }
-
   return (
     <ScrollView
       className="flex-1 bg-bg-primary"
       contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
       showsVerticalScrollIndicator={false}
     >
-      {/* Zone 1 : Remerciements */}
-      <CalibThankYou
-        name={name}
-        catalogueName={score.catalogue_name}
-        testType={score.test_type}
-        disclaimer={DISCLAIMER}
-      />
+      {/* Zone 1 : Confirmation header */}
+      <View
+        style={{
+          backgroundColor: "#1A2C42",
+          borderRadius: 12,
+          borderWidth: 1,
+          borderColor: "#1E3050",
+          padding: 24,
+          alignItems: "center",
+          marginBottom: 20,
+        }}
+      >
+        <Ionicons name="checkmark-circle" size={48} color="#2E8A5C" />
+        <Text
+          style={{
+            color: "#F1F4F8",
+            fontSize: 20,
+            fontWeight: "800",
+            textAlign: "center",
+            marginTop: 12,
+          }}
+        >
+          Contribution enregistrée !
+        </Text>
+        <Text
+          style={{
+            color: "#94A3B8",
+            fontSize: 14,
+            textAlign: "center",
+            marginTop: 6,
+          }}
+        >
+          {score.catalogue_name}
+        </Text>
+        <Text
+          style={{
+            color: "#64748B",
+            fontSize: 12,
+            fontStyle: "italic",
+            textAlign: "center",
+            marginTop: 8,
+          }}
+        >
+          Vos réponses contribuent à l'étalonnage de cet instrument. Ces données ne constituent
+          pas une évaluation personnelle.
+        </Text>
+      </View>
 
-      {/* Zone 2 : Visualisation des scores */}
+      {/* Zone 2 : Raw trait scores (neutral presentation) */}
       {traits.length > 0 && (
         <View
           style={{
@@ -145,16 +118,26 @@ export default function CalibResultScreen() {
               marginBottom: 16,
             }}
           >
-            VOS RÉSULTATS
+            RÉPONSES ENREGISTRÉES
           </Text>
-          {renderVisualization()}
-
-          {/* Toujours afficher les barres si >= 3 traits */}
-          {traits.length >= 3 && (
-            <View style={{ marginTop: 8 }}>
-              <CalibTraitBars traits={traits} />
+          {traits.map((trait: CalibTraitScoreOut, index: number) => (
+            <View
+              key={trait.trait}
+              style={{
+                flexDirection: "row",
+                justifyContent: "space-between",
+                alignItems: "center",
+                paddingVertical: 10,
+                borderTopWidth: index === 0 ? 0 : 1,
+                borderTopColor: "#1E3050",
+              }}
+            >
+              <Text style={{ color: "#94A3B8", fontSize: 14 }}>{trait.label}</Text>
+              <Text style={{ color: "#94A3B8", fontSize: 14 }}>
+                {trait.score.toFixed(1)}
+              </Text>
             </View>
-          )}
+          ))}
         </View>
       )}
 

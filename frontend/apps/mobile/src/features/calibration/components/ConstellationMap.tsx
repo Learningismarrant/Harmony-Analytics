@@ -1,6 +1,6 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { View, TouchableOpacity, Text } from "react-native";
-import Svg, { Circle, Line, Defs, RadialGradient, Stop } from "react-native-svg";
+import Svg, { Circle, Line, Defs, RadialGradient, Stop, Rect, Text as SvgText, G } from "react-native-svg";
 import { Ionicons } from "@expo/vector-icons";
 import type { CalibCatalogueOut, CalibSessionOut, CatalogueDomain } from "@harmony/types";
 
@@ -148,6 +148,15 @@ export function ConstellationMap({
   sessions,
   onDomainPress,
 }: ConstellationMapProps) {
+  // ── Tooltip state ────────────────────────────────────────────────────────────
+  const [tooltip, setTooltip] = useState<{ domain: CatalogueDomain; x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (tooltip === null) return;
+    const timer = setTimeout(() => setTooltip(null), 1500);
+    return () => clearTimeout(timer);
+  }, [tooltip]);
+
   // ── Progression par domaine ──────────────────────────────────────────────────
   function getDomainProgress(domain: CatalogueDomain) {
     const domainCatalogues = catalogues.filter(
@@ -342,6 +351,40 @@ export function ConstellationMap({
             </React.Fragment>
           );
         })}
+
+        {/* Tooltip au tap sur une étoile */}
+        {DOMAINS.map((domain) => {
+          if (tooltip?.domain !== domain) return null;
+          const label = DOMAIN_LABELS[domain];
+          const tx = tooltip.x;
+          const ty = tooltip.y - 35;
+          const rectWidth = 140;
+          const rectHeight = 24;
+          return (
+            <G key={`tooltip-${domain}`}>
+              <Rect
+                x={tx - rectWidth / 2}
+                y={ty - rectHeight / 2}
+                width={rectWidth}
+                height={rectHeight}
+                rx={8}
+                fill="rgba(255,255,255,0.12)"
+                stroke="rgba(255,255,255,0.25)"
+                strokeWidth={1}
+              />
+              <SvgText
+                x={tx}
+                y={ty + 4}
+                textAnchor="middle"
+                fontSize={10}
+                fontWeight="600"
+                fill="#F1F4F8"
+              >
+                {label}
+              </SvgText>
+            </G>
+          );
+        })}
       </Svg>
 
       {/* ── Texte central ─────────────────────────────────────────────────────── */}
@@ -395,7 +438,10 @@ export function ConstellationMap({
               alignItems: "center",
               justifyContent: "center",
             }}
-            onPress={() => onDomainPress(domain)}
+            onPress={() => {
+              setTooltip({ domain, x: pos.x, y: pos.y });
+              setTimeout(() => onDomainPress(domain), 1500);
+            }}
             activeOpacity={0.7}
           >
             <Ionicons name={DOMAIN_ICONS[domain]} size={16} color={color} />
