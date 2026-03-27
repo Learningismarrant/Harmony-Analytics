@@ -125,11 +125,13 @@ export default function CalibSessionScreen() {
   const router = useRouter();
 
   // Vérification au montage : si la session est déjà complète, rediriger vers les résultats
-  const { data: sessions } = useQuery({
+  const { data: sessions, isLoading: isLoadingSessions } = useQuery({
     queryKey: calibrationQueryKeys.sessions(),
     queryFn: () => calibrationApi.getSessions(),
     staleTime: 0,
   });
+
+  const realSession = sessions?.find((s) => s.id === Number(sessionId)) ?? null;
 
   useEffect(() => {
     if (!sessions || !sessionId) return;
@@ -155,9 +157,9 @@ export default function CalibSessionScreen() {
     goPrev,
     handleSubmit,
     submitMutation,
-  } = useCalibPassation(Number(catalogueId), Number(sessionId));
+  } = useCalibPassation(Number(catalogueId), realSession ?? null);
 
-  if (isLoading || !session) {
+  if (isLoadingSessions || isLoading || !session) {
     return (
       <View className="flex-1 bg-bg-primary items-center justify-center">
         <ActivityIndicator color="#94A3B8" size="large" />

@@ -5,14 +5,12 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useRouter, useFocusEffect } from "expo-router";
 import { useCalibPassation } from "./useCalibPassation";
 
-const mockStartSession = jest.fn();
 const mockGetQuestions = jest.fn();
 const mockSubmitResponses = jest.fn();
 const mockRouterReplace = jest.fn();
 
 jest.mock("@harmony/api", () => ({
   calibrationApi: {
-    startSession: (...args: unknown[]) => mockStartSession(...args),
     getQuestions: (...args: unknown[]) => mockGetQuestions(...args),
     submitResponses: (...args: unknown[]) => mockSubmitResponses(...args),
   },
@@ -29,8 +27,10 @@ const SESSION = {
   id: 1,
   calibrator_id: 1,
   catalogue_id: 1,
+  status: "in_progress" as const,
   started_at: "2026-03-21T10:00:00Z",
   completed_at: null,
+  response_count: 0,
 };
 
 const QUESTIONS = [
@@ -50,7 +50,6 @@ function makeWrapper(): any {
 
 beforeEach(() => {
   jest.clearAllMocks();
-  mockStartSession.mockResolvedValue(SESSION);
   mockGetQuestions.mockResolvedValue(QUESTIONS);
   mockSubmitResponses.mockResolvedValue({ session_id: 1, n_responses: 3, completed: true });
   jest.mocked(useRouter).mockReturnValue({
@@ -63,33 +62,39 @@ beforeEach(() => {
 
 describe("useCalibPassation — initialisation", () => {
   it("démarre à l'index 0 après chargement", async () => {
-    const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.session).not.toBeNull());
+    const { result } = renderHook(() => useCalibPassation(1, SESSION), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.currentIndex).toBe(0);
   });
 
   it("showInstructions est true au départ", async () => {
-    const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
-    await waitFor(() => expect(result.current.session).not.toBeNull());
+    const { result } = renderHook(() => useCalibPassation(1, SESSION), { wrapper: makeWrapper() });
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.showInstructions).toBe(true);
   });
 
-  it("appelle startSession au mount", async () => {
-    renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
-    await waitFor(() => expect(mockStartSession).toHaveBeenCalledWith(1));
+  it("retourne session nulle si realSession est null", () => {
+    const { result } = renderHook(() => useCalibPassation(1, null), { wrapper: makeWrapper() });
+    expect(result.current.session).toBeNull();
   });
 
-  it("ne crée pas de session si initialSessionId fourni", async () => {
-    renderHook(() => useCalibPassation(1, 42), { wrapper: makeWrapper() });
+  it("ne charge pas les questions si realSession est null", async () => {
+    renderHook(() => useCalibPassation(1, null), { wrapper: makeWrapper() });
     await new Promise((r) => setTimeout(r, 50));
-    expect(mockStartSession).not.toHaveBeenCalled();
+    expect(mockGetQuestions).not.toHaveBeenCalled();
+  });
+
+  it("ne charge pas les questions si la session est déjà complète", async () => {
+    const completedSession = { ...SESSION, completed_at: "2026-03-22T10:00:00Z" };
+    renderHook(() => useCalibPassation(1, completedSession), { wrapper: makeWrapper() });
+    await new Promise((r) => setTimeout(r, 50));
+    expect(mockGetQuestions).not.toHaveBeenCalled();
   });
 });
 
 describe("useCalibPassation — selectAnswer stocke un entier", () => {
   it("selectAnswer stores integer value", async () => {
-    const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useCalibPassation(1, SESSION), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     act(() => result.current.selectAnswer(1, 3));
@@ -97,7 +102,7 @@ describe("useCalibPassation — selectAnswer stocke un entier", () => {
   });
 
   it("selectAnswer peut écraser une réponse précédente", async () => {
-    const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useCalibPassation(1, SESSION), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     act(() => result.current.selectAnswer(1, 2));
@@ -107,7 +112,7 @@ describe("useCalibPassation — selectAnswer stocke un entier", () => {
 
   it("selectAnswer est un no-op si questions non chargées", () => {
     mockGetQuestions.mockReturnValue(new Promise(() => {}));
-    const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useCalibPassation(1, SESSION), { wrapper: makeWrapper() });
     act(() => result.current.selectAnswer(1, 3));
     expect(result.current.responses[1]).toBeUndefined();
   });
@@ -115,7 +120,7 @@ describe("useCalibPassation — selectAnswer stocke un entier", () => {
 
 describe("useCalibPassation — navigation", () => {
   it("goNext increments index", async () => {
-    const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useCalibPassation(1, SESSION), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     act(() => result.current.selectAnswer(1, 3)); // répondre à Q1 avant d'avancer
@@ -124,7 +129,7 @@ describe("useCalibPassation — navigation", () => {
   });
 
   it("goPrev decrements index", async () => {
-    const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useCalibPassation(1, SESSION), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     act(() => result.current.selectAnswer(1, 3));
@@ -134,7 +139,7 @@ describe("useCalibPassation — navigation", () => {
   });
 
   it("goNext s'arrête à la dernière question", async () => {
-    const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useCalibPassation(1, SESSION), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     act(() => result.current.selectAnswer(1, 3));
@@ -147,7 +152,7 @@ describe("useCalibPassation — navigation", () => {
   });
 
   it("goPrev ne descend pas en dessous de 0", async () => {
-    const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useCalibPassation(1, SESSION), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     act(() => result.current.goPrev());
@@ -158,7 +163,7 @@ describe("useCalibPassation — navigation", () => {
 describe("useCalibPassation — reset sur changement catalogueId", () => {
   it("remet à zéro l'état quand catalogueId change", async () => {
     const { result, rerender } = renderHook(
-      ({ id }: { id: number }) => useCalibPassation(id),
+      ({ id }: { id: number }) => useCalibPassation(id, SESSION),
       { wrapper: makeWrapper(), initialProps: { id: 1 } },
     );
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -183,7 +188,7 @@ describe("useCalibPassation — submit", () => {
   it("handleSubmit affiche une alerte si des questions sont sans réponse", async () => {
     jest.spyOn(Alert, "alert").mockImplementation(() => {});
 
-    const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useCalibPassation(1, SESSION), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     act(() => result.current.selectAnswer(1, 1)); // seulement 1 sur 3
@@ -197,7 +202,7 @@ describe("useCalibPassation — submit", () => {
   });
 
   it("handleSubmit soumet directement si toutes les questions sont répondues", async () => {
-    const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useCalibPassation(1, SESSION), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     act(() => {
@@ -210,8 +215,27 @@ describe("useCalibPassation — submit", () => {
     await waitFor(() => expect(mockSubmitResponses).toHaveBeenCalled());
   });
 
+  it("submitResponses est appelé avec le bon session.id", async () => {
+    const sessionWithId19 = { ...SESSION, id: 19, catalogue_id: 13 };
+    const { result } = renderHook(
+      () => useCalibPassation(13, sessionWithId19),
+      { wrapper: makeWrapper() },
+    );
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    act(() => {
+      result.current.selectAnswer(1, 1);
+      result.current.selectAnswer(2, 2);
+      result.current.selectAnswer(3, 3);
+    });
+
+    await act(async () => result.current.handleSubmit());
+    await waitFor(() => expect(mockSubmitResponses).toHaveBeenCalled());
+    expect(mockSubmitResponses).toHaveBeenCalledWith(19, expect.any(Object));
+  });
+
   it("navigue vers le résultat après succès de soumission", async () => {
-    const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useCalibPassation(1, SESSION), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     act(() => {
@@ -229,7 +253,7 @@ describe("useCalibPassation — BackHandler (Android)", () => {
   it("enregistre un listener BackHandler au focus", async () => {
     const addEventSpy = jest.spyOn(BackHandler, "addEventListener");
 
-    const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useCalibPassation(1, SESSION), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(addEventSpy).toHaveBeenCalledWith("hardwareBackPress", expect.any(Function));
@@ -242,7 +266,7 @@ describe("useCalibPassation — BackHandler (Android)", () => {
       return { remove: jest.fn() };
     });
 
-    const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useCalibPassation(1, SESSION), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     const blocked = capturedHandler?.();
@@ -257,7 +281,7 @@ describe("useCalibPassation — BackHandler (Android)", () => {
       return { remove: jest.fn() };
     });
 
-    const { result } = renderHook(() => useCalibPassation(1), { wrapper: makeWrapper() });
+    const { result } = renderHook(() => useCalibPassation(1, SESSION), { wrapper: makeWrapper() });
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     act(() => result.current.setShowInstructions(false));

@@ -5,13 +5,10 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { calibrationApi, calibrationQueryKeys } from "@harmony/api";
 import type { CalibSessionOut, CalibQuestionOut } from "@harmony/types";
 
-export function useCalibPassation(catalogueId: number, initialSessionId?: number) {
+export function useCalibPassation(catalogueId: number, realSession: CalibSessionOut | null) {
   const router = useRouter();
   const queryClient = useQueryClient();
 
-  const [session, setSession] = useState<CalibSessionOut | null>(
-    initialSessionId ? ({ id: initialSessionId, catalogue_id: catalogueId } as CalibSessionOut) : null,
-  );
   const [currentIndex, setCurrentIndex] = useState(0);
   const [responses, setResponses] = useState<Record<number, number>>({});
   const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now());
@@ -19,18 +16,13 @@ export function useCalibPassation(catalogueId: number, initialSessionId?: number
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [showInstructions, setShowInstructions] = useState(true);
 
-  // Reset complet si catalogueId change — ne pas reset la session si initialSessionId fourni
-  // (le useState a déjà initialisé la session, le useEffect ne doit pas l'écraser au mount)
+  // Reset complet si catalogueId change
   useEffect(() => {
     setCurrentIndex(0);
     setResponses({});
     setTimeSpent({});
     setIsSubmitted(false);
     setShowInstructions(true);
-    if (!initialSessionId) {
-      setSession(null);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalogueId]);
 
   // Reset le timer quand on change de question
@@ -38,65 +30,45 @@ export function useCalibPassation(catalogueId: number, initialSessionId?: number
     setQuestionStartTime(Date.now());
   }, [currentIndex]);
 
-  // Query questions — activée seulement si session existe
+  // Query questions — activée seulement si session existe et n'est pas encore complète
   const { data: questions, isLoading: isLoadingQuestions } = useQuery({
     queryKey: calibrationQueryKeys.questions(catalogueId),
     queryFn: () => calibrationApi.getQuestions(catalogueId),
-    enabled: session !== null,
+    enabled: realSession !== null && realSession.completed_at === null,
     gcTime: 0,
   });
-
-  // Mutation startSession — appelée au mount si session est null
-  const startSessionMutation = useMutation({
-    mutationFn: () => calibrationApi.startSession(catalogueId),
-    onSuccess: (newSession) => {
-      setSession(newSession);
-      queryClient.invalidateQueries({ queryKey: calibrationQueryKeys.sessions() });
-    },
-    onError: () => {
-      Alert.alert("Erreur", "Impossible de démarrer la session. Réessayez.");
-    },
-  });
-
-  // Lancer la session au mount si pas encore créée (skip si initialSessionId fourni)
-  useEffect(() => {
-    if (catalogueId > 0 && session === null && !initialSessionId && !startSessionMutation.isPending) {
-      startSessionMutation.mutate();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [catalogueId]);
 
   // Mutation submitResponses
   const submitMutation = useMutation({
     mutationFn: () => {
-      if (!session) throw new Error("Pas de session active");
+      if (!realSession) throw new Error("Pas de session active");
       const responseList = Object.entries(responses).map(([qId, val]) => ({
         question_id: parseInt(qId, 10),
         response_value: String(val),
         seconds_spent: timeSpent[parseInt(qId, 10)] ?? 0,
       }));
-      return calibrationApi.submitResponses(session.id, { responses: responseList });
+      return calibrationApi.submitResponses(realSession.id, { responses: responseList });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: calibrationQueryKeys.sessions() });
       setIsSubmitted(true);
-      if (session) {
-        router.replace(`/(calibrator)/session/result/${session.id}` as never);
+      if (realSession) {
+        router.replace(`/(calibrator)/session/result/${realSession.id}` as never);
       }
     },
     onError: (error: unknown) => {
       // 409 = session déjà complète → rediriger vers les résultats plutôt qu'afficher une erreur
       const status = (error as { response?: { status?: number } })?.response?.status;
-      if (status === 409 && session) {
+      if (status === 409 && realSession) {
         queryClient.invalidateQueries({ queryKey: calibrationQueryKeys.sessions() });
-        router.replace(`/(calibrator)/session/result/${session.id}` as never);
+        router.replace(`/(calibrator)/session/result/${realSession.id}` as never);
         return;
       }
       Alert.alert("Erreur", "Échec de l'envoi. Veuillez réessayer.");
     },
   });
 
-  const isLoading = isLoadingQuestions || startSessionMutation.isPending;
+  const isLoading = isLoadingQuestions;
 
   // BackHandler Android — identique à useTakeTest
   useFocusEffect(
@@ -164,7 +136,7 @@ export function useCalibPassation(catalogueId: number, initialSessionId?: number
   }
 
   return {
-    session,
+    session: realSession,
     questions,
     isLoading,
     currentIndex,
