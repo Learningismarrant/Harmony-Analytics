@@ -18,7 +18,7 @@ interface StarDef {
   key: StarKey;
   icon: keyof typeof Ionicons.glyphMap;
   color: string;
-  angle: number;   // degrees
+  angle: number; // degrees
   label: string;
 }
 
@@ -49,92 +49,15 @@ function starPosition(angle: number): { x: number; y: number } {
   };
 }
 
-// ─── Dot row (always 3 dots for the 3 profile stars) ──────────────────────────
-function DotRow({
-  progress,
-  color,
-  cx,
-  cy,
-}: {
-  progress: number; // 0–1
-  color: string;
-  cx: number;
-  cy: number;
-}) {
-  const TOTAL = 3;
-  const completed = Math.round(progress * TOTAL);
-  const dotSpacing = 8;
-  const startX = cx - ((TOTAL - 1) * dotSpacing) / 2;
-  const dotY = cy + STAR_RADIUS + 8;
-
-  return (
-    <>
-      {Array.from({ length: TOTAL }).map((_, i) => (
-        <Circle
-          key={i}
-          cx={startX + i * dotSpacing}
-          cy={dotY}
-          r={2.5}
-          fill={i < completed ? color : "rgba(255,255,255,0.12)"}
-        />
-      ))}
-    </>
-  );
-}
-
 // ─── Props ─────────────────────────────────────────────────────────────────────
 export interface ProfileMacroMapProps {
   initials: string;
-  globalProgress: number;       // 0–1
-  starProgress: {
-    tests: number;              // 0–1
-    experience: number;
-    documents: number;
-  };
   onStarPress: (key: StarKey) => void;
+  onCenterPress: () => void;
 }
 
 // ─── Component ─────────────────────────────────────────────────────────────────
-export function ProfileMacroMap({
-  initials,
-  globalProgress,
-  starProgress,
-  onStarPress,
-}: ProfileMacroMapProps) {
-  // Progress ring geometry
-  const ringCircumference = 2 * Math.PI * (CENTER_RADIUS - 4);
-  const ringDash = ringCircumference * globalProgress;
-  const ringGap = ringCircumference - ringDash;
-
-  // Per-star derived style helpers
-  function lineStroke(star: StarDef): string {
-    const p = starProgress[star.key];
-    if (p <= 0) return "rgba(255,255,255,0.06)";
-    if (p >= 1) return `rgba(${hexToRgb(star.color)},0.85)`;
-    return `rgba(${hexToRgb(star.color)},0.4)`;
-  }
-
-  function starFill(star: StarDef): string {
-    const p = starProgress[star.key];
-    if (p <= 0) return "#1A2C42";
-    const alpha = p >= 1 ? "0.28" : "0.16";
-    return `rgba(${hexToRgb(star.color)},${alpha})`;
-  }
-
-  function starBorder(star: StarDef): string {
-    const p = starProgress[star.key];
-    if (p <= 0) return "rgba(255,255,255,0.12)";
-    return p >= 1
-      ? `rgba(${hexToRgb(star.color)},0.9)`
-      : `rgba(${hexToRgb(star.color)},0.55)`;
-  }
-
-  function iconColor(star: StarDef): string {
-    const p = starProgress[star.key];
-    if (p <= 0) return "rgba(255,255,255,0.25)";
-    return p >= 1 ? star.color : `rgba(${hexToRgb(star.color)},0.75)`;
-  }
-
+export function ProfileMacroMap({ initials, onStarPress, onCenterPress }: ProfileMacroMapProps) {
   return (
     <View style={{ width: SVG_SIZE, height: SVG_SIZE }}>
       {/* ── SVG layer: connections + circles ──────────────────────────────────── */}
@@ -145,30 +68,20 @@ export function ProfileMacroMap({
         viewBox={`0 0 ${SVG_SIZE} ${SVG_SIZE}`}
       >
         <Defs>
-          <RadialGradient
-            id="centerGlow"
-            cx="50%"
-            cy="50%"
-            r="50%"
-            fx="50%"
-            fy="50%"
-          >
+          <RadialGradient id="centerGlow" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
             <Stop offset="0%" stopColor="#A67C52" stopOpacity="0.2" />
             <Stop offset="100%" stopColor="#A67C52" stopOpacity="0" />
           </RadialGradient>
         </Defs>
 
-        {/* Connection lines */}
+        {/* Connection lines — static, per-star color */}
         {STARS.map((star) => {
           const pos = starPosition(star.angle);
           return (
             <Line
               key={`line-${star.key}`}
-              x1={CX}
-              y1={CY}
-              x2={pos.x}
-              y2={pos.y}
-              stroke={lineStroke(star)}
+              x1={CX} y1={CY} x2={pos.x} y2={pos.y}
+              stroke={`rgba(${hexToRgb(star.color)},0.28)`}
               strokeWidth={1}
               strokeDasharray="4 4"
             />
@@ -176,96 +89,61 @@ export function ProfileMacroMap({
         })}
 
         {/* Central ambient glow */}
-        <Circle
-          cx={CX}
-          cy={CY}
-          r={CENTER_RADIUS + 14}
-          fill="url(#centerGlow)"
-        />
+        <Circle cx={CX} cy={CY} r={CENTER_RADIUS + 14} fill="url(#centerGlow)" />
 
         {/* Central circle */}
         <Circle
-          cx={CX}
-          cy={CY}
-          r={CENTER_RADIUS}
+          cx={CX} cy={CY} r={CENTER_RADIUS}
           fill="#0D1B2A"
-          stroke="rgba(166,124,82,0.4)"
+          stroke="rgba(166,124,82,0.45)"
           strokeWidth={1.5}
         />
 
-        {/* Progress ring track */}
+        {/* Decorative inner ring */}
         <Circle
-          cx={CX}
-          cy={CY}
-          r={CENTER_RADIUS - 4}
+          cx={CX} cy={CY} r={CENTER_RADIUS - 4}
           fill="none"
           stroke="rgba(166,124,82,0.12)"
           strokeWidth={3}
         />
 
-        {/* Progress ring fill */}
-        {globalProgress > 0 && (
-          <Circle
-            cx={CX}
-            cy={CY}
-            r={CENTER_RADIUS - 4}
-            fill="none"
-            stroke="#A67C52"
-            strokeWidth={3}
-            strokeDasharray={`${ringDash} ${ringGap}`}
-            strokeLinecap="round"
-            transform={`rotate(-90, ${CX}, ${CY})`}
-          />
-        )}
-
         {/* Orbital stars */}
         {STARS.map((star) => {
           const pos = starPosition(star.angle);
-          const p = starProgress[star.key];
           return (
             <React.Fragment key={`star-${star.key}`}>
-              {/* Glow halo (only when any progress) */}
-              {p > 0 && (
-                <Circle
-                  cx={pos.x}
-                  cy={pos.y}
-                  r={STAR_RADIUS + 10}
-                  fill={`rgba(${hexToRgb(star.color)},0.08)`}
-                />
-              )}
-
+              {/* Glow halo */}
+              <Circle
+                cx={pos.x} cy={pos.y}
+                r={STAR_RADIUS + 10}
+                fill={`rgba(${hexToRgb(star.color)},0.07)`}
+              />
               {/* Main circle */}
               <Circle
-                cx={pos.x}
-                cy={pos.y}
+                cx={pos.x} cy={pos.y}
                 r={STAR_RADIUS}
-                fill={starFill(star)}
-                stroke={starBorder(star)}
+                fill={`rgba(${hexToRgb(star.color)},0.16)`}
+                stroke={`rgba(${hexToRgb(star.color)},0.55)`}
                 strokeWidth={1.5}
-              />
-
-              {/* Dot progress indicators */}
-              <DotRow
-                progress={p}
-                color={star.color}
-                cx={pos.x}
-                cy={pos.y}
               />
             </React.Fragment>
           );
         })}
       </Svg>
 
-      {/* ── Center initials overlay ────────────────────────────────────────────── */}
-      <View
+      {/* ── Center tap zone + initials ─────────────────────────────────────────── */}
+      <TouchableOpacity
         style={{
           position: "absolute",
-          left: CX - 32,
-          top: CY - 16,
-          width: 64,
+          left: CX - CENTER_RADIUS,
+          top: CY - CENTER_RADIUS,
+          width: CENTER_RADIUS * 2,
+          height: CENTER_RADIUS * 2,
           alignItems: "center",
+          justifyContent: "center",
         }}
-        pointerEvents="none"
+        onPress={onCenterPress}
+        activeOpacity={0.7}
       >
         <Text
           style={{
@@ -278,16 +156,13 @@ export function ProfileMacroMap({
         >
           {initials.substring(0, 2).toUpperCase()}
         </Text>
-      </View>
+      </TouchableOpacity>
 
       {/* ── Star icons + tap zones ─────────────────────────────────────────────── */}
       {STARS.map((star) => {
         const pos = starPosition(star.angle);
-        const color = iconColor(star);
-
-        // Label positioning: below the dot row
-        const labelY = pos.y + STAR_RADIUS + 20;
-        const labelWidth = 60;
+        const labelY = pos.y + STAR_RADIUS + 10;
+        const labelWidth = 64;
 
         return (
           <React.Fragment key={`overlay-${star.key}`}>
@@ -305,10 +180,10 @@ export function ProfileMacroMap({
               onPress={() => onStarPress(star.key)}
               activeOpacity={0.7}
             >
-              <Ionicons name={star.icon} size={18} color={color} />
+              <Ionicons name={star.icon} size={18} color={star.color} />
             </TouchableOpacity>
 
-            {/* Label below dot row */}
+            {/* Label below star */}
             <View
               style={{
                 position: "absolute",
@@ -321,7 +196,7 @@ export function ProfileMacroMap({
             >
               <Text
                 style={{
-                  color: color,
+                  color: star.color,
                   fontSize: 9,
                   fontWeight: "600",
                   letterSpacing: 0.8,

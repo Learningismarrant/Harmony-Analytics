@@ -1,26 +1,15 @@
-import { View, Text, TouchableOpacity, ScrollView, Alert } from "react-native";
+import { View, Text, TouchableOpacity, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuthStore } from "@/features/auth/store";
-import { IdentityCard } from "@/features/profile/components/IdentityCard";
 import { ProfileMacroMap } from "@/features/profile/components/ProfileMacroMap";
 
-// ── Derive initials from a full name string ────────────────────────────────────
 function deriveInitials(name: string | null): string {
   if (!name) return "YC";
   const parts = name.trim().split(/\s+/);
   if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
-
-// ── Hardcoded investor-demo progress values ────────────────────────────────────
-const STAR_PROGRESS = {
-  tests:       0.33,
-  experience:  1.0,
-  documents:   0.67,
-} as const;
-
-const GLOBAL_PROGRESS = 0.67;
 
 export default function ProfileIndexScreen() {
   const router = useRouter();
@@ -35,10 +24,6 @@ export default function ProfileIndexScreen() {
     ]);
   }
 
-  function handleStarPress(key: "tests" | "experience" | "documents") {
-    router.push(`/(candidate)/profile/${key}`);
-  }
-
   return (
     <View className="flex-1 bg-bg-primary">
       {/* Page header */}
@@ -50,10 +35,7 @@ export default function ProfileIndexScreen() {
           >
             MY PROFILE
           </Text>
-          <Text
-            className="text-muted text-xs mt-0.5"
-            style={{ letterSpacing: 2 }}
-          >
+          <Text className="text-muted text-xs mt-0.5" style={{ letterSpacing: 2 }}>
             YOUR RADIANT IDENTITY
           </Text>
         </View>
@@ -71,42 +53,27 @@ export default function ProfileIndexScreen() {
         </TouchableOpacity>
       </View>
 
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingBottom: 48,
-        }}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Macro constellation map */}
-        <View style={{ alignItems: "center", paddingVertical: 16 }}>
-          <ProfileMacroMap
-            initials={initials}
-            globalProgress={GLOBAL_PROGRESS}
-            starProgress={STAR_PROGRESS}
-            onStarPress={handleStarPress}
-          />
-        </View>
+      {/* Macro constellation — fills the available space */}
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <ProfileMacroMap
+          initials={initials}
+          onStarPress={(key) => router.push(`/(candidate)/profile/${key}`)}
+          onCenterPress={() => router.push("/(candidate)/profile/identity")}
+        />
 
-        {/* Identity card */}
-        <IdentityCard />
-
-        {/* Footer watermark */}
-        <View className="items-center mt-10 mb-2">
-          <Text
-            style={{
-              color: "#718096",
-              fontSize: 8,
-              letterSpacing: 4,
-              fontWeight: "700",
-              opacity: 0.4,
-            }}
-          >
-            RADIANT ANALYTICS · YACHTING ASSESSMENT CENTER
-          </Text>
-        </View>
-      </ScrollView>
+        <Text
+          style={{
+            color: "#718096",
+            fontSize: 8,
+            letterSpacing: 4,
+            fontWeight: "700",
+            opacity: 0.4,
+            marginTop: 8,
+          }}
+        >
+          RADIANT ANALYTICS · YACHTING ASSESSMENT CENTER
+        </Text>
+      </View>
     </View>
   );
 }

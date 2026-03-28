@@ -1,25 +1,15 @@
-import { View, Text, TouchableOpacity } from "react-native";
+import { View, Text, ActivityIndicator } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useQuery } from "@tanstack/react-query";
+import { identityApi, queryKeys } from "@harmony/api";
+import { useAuthStore } from "@/features/auth/store";
+import type { AvailabilityStatus } from "@harmony/types";
 
-// TODO: Replace with real data from useQuery(queryKeys.identity.fullProfile(crewProfileId))
-const MOCK_IDENTITY = {
-  name: "James Whitfield",
-  position: "First Mate",
-  nationality: "British",
-  location: "Monaco, France",
-  experience_years: 8,
-  email: "j.whitfield@harmony.crew",
-  phone: "+44 7700 900461",
-  availability: "available" as const,
-  bio: "Experienced deck officer with 8 years aboard superyachts in the Med and Caribbean. STCW certified, strong leadership track record.",
-  is_harmony_verified: true,
-};
-
-const AVAILABILITY_CONFIG = {
-  available: { label: "Available", color: "#5A8279" },
-  soon: { label: "Available soon", color: "#A68D6A" },
-  on_board: { label: "On board", color: "#A67C52" },
-  unavailable: { label: "Unavailable", color: "#9C6B6B" },
+const AVAILABILITY_CONFIG: Record<AvailabilityStatus, { label: string; color: string }> = {
+  available:   { label: "Available",       color: "#5A8279" },
+  soon:        { label: "Available soon",  color: "#A68D6A" },
+  on_board:    { label: "On board",        color: "#A67C52" },
+  unavailable: { label: "Unavailable",     color: "#9C6B6B" },
 };
 
 function InfoRow({
@@ -45,21 +35,47 @@ function InfoRow({
 }
 
 export function IdentityCard() {
-  // TODO: const { data: profile } = useQuery(...)
-  const identity = MOCK_IDENTITY;
-  const avail = AVAILABILITY_CONFIG[identity.availability];
+  const crewProfileId = useAuthStore((s) => s.crewProfileId);
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: queryKeys.identity.fullProfile(crewProfileId!),
+    queryFn: () => identityApi.getFullProfile(crewProfileId!),
+    enabled: !!crewProfileId,
+  });
+
+  if (isLoading) {
+    return (
+      <View className="py-16 items-center">
+        <ActivityIndicator size="large" color="#A67C52" />
+      </View>
+    );
+  }
+
+  if (isError || !data) {
+    return (
+      <View className="bg-bg-secondary border border-bg-border rounded-2xl p-5 items-center">
+        <Ionicons name="alert-circle-outline" size={32} color="#883838" />
+        <Text className="text-muted text-sm text-center mt-3">
+          Unable to load your profile.
+        </Text>
+      </View>
+    );
+  }
+
+  const { identity, crew } = data;
+  const initials = identity.name.trim().split(/\s+/).map((p) => p[0]).join("").substring(0, 2).toUpperCase();
+  const avail = AVAILABILITY_CONFIG[crew.availability_status] ?? AVAILABILITY_CONFIG.unavailable;
 
   return (
     <View className="gap-y-4">
       {/* Avatar + name */}
       <View className="bg-bg-secondary border border-bg-border rounded-2xl p-5 items-center">
-        {/* Avatar */}
         <View
           className="w-20 h-20 rounded-full items-center justify-center mb-3"
           style={{ borderWidth: 2, borderColor: "#A67C52", backgroundColor: "#1A2C42" }}
         >
           <Text style={{ fontSize: 32, color: "#A67C52", fontWeight: "700" }}>
-            {identity.name.charAt(0)}
+            {initials}
           </Text>
         </View>
 
@@ -74,7 +90,7 @@ export function IdentityCard() {
         {/* Position */}
         <View className="mt-1 px-3 py-1 rounded-full" style={{ backgroundColor: "#1E3050" }}>
           <Text className="text-muted text-xs tracking-widest uppercase">
-            {identity.position}
+            {crew.position_targeted}
           </Text>
         </View>
 
@@ -88,29 +104,18 @@ export function IdentityCard() {
             {avail.label}
           </Text>
         </View>
-
-        {/* Bio */}
-        {identity.bio && (
-          <Text className="text-muted text-xs text-center mt-3 leading-5">{identity.bio}</Text>
-        )}
-
-        {/* Edit button — TODO: wire up */}
-        <TouchableOpacity
-          className="mt-4 flex-row items-center gap-x-1.5 px-4 py-2 rounded-xl"
-          style={{ backgroundColor: "#A67C5233", borderWidth: 1, borderColor: "#A67C5255" }}
-          onPress={() => {}} // TODO: open edit modal
-        >
-          <Ionicons name="pencil-outline" size={13} color="#A67C52" />
-          <Text style={{ color: "#A67C52", fontSize: 12, fontWeight: "600" }}>Edit profile</Text>
-        </TouchableOpacity>
       </View>
 
       {/* Info rows */}
       <View className="bg-bg-secondary border border-bg-border rounded-2xl px-4 py-1">
-        <InfoRow icon="mail-outline" label="Email" value={identity.email} />
-        <InfoRow icon="call-outline" label="Phone" value={identity.phone} />
-        <InfoRow icon="location-outline" label="Location" value={identity.location} />
-        <InfoRow icon="flag-outline" label="Nationality" value={identity.nationality} />
+        <InfoRow icon="mail-outline"     label="Email"    value={identity.email} />
+        {identity.phone    && <InfoRow icon="call-outline"     label="Phone"    value={identity.phone} />}
+        {identity.location && <InfoRow icon="location-outline" label="Location" value={identity.location} />}
+        <InfoRow
+          icon="time-outline"
+          label="Experience"
+          value={`${crew.experience_years} year${crew.experience_years !== 1 ? "s" : ""} at sea`}
+        />
       </View>
     </View>
   );
