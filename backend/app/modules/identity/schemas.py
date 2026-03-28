@@ -149,20 +149,22 @@ class TestReportOut(BaseModel):
 
 # ── Full Profile ───────────────────────────────────────────
 
-class AccessContextOut(BaseModel):
-    view_mode: FeedbackTarget
-    label: str
-    context_position: Optional[str] = None
-    is_active_crew: bool = False
-
-
-class FullCrewProfileOut(BaseModel):
-    context: AccessContextOut
-    identity: UserIdentityOut
-    crew: CrewProfileOut
-    experiences: List[ExperienceOut] = []
-    documents: List[DocumentOut] = []
-    reports: List[TestReportOut] = []
+class FullIdentityOut(BaseModel):
+    """Identité enrichie retournée par get_full_profile() — fusion User + CrewProfile."""
+    crew_profile_id: int
+    user_id: int
+    name: str
+    email: str
+    avatar_url: Optional[str] = None
+    location: Optional[str] = None
+    phone: Optional[str] = None
+    bio: Optional[str] = None
+    is_harmony_verified: bool = False
+    position_targeted: Optional[str] = None
+    availability_status: Optional[str] = None
+    experience_years: int = 0
+    nationality: Optional[str] = None
+    languages: List[str] = []
 
 
 # ── Snapshot (lecture externe) ─────────────────────────────
@@ -241,6 +243,19 @@ class PsychometricReportOut(BaseModel):
     onboarding_tips:   Optional[Dict[str, Any]] = None
     integration_risks: Optional[List[Any]] = None
     management_advice: Optional[Dict[str, Any]] = None
+
+
+# ── Full Profile ───────────────────────────────────────────
+
+class FullCrewProfileOut(BaseModel):
+    crew_profile_id: int
+    view_mode: str
+    context_label: str
+    is_active_crew: bool = False
+    identity: FullIdentityOut
+    experiences: List[ExperienceOut] = []
+    documents: List[DocumentOut] = []
+    reports: Optional[PsychometricReportOut] = None
 
 
 # ── OnboardingAdviceOut ────────────────────────────────────

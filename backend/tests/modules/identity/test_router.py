@@ -31,25 +31,31 @@ def _identity():
 
 
 def _full_profile():
-    """FullCrewProfileOut — context + identity + crew + experiences + documents + reports."""
+    """FullCrewProfileOut — flat structure matching service output."""
     return {
-        "context": {
-            "view_mode": "candidate",
-            "label": "Mon profil",
-            "context_position": None,
-            "is_active_crew": False,
-        },
-        "identity": _identity(),
-        "crew": {
-            "id": 1,
+        "crew_profile_id": 1,
+        "view_mode": "candidate",
+        "context_label": "Mon Profil",
+        "is_active_crew": False,
+        "identity": {
+            "crew_profile_id": 1,
             "user_id": 1,
+            "name": "Jean Marin",
+            "email": "j@test.com",
+            "phone": None,
+            "avatar_url": None,
+            "location": None,
+            "bio": None,
+            "is_harmony_verified": False,
             "position_targeted": "Deckhand",
-            "experience_years": 2,
             "availability_status": "available",
+            "experience_years": 2,
+            "nationality": None,
+            "languages": [],
         },
         "experiences": [],
         "documents": [],
-        "reports": [],
+        "reports": None,
     }
 
 
@@ -80,7 +86,7 @@ async def test_get_full_profile_200(crew_client, mocker):
     assert resp.status_code == 200
     data = resp.json()
     assert "identity" in data
-    assert "context" in data
+    assert "crew_profile_id" in data
 
 
 @pytest.mark.asyncio

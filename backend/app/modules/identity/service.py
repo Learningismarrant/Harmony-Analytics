@@ -386,8 +386,8 @@ class IdentityService:
             "is_harmony_verified":  getattr(user, "is_harmony_verified", False),
 
             # Données CrewProfile
-            "position_targeted":    str(crew.position_targeted) if crew.position_targeted else None,
-            "availability_status":  str(crew.availability_status) if crew.availability_status else None,
+            "position_targeted":    crew.position_targeted.value if hasattr(crew.position_targeted, "value") else (crew.position_targeted or None),
+            "availability_status":  crew.availability_status.value if hasattr(crew.availability_status, "value") else (crew.availability_status or None),
             "experience_years":     crew.experience_years,
             "nationality":          getattr(crew, "nationality", None),
             "languages":            getattr(crew, "languages", []),

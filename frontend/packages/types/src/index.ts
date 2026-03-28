@@ -115,20 +115,32 @@ export interface ExperienceCreateIn {
   candidate_comment?: string;
 }
 
-export interface AccessContextOut {
-  view_mode: "candidate" | "manager" | "recruiter";
-  label: string;
-  context_position: YachtPosition | null;
-  is_active_crew: boolean;
+export interface FullIdentityOut {
+  crew_profile_id: number;
+  user_id: number;
+  name: string;
+  email: string;
+  avatar_url: string | null;
+  location: string | null;
+  phone: string | null;
+  bio: string | null;
+  is_harmony_verified: boolean;
+  position_targeted: YachtPosition | null;
+  availability_status: AvailabilityStatus | null;
+  experience_years: number;
+  nationality: string | null;
+  languages: string[];
 }
 
 export interface FullCrewProfileOut {
-  context: AccessContextOut;
-  identity: UserIdentityOut;
-  crew: CrewProfileSummary;
+  crew_profile_id: number;
+  view_mode: string;
+  context_label: string;
+  is_active_crew: boolean;
+  identity: FullIdentityOut;
   experiences: ExperienceOut[];
   documents: DocumentOut[];
-  reports: PsychometricReportOut[];
+  reports: PsychometricReportOut | null;
 }
 
 export interface DocumentOut {

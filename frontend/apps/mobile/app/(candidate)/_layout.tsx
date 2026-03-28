@@ -51,7 +51,7 @@ function LogoutButton() {
 // ── Shared screen options ─────────────────────────────────────────────────────
 
 const SCREEN_TITLES: Record<string, string> = {
-  profile:              "Profile",
+  profile:              "My Profile",
   "assessment/index":   "Assessment",
   "survey/index":       "Survey",
   "training/index":     "Training",

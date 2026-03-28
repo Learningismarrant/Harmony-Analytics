@@ -62,9 +62,9 @@ export function IdentityCard() {
     );
   }
 
-  const { identity, crew } = data;
+  const { identity } = data;
   const initials = identity.name.trim().split(/\s+/).map((p) => p[0]).join("").substring(0, 2).toUpperCase();
-  const avail = AVAILABILITY_CONFIG[crew.availability_status] ?? AVAILABILITY_CONFIG.unavailable;
+  const avail = (identity.availability_status && AVAILABILITY_CONFIG[identity.availability_status as AvailabilityStatus]) ?? AVAILABILITY_CONFIG.unavailable;
 
   return (
     <View className="gap-y-4">
@@ -90,7 +90,7 @@ export function IdentityCard() {
         {/* Position */}
         <View className="mt-1 px-3 py-1 rounded-full" style={{ backgroundColor: "#1E3050" }}>
           <Text className="text-muted text-xs tracking-widest uppercase">
-            {crew.position_targeted}
+            {identity.position_targeted}
           </Text>
         </View>
 
@@ -114,7 +114,7 @@ export function IdentityCard() {
         <InfoRow
           icon="time-outline"
           label="Experience"
-          value={`${crew.experience_years} year${crew.experience_years !== 1 ? "s" : ""} at sea`}
+          value={`${identity.experience_years} year${identity.experience_years !== 1 ? "s" : ""} at sea`}
         />
       </View>
     </View>
